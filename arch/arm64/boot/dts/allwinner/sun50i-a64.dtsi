@@ -615,6 +615,13 @@
 			resets = <&ccu RST_BUS_I2S1>;
 			dma-names = "rx", "tx";
 			dmas = <&dma 4>, <&dma 4>;
+		};
+
+		pwm: pwm@01c21400 {
+			compatible = "allwinner,sun50i-a64-pwm";
+			reg = <0x01c21400 0x8>;
+			clocks = <&osc24M>;
+			#pwm-cells = <3>;
 			status = "disabled";
 		};
 
