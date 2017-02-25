@@ -344,6 +344,9 @@ static const struct of_device_id sun4i_pwm_dt_ids[] = {
 		.compatible = "allwinner,sun8i-h3-pwm",
 		.data = &sun4i_pwm_single_bypass,
 	}, {
+		.compatible = "allwinner,sun50i-a64-pwm",
+		.data = &sun4i_pwm_single_bypass,
+	}, {
 		/* sentinel */
 	},
 };
