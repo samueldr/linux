@@ -14,12 +14,20 @@
  *
  */
 #include <linux/bitops.h>
+#include <linux/of.h>
 #include <linux/phy.h>
 #include <linux/module.h>
 
-#define RTL821x_PHYSR				0x11
-#define RTL821x_PHYSR_DUPLEX			BIT(13)
-#define RTL821x_PHYSR_SPEED			GENMASK(15, 14)
+#define RTL821x_PHYSR		0x11
+#define RTL821x_PHYSR_DUPLEX	0x2000
+#define RTL821x_PHYSR_SPEED	0xc000
+#define RTL821x_INER		0x12
+#define RTL821x_INER_INIT	0x6400
+#define RTL821x_INSR		0x13
+#define RTL821x_PAGE_SELECT	0x1f
+#define RTL8211E_INER_LINK_STATUS 0x400
+#define RTL8211E_EXT_PAGE_SELECT 0x1e
+#define RTL8211E_EXT_PAGE	0x7
 
 #define RTL821x_INER				0x12
 #define RTL8211B_INER_INIT			0x6400
@@ -159,6 +167,34 @@ static int rtl8211b_resume(struct phy_device *phydev)
 	return genphy_resume(phydev);
 }
 
+static int rtl8211e_config_init(struct phy_device *phydev)
+{
+	struct device *dev = &phydev->mdio.dev;
+	struct device_node *of_node = dev->of_node;
+	int ret;
+
+	ret = genphy_config_init(phydev);
+	if (ret < 0)
+		return ret;
+
+	if (phydev->interface == PHY_INTERFACE_MODE_RGMII_TXID) {
+		/*
+		 * Disable the RX internal delay here.
+		 *
+		 * All the magic numbers are not documented on RTL8211E
+		 * datasheet. They're said to be from Realtek by Pine64.
+		 */
+		phy_write(phydev, RTL821x_PAGE_SELECT, RTL8211E_EXT_PAGE);
+		phy_write(phydev, RTL8211E_EXT_PAGE_SELECT, 0xa4);
+		phy_write(phydev, 0x1c, 0xb591);
+
+		/* Restore to default page 0 */
+		phy_write(phydev, RTL821x_PAGE_SELECT, 0);
+	}
+
+	return 0;
+}
+
 static struct phy_driver realtek_drvs[] = {
 	{
 		.phy_id         = 0x00008201,
@@ -206,6 +242,9 @@ static struct phy_driver realtek_drvs[] = {
 		.phy_id_mask	= 0x001fffff,
 		.features	= PHY_GBIT_FEATURES,
 		.flags		= PHY_HAS_INTERRUPT,
+		.config_aneg	= &genphy_config_aneg,
+		.config_init	= rtl8211e_config_init,
+		.read_status	= &genphy_read_status,
 		.ack_interrupt	= &rtl821x_ack_interrupt,
 		.config_intr	= &rtl8211e_config_intr,
 		.suspend	= genphy_suspend,
