@@ -619,7 +619,7 @@ static int anx6345_bridge_attach(struct drm_bridge *bridge)
 
 	err = drm_connector_init(bridge->dev, &anx6345->connector,
 				 &anx6345_connector_funcs,
-				 DRM_MODE_CONNECTOR_DisplayPort);
+				 DRM_MODE_CONNECTOR_eDP);
 	if (err) {
 		DRM_ERROR("Failed to initialize connector: %d\n", err);
 		return err;
