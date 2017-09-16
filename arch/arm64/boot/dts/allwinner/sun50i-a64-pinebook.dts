@@ -79,7 +79,7 @@
 
 		lid_switch {
 			label = "Lid Switch";
-			gpios = <&pio 7 10 GPIO_ACTIVE_LOW>; /* PH10 */
+			gpios = <&r_pio 0 12 GPIO_ACTIVE_LOW>; /* PL12 */
 			linux,input-type = <EV_SW>;
 			linux,code = <SW_LID>;
 			linux,can-disable;
