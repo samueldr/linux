@@ -1954,7 +1954,11 @@ static int dw_hdmi_bridge_attach(struct drm_bridge *bridge)
 	struct drm_connector *connector = &hdmi->connector;
 
 	connector->interlace_allowed = 1;
-	connector->polled = DRM_CONNECTOR_POLL_HPD;
+	if (hdmi->phy.ops->setup_hpd)
+		connector->polled = DRM_CONNECTOR_POLL_HPD;
+	else
+		connector->polled = DRM_CONNECTOR_POLL_CONNECT |
+				    DRM_CONNECTOR_POLL_DISCONNECT;
 
 	drm_connector_helper_add(connector, &dw_hdmi_connector_helper_funcs);
 
@@ -2381,6 +2385,9 @@ __dw_hdmi_probe(struct platform_device *pdev,
 		dev_err(hdmi->dev, "Cannot enable HDMI iahb clock: %d\n", ret);
 		goto err_isfr;
 	}
+
+	if (plat_data->pre_init)
+		plat_data->pre_init(plat_data->pre_init_data);
 
 	/* Product and revision IDs */
 	hdmi->version = (hdmi_readb(hdmi, HDMI_DESIGN_ID) << 8)
