@@ -303,6 +303,14 @@
 	status = "disabled";
 };
 
+&i2s2 {
+	status = "okay";
+};
+
+&sound_hdmi {
+	status = "okay";
+};
+
 &sound {
 	status = "okay";
 };
