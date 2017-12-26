@@ -113,7 +113,16 @@
 	status = "okay";
 };
 
+&hdmi {
+	hvcc-supply = <&reg_dldo1>;
+	status = "okay";
+};
+
 &mixer0 {
+	status = "okay";
+};
+
+&mixer1 {
 	status = "okay";
 };
 
@@ -335,6 +344,18 @@
 		reg = <0>;
 		remote-endpoint = <&anx6345_in>;
 	};
+};
+
+&tcon1 {
+	status = "okay";
+};
+
+&i2s2 {
+	status = "okay";
+};
+
+&sound_hdmi {
+	status = "okay";
 };
 
 &sound {
