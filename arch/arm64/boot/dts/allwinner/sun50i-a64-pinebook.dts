@@ -60,13 +60,8 @@
 	backlight: backlight {
 		compatible = "pwm-backlight";
 		pwms = <&pwm 0 50000 0>;
-		/*
-		 * Directly use PWM_POLARITY_INVERTED here cannot work,
-		 * and may even make backlight fail to be initialized
-		 * during U-Boot in next boot.
-		 */
-		brightness-levels = <100 70 60 50 40 30 20 10 0>;
-		default-brightness-level = <6>;
+		brightness-levels = <0 10 20 30 40 50 60 70 80 90 100>;
+		default-brightness-level = <2>;
 		enable-gpios = <&pio 3 23 GPIO_ACTIVE_HIGH>; /* PD23 */
 	};
 
