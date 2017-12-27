@@ -24,6 +24,7 @@
 #include <linux/io.h>
 #include <linux/pm_runtime.h>
 #include <linux/regmap.h>
+#include <linux/gpio/consumer.h>
 
 #include <sound/pcm_params.h>
 #include <sound/soc.h>
@@ -97,7 +98,20 @@ struct sun8i_codec {
 	struct regmap	*regmap;
 	struct clk	*clk_module;
 	struct clk	*clk_bus;
+	struct gpio_desc *gpio_pa;
 };
+
+static int sun8i_codec_spk_event(struct snd_soc_dapm_widget *w,
+				 struct snd_kcontrol *k, int event)
+{
+	struct snd_soc_component *component = snd_soc_dapm_to_component(w->dapm);
+	struct sun8i_codec *scodec = snd_soc_component_get_drvdata(component);
+
+	gpiod_set_value_cansleep(scodec->gpio_pa,
+				 !!SND_SOC_DAPM_EVENT_ON(event));
+
+	return 0;
+}
 
 static int sun8i_codec_runtime_resume(struct device *dev)
 {
@@ -432,6 +446,9 @@ static const struct snd_soc_dapm_widget sun8i_codec_dapm_widgets[] = {
 	SOC_MIXER_ARRAY("Right Digital ADC Mixer", SND_SOC_NOPM, 0, 0,
 			sun8i_input_mixer_controls),
 
+	/* Speaker */
+	SND_SOC_DAPM_SPK("Speaker", sun8i_codec_spk_event),
+
 	/* Clocks */
 	SND_SOC_DAPM_SUPPLY("MODCLK AFI1", SUN8I_MOD_CLK_ENA,
 			    SUN8I_MOD_CLK_ENA_AIF1, 0, NULL, 0),
@@ -568,6 +585,15 @@ static int sun8i_codec_probe(struct platform_device *pdev)
 	if (IS_ERR(scodec->clk_bus)) {
 		dev_err(&pdev->dev, "Failed to get the bus clock\n");
 		return PTR_ERR(scodec->clk_bus);
+	}
+
+	scodec->gpio_pa = devm_gpiod_get_optional(&pdev->dev, "allwinner,pa",
+						  GPIOD_OUT_LOW);
+	if (IS_ERR(scodec->gpio_pa)) {
+		ret = PTR_ERR(scodec->gpio_pa);
+		if (ret != -EPROBE_DEFER)
+			dev_err(&pdev->dev, "Failed to get pa gpio: %d\n", ret);
+		return ret;
 	}
 
 	res_base = platform_get_resource(pdev, IORESOURCE_MEM, 0);
