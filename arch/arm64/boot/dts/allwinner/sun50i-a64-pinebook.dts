@@ -90,7 +90,8 @@
 };
 
 &codec {
-       status = "okay";
+	allwinner,pa-gpios = <&pio 7 7 GPIO_ACTIVE_HIGH>;
+	status = "okay";
 };
 
 &codec_analog {
@@ -359,7 +360,11 @@
 };
 
 &sound {
-       status = "okay";
+	status = "okay";
+	simple-audio-card,routing =
+			"Left DAC", "AIF1 Slot 0 Left",
+			"Right DAC", "AIF1 Slot 0 Right",
+			"Speaker", "LINEOUT";
 };
 
 &uart0 {
