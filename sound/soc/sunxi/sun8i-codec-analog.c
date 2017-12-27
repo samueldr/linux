@@ -752,7 +752,7 @@ static const struct snd_kcontrol_new sun50i_codec_lineout_ctrls[] = {
 		       sun8i_codec_lineout_vol_scale),
 	SOC_DOUBLE("Line Out Playback Switch",
 		   SUN50I_ADDA_LINEOUT_CTRL0,
-		   SUN50I_ADDA_LINEOUT_CTRL0_REN,
+		   SUN50I_ADDA_LINEOUT_CTRL0_LEN,
 		   SUN50I_ADDA_LINEOUT_CTRL0_REN, 1, 0),
 };
 
