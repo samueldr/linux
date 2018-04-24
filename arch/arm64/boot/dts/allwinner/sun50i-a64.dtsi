@@ -196,6 +196,27 @@
 		};
 	};
 
+	thermal-zones {
+		cpu_thermal: cpu0-thermal {
+		       /* milliseconds */
+		       polling-delay-passive = <250>;
+		       polling-delay = <1000>;
+		       thermal-sensors = <&ths 0>;
+		};
+		gpu0_thermal: gpu0-thermal {
+		       /* milliseconds */
+		       polling-delay-passive = <250>;
+		       polling-delay = <1000>;
+		       thermal-sensors = <&ths 1>;
+		};
+		gpu1_thermal: gpu1-thermal {
+		       /* milliseconds */
+		       polling-delay-passive = <250>;
+		       polling-delay = <1000>;
+		       thermal-sensors = <&ths 2>;
+		};
+	};
+
 	timer {
 		compatible = "arm,armv8-timer";
 		interrupts = <GIC_PPI 13
@@ -699,6 +720,17 @@
 			clocks = <&ccu CLK_BUS_CODEC>, <&ccu CLK_AC_DIG>;
 			clock-names = "bus", "mod";
 			status = "disabled";
+		};
+
+		ths: thermal-sensor@1c25000 {
+			compatible = "allwinner,sun50i-a64-ths";
+			reg = <0x01c25000 0x100>;
+			interrupts = <GIC_SPI 31 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&ccu CLK_BUS_THS>, <&ccu CLK_THS>;
+			clock-names = "bus", "mod";
+			resets = <&ccu RST_BUS_THS>;
+			#io-channel-cells = <0>;
+			#thermal-sensor-cells = <1>;
 		};
 
 		uart0: serial@1c28000 {
