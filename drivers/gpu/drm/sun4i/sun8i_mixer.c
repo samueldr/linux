@@ -353,12 +353,12 @@ static int sun8i_mixer_bind(struct device *dev, struct device *master,
 	dev_set_drvdata(dev, mixer);
 	mixer->engine.ops = &sun8i_engine_ops;
 	mixer->engine.node = dev->of_node;
-	/* The ID of the mixer currently doesn't matter */
-	mixer->engine.id = -1;
 
 	mixer->cfg = of_device_get_match_data(dev);
 	if (!mixer->cfg)
 		return -EINVAL;
+
+	mixer->engine.id = mixer->cfg->index;
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	regs = devm_ioremap_resource(dev, res);
