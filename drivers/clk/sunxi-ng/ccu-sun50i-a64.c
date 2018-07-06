@@ -515,8 +515,8 @@ static const char * const de_parents[] = { "pll-periph0-2x", "pll-de" };
 static SUNXI_CCU_M_WITH_MUX_GATE(de_clk, "de", de_parents,
 				 0x104, 0, 4, 24, 3, BIT(31), 0);
 
-static const char * const tcon0_parents[] = { "pll-video0-2x" };
-static const u8 tcon0_table[] = { 2, };
+static const char * const tcon0_parents[] = { "pll-mipi", "pll-video0-2x" };
+static const u8 tcon0_table[] = { 0, 2, };
 static SUNXI_CCU_MUX_TABLE_WITH_GATE(tcon0_clk, "tcon0", tcon0_parents,
 				     tcon0_table, 0x118, 24, 3, BIT(31),
 				     CLK_SET_RATE_PARENT);
