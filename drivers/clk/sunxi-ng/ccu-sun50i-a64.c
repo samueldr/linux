@@ -523,8 +523,8 @@ static SUNXI_CCU_MUX_TABLE_WITH_GATE(tcon0_clk, "tcon0", tcon0_parents,
 				     tcon0_table, 0x118, 24, 3, BIT(31),
 				     CLK_SET_RATE_PARENT);
 
-static const char * const tcon1_parents[] = { "pll-video0", "pll-video1" };
-static const u8 tcon1_table[] = { 0, 2, };
+static const char * const tcon1_parents[] = { "pll-video0" };
+static const u8 tcon1_table[] = { 0, };
 static struct ccu_div tcon1_clk = {
 	.enable		= BIT(31),
 	.div		= _SUNXI_CCU_DIV(0, 4),
