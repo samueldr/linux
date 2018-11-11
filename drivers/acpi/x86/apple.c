@@ -62,7 +62,7 @@ void acpi_extract_apple_properties(struct acpi_device *adev)
 	if (!numprops)
 		goto out_free;
 
-	valid = bitmap_zalloc(numprops, GFP_KERNEL);
+	valid = kcalloc(BITS_TO_LONGS(numprops), sizeof(long), GFP_KERNEL);
 	if (!valid)
 		goto out_free;
 
@@ -137,5 +137,5 @@ void acpi_extract_apple_properties(struct acpi_device *adev)
 
 out_free:
 	ACPI_FREE(props);
-	bitmap_free(valid);
+	kfree(valid);
 }
