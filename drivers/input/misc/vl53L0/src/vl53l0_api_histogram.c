@@ -181,7 +181,7 @@ VL53L0_Error VL53L0_perform_single_histogram_measurement(VL53L0_DEV Dev,
 	}
 	pHistogramMeasurementData->HistogramType = (uint8_t)HistogramMode;
 	pHistogramMeasurementData->ErrorStatus	 = VL53L0_DEVICEERROR_NONE;
-	pHistogramMeasurementData->FirstBin	 = 0;
+	pHistogramMeasurementData->FirstBin		 = 0;
 	pHistogramMeasurementData->NumberOfBins	 = 0;
 
 

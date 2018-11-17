@@ -1,22 +1,19 @@
 /*
-*  stmvl53l0_module-cci.c - Linux kernel modules for STM VL53L0 FlightSense TOF
-*							sensor
-*
-*  Copyright (C) 2015 STMicroelectronics Imaging Division.
-*
-*  This program is free software; you can redistribute it and/or modify
-*  it under the terms of the GNU General Public License as published by
-*  the Free Software Foundation; either version 2 of the License, or
-*  (at your option) any later version.
-*
-*  This program is distributed in the hope that it will be useful,
-*  but WITHOUT ANY WARRANTY; without even the implied warranty of
-*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-*  GNU General Public License for more details.
-*
-*  You should have received a copy of the GNU General Public License
-*  along with this program;
-*/
+ *  stmvl53l0_module-cci.c - Linux kernel modules for STM VL53L0 FlightSense TOF
+ *							sensor
+ *
+ *  Copyright (C) 2016 STMicroelectronics Imaging Division.
+ *
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ */
 #include <linux/uaccess.h>
 #include <linux/module.h>
 #include <linux/init.h>
@@ -50,9 +47,8 @@
 #include "stmvl53l0-cci.h"
 #include "stmvl53l0-i2c.h"
 #include "stmvl53l0.h"
-#define LASER_SENSOR_PINCTRL_STATE_SLEEP "laser_suspend"
-#define LASER_SENSOR_PINCTRL_STATE_DEFAULT "laser_default"
 
+#ifdef CAMERA_CCI
 /*
  * Global data
  */
@@ -69,31 +65,6 @@ static struct msm_camera_i2c_fn_t msm_sensor_cci_func_tbl = {
 	.i2c_util = msm_sensor_cci_i2c_util,
 	.i2c_poll =  msm_camera_cci_i2c_poll,
 };
-
-int vl53l0_get_dt_xtalk_data(struct device_node *of_node, int *xtalk)
-{
-	int rc = 0;
-	uint32_t count = 0;
-	uint32_t v_array[1];
-
-	count = of_property_count_strings(of_node, "st,xtalkval");
-
-	if (!count)
-		return 0;
-
-	rc = of_property_read_u32_array(of_node, "st,xtalkval",
-		v_array, 1);
-
-	if (rc != -EINVAL) {
-		if (rc < 0)
-			pr_err("%s failed %d\n", __func__, __LINE__);
-		else
-			*xtalk = v_array[0];
-	} else
-		rc = 0;
-
-	return rc;
-}
 static int stmvl53l0_get_dt_data(struct device *dev, struct cci_data *data);
 
 /*
@@ -102,32 +73,11 @@ static int stmvl53l0_get_dt_data(struct device *dev, struct cci_data *data);
 static int stmvl53l0_get_dt_data(struct device *dev, struct cci_data *data)
 {
 	int rc = 0;
-	struct msm_camera_gpio_conf *gconf = NULL;
-	uint16_t *gpio_array = NULL;
-	uint16_t gpio_array_size = 0;
-	int i;
-	struct msm_pinctrl_info *sensor_pctrl = NULL;
-	struct msm_tof_vreg *vreg_cfg = NULL;
-
 	vl53l0_dbgmsg("Enter\n");
-
-	sensor_pctrl = &data->pinctrl_info;
-	sensor_pctrl->pinctrl = devm_pinctrl_get(dev);
-	if (IS_ERR_OR_NULL(sensor_pctrl->pinctrl)) {
-		pr_err("%s:%d Getting pinctrl handle failed\n",
-			__func__, __LINE__);
-		return -EINVAL;
-	}
-	sensor_pctrl->gpio_state_active =
-		pinctrl_lookup_state(sensor_pctrl->pinctrl,
-		LASER_SENSOR_PINCTRL_STATE_DEFAULT);
-
-	sensor_pctrl->gpio_state_suspend
-		= pinctrl_lookup_state(sensor_pctrl->pinctrl,
-		LASER_SENSOR_PINCTRL_STATE_SLEEP);
 
 	if (dev->of_node) {
 		struct device_node *of_node = dev->of_node;
+		struct msm_tof_vreg *vreg_cfg;
 
 		if (!of_node) {
 			vl53l0_errmsg("failed %d\n", __LINE__);
@@ -141,8 +91,8 @@ static int stmvl53l0_get_dt_data(struct device *dev, struct cci_data *data)
 			return rc;
 		}
 		vl53l0_dbgmsg("cell-index: %d\n", data->pdev->id);
-		rc = of_property_read_u32(of_node,
-			"qcom,cci-master", &data->cci_master);
+		rc = of_property_read_u32(of_node, "qcom,cci-master",
+				&data->cci_master);
 		if (rc < 0) {
 			vl53l0_errmsg("failed %d\n", __LINE__);
 			/* Set default master 0 */
@@ -150,49 +100,19 @@ static int stmvl53l0_get_dt_data(struct device *dev, struct cci_data *data)
 			rc = 0;
 		}
 		vl53l0_dbgmsg("cci_master: %d\n", data->cci_master);
-
-		if (of_find_property(of_node,
-					"qcom,cam-vreg-name", NULL)) {
-			vl53l0_dbgmsg("vreg setting is found");
+		if (of_find_property(of_node, "qcom,cam-vreg-name", NULL)) {
 			vreg_cfg = &data->vreg_cfg;
 			rc = msm_camera_get_dt_vreg_data(of_node,
-				 &vreg_cfg->cam_vreg, &vreg_cfg->num_vreg);
+				&vreg_cfg->cam_vreg, &vreg_cfg->num_vreg);
 			if (rc < 0) {
 				vl53l0_errmsg("failed %d\n", __LINE__);
-				rc = 0;
-			}
-		}
-		vl53l0_dbgmsg("vreg num: %d\n", vreg_cfg->num_vreg);
-
-		gpio_array_size = of_gpio_count(of_node);
-		gconf = &data->gconf;
-
-		if (gpio_array_size) {
-			gpio_array = kcalloc(gpio_array_size, sizeof(uint16_t),
-				GFP_KERNEL);
-
-			for (i = 0; i < gpio_array_size; i++) {
-				gpio_array[i] = of_get_gpio(of_node, i);
-				pr_err("%s gpio_array[%d] = %d\n", __func__, i,
-					gpio_array[i]);
-			}
-
-			rc = msm_camera_get_dt_gpio_req_tbl(of_node, gconf,
-				gpio_array, gpio_array_size);
-			if (rc < 0) {
-				pr_err("%s failed %d\n", __func__, __LINE__);
-				return rc;
-			}
-
-			rc = msm_camera_init_gpio_pin_tbl(of_node, gconf,
-				gpio_array, gpio_array_size);
-			if (rc < 0) {
-				pr_err("%s failed %d\n", __func__, __LINE__);
 				return rc;
 			}
 		}
-		rc = vl53l0_get_dt_xtalk_data(of_node,
-			&(data->xtalk));
+		vl53l0_dbgmsg("vreg-name: %s min_volt: %d max_volt: %d",
+			vreg_cfg->cam_vreg->reg_name,
+			vreg_cfg->cam_vreg->min_voltage,
+			vreg_cfg->cam_vreg->max_voltage);
 	}
 	vl53l0_dbgmsg("End rc =%d\n", rc);
 
@@ -204,10 +124,11 @@ static int32_t stmvl53l0_vreg_control(struct cci_data *data, int config)
 	int rc = 0, i, cnt;
 	struct msm_tof_vreg *vreg_cfg;
 
-	vl53l0_dbgmsg("Enter with config %d\n", config);
+	vl53l0_dbgmsg("Enter\n");
 
 	vreg_cfg = &data->vreg_cfg;
 	cnt = vreg_cfg->num_vreg;
+	vl53l0_dbgmsg("num_vreg: %d\n", cnt);
 	if (!cnt) {
 		vl53l0_errmsg("failed %d\n", __LINE__);
 		return 0;
@@ -229,9 +150,24 @@ static int32_t stmvl53l0_vreg_control(struct cci_data *data, int config)
 	return rc;
 }
 
+
 static int msm_tof_close(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 {
 	int rc = 0;
+/*
+	struct msm_tof_ctrl_t *tof_ctrl =  v4l2_get_subdevdata(sd);
+	if (!tof_ctrl) {
+		pr_err("failed\n");
+		return -EINVAL;
+	}
+	if (tof_ctrl->tof_device_type == MSM_CAMERA_PLATFORM_DEVICE) {
+		rc = tof_ctrl->i2c_client.i2c_func_tbl->i2c_util(
+			&tof_ctrl->i2c_client, MSM_CCI_RELEASE);
+		if (rc < 0)
+			pr_err("cci_init failed\n");
+	}
+    tof_ctrl->i2c_state = TOF_I2C_RELEASE;
+*/
 	return rc;
 }
 
@@ -272,7 +208,6 @@ static int stmvl53l0_cci_init(struct cci_data *data)
 		data->client->cci_client =
 			kzalloc(sizeof(struct msm_camera_cci_client),
 			GFP_KERNEL);
-
 		if (!data->client->cci_client) {
 			vl53l0_errmsg("%d, failed no memory\n", __LINE__);
 			return -ENOMEM;
@@ -284,8 +219,8 @@ static int stmvl53l0_cci_init(struct cci_data *data)
 		v4l2_set_subdevdata(&data->msm_sd.sd, data);
 		data->msm_sd.sd.internal_ops = &msm_tof_internal_ops;
 		data->msm_sd.sd.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
-		snprintf(data->msm_sd.sd.name,
-				ARRAY_SIZE(data->msm_sd.sd.name), "msm_tof");
+		snprintf(data->msm_sd.sd.name, ARRAY_SIZE(data->msm_sd.sd.name),
+			"msm_tof");
 		media_entity_init(&data->msm_sd.sd.entity, 0, NULL, 0);
 		data->msm_sd.sd.entity.type = MEDIA_ENT_T_V4L2_SUBDEV;
 		data->msm_sd.sd.entity.group_id = MSM_CAMERA_SUBDEV_TOF;
@@ -296,7 +231,6 @@ static int stmvl53l0_cci_init(struct cci_data *data)
 		data->subdev_initialized = TRUE;
 	}
 
-	vl53l0_dbgmsg("inited\n");
 	cci_client->sid = 0x29;
 	cci_client->retries = 3;
 	cci_client->id_map = 0;
@@ -308,6 +242,7 @@ static int stmvl53l0_cci_init(struct cci_data *data)
 		return rc;
 	}
 	vl53l0_dbgmsg("CCI Init Succeeded\n");
+
 	data->client->addr_type = MSM_CAMERA_I2C_BYTE_ADDR;
 
 	return 0;
@@ -316,54 +251,69 @@ static int stmvl53l0_cci_init(struct cci_data *data)
 static int32_t stmvl53l0_platform_probe(struct platform_device *pdev)
 {
 	struct stmvl53l0_data *vl53l0_data = NULL;
-	struct cci_data *data = NULL;
-	unsigned int present = 0;
-
+	struct cci_data *cci_object = NULL;
 	int32_t rc = 0;
 
 	vl53l0_dbgmsg("Enter\n");
 
 	if (!pdev->dev.of_node) {
-		vl53l0_errmsg("%d,of_node NULL\n", __LINE__);
+		vl53l0_errmsg("of_node NULL\n");
 		return -EINVAL;
 	}
 
-	vl53l0_data = stmvl53l0_getobject();
-	if (NULL == vl53l0_data) {
-		vl53l0_errmsg("%d,Object not found!\n", __LINE__);
-		return -EINVAL;
+	vl53l0_data = kzalloc(sizeof(struct stmvl53l0_data), GFP_KERNEL);
+	if (!vl53l0_data) {
+		rc = -ENOMEM;
+		return rc;
 	}
-	data = &(vl53l0_data->cci_client_object);
-	if (!data) {
-		vl53l0_errmsg("%d,data NULL\n", __LINE__);
-		return -EINVAL;
+	if (vl53l0_data) {
+		vl53l0_data->client_object =
+			kzalloc(sizeof(struct cci_data), GFP_KERNEL);
+		cci_object = (struct cci_data *)vl53l0_data->client_object;
 	}
+	cci_object->client =
+		(struct msm_camera_i2c_client *)&cci_object->g_client;
+
+	/* setup bus type */
+	vl53l0_data->bus_type = CCI_BUS;
 
 	/* Set platform device handle */
-	data->subdev_ops = &msm_tof_subdev_ops;
-	data->pdev = pdev;
-	stmvl53l0_get_dt_data(&pdev->dev, data);
-	data->subdev_id = pdev->id;
+	cci_object->subdev_ops = &msm_tof_subdev_ops;
+	cci_object->pdev = pdev;
+	rc = stmvl53l0_get_dt_data(&pdev->dev, cci_object);
+	if (rc < 0) {
+		vl53l0_errmsg("%d, failed rc %d\n", __LINE__, rc);
+		kfree(vl53l0_data->client_object);
+		kfree(vl53l0_data);
+		return rc;
+	}
+	vl53l0_data->irq_gpio = of_get_named_gpio_flags(pdev->dev.of_node,
+		"stm,irq-gpio", 0, NULL);
+
+	if (!gpio_is_valid(vl53l0_data->irq_gpio)) {
+		vl53l0_errmsg("%d failed get irq gpio", __LINE__);
+		kfree(vl53l0_data->client_object);
+		kfree(vl53l0_data);
+		return -EINVAL;
+	}
+
+	cci_object->subdev_id = pdev->id;
 
 	/* Set device type as platform device */
-	data->device_type = MSM_CAMERA_PLATFORM_DEVICE;
-	data->subdev_initialized = FALSE;
+	cci_object->device_type = MSM_CAMERA_PLATFORM_DEVICE;
+	cci_object->subdev_initialized = FALSE;
 
-	data->client = (struct msm_camera_i2c_client *)&data->g_client;
+	/* setup device name */
+	vl53l0_data->dev_name = dev_name(&pdev->dev);
 
-	rc = stmvl53l0_power_up_cci(data, &present);
-	if (rc) {
-		vl53l0_errmsg("%d,error rc %d\n", __LINE__, rc);
-		return rc;
-	}
-	rc = stmvl53l0_checkmoduleid(vl53l0_data, data->client, CCI_BUS);
-	if (rc != 0) {
-		vl53l0_errmsg("%d,error rc %d\n", __LINE__, rc);
-		stmvl53l0_power_down_cci(data);
-		return rc;
-	}
-	stmvl53l0_power_down_cci(data);
-	stmvl53l0_setup(vl53l0_data, CCI_BUS);
+	/* setup device data */
+	dev_set_drvdata(&pdev->dev, vl53l0_data);
+
+	/* setup other stuff */
+	rc = stmvl53l0_setup(vl53l0_data);
+
+	/* init default value */
+	cci_object->power_up = 0;
 
 	vl53l0_dbgmsg("End\n");
 
@@ -371,6 +321,18 @@ static int32_t stmvl53l0_platform_probe(struct platform_device *pdev)
 
 }
 
+static int32_t stmvl53l0_platform_remove(struct platform_device *pdev)
+{
+	struct stmvl53l0_data *vl53l0_data = platform_get_drvdata(pdev);
+
+	stmvl53l0_cleanup(vl53l0_data);
+	platform_set_drvdata(pdev, NULL);
+
+	kfree(vl53l0_data->client_object);
+	kfree(vl53l0_data);
+
+  return 0;
+}
 
 static const struct of_device_id st_stmvl53l0_dt_match[] = {
 	{ .compatible = "st,stmvl53l0", },
@@ -379,10 +341,12 @@ static const struct of_device_id st_stmvl53l0_dt_match[] = {
 
 static struct platform_driver stmvl53l0_platform_driver = {
 	.probe = stmvl53l0_platform_probe,
+	.remove = stmvl53l0_platform_remove,
 	.driver = {
 		.name = STMVL53L0_DRV_NAME,
 		.owner = THIS_MODULE,
 		.of_match_table = st_stmvl53l0_dt_match,
+                .probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 };
 
@@ -392,11 +356,6 @@ int stmvl53l0_power_up_cci(void *cci_object, unsigned int *preset_flag)
 	struct cci_data *data = (struct cci_data *)cci_object;
 
 	vl53l0_dbgmsg("Enter");
-	pinctrl_select_state(data->pinctrl_info.pinctrl,
-		data->pinctrl_info.gpio_state_active);
-
-	stmvl53l0_vreg_control(data, 1);
-	msleep(20);
 
 	/* need to init cci first */
 	ret = stmvl53l0_cci_init(data);
@@ -404,15 +363,20 @@ int stmvl53l0_power_up_cci(void *cci_object, unsigned int *preset_flag)
 		vl53l0_errmsg("stmvl53l0_cci_init failed %d\n", __LINE__);
 		return ret;
 	}
-
-	msm_camera_request_gpio_table(
-		data->gconf.cam_gpio_req_tbl,
-		data->gconf.cam_gpio_req_tbl_size, 1);
-	gpio_set_value_cansleep(data->gconf.cam_gpio_req_tbl[0].gpio, 1);
+	/* actual power up */
+	if (data && data->device_type == MSM_CAMERA_PLATFORM_DEVICE) {
+		ret = stmvl53l0_vreg_control(data, 1);
+		if (ret < 0) {
+			vl53l0_errmsg("stmvl53l0_vreg_control failed %d\n",
+				__LINE__);
+			return ret;
+		}
+	}
 	data->power_up = 1;
+	usleep_range(3000, 3500);
 	*preset_flag = 1;
 	vl53l0_dbgmsg("End\n");
-	msleep(20);
+
 	return ret;
 }
 
@@ -427,20 +391,18 @@ int stmvl53l0_power_down_cci(void *cci_object)
 		ret = data->client->i2c_func_tbl->i2c_util(data->client,
 				MSM_CCI_RELEASE);
 		if (ret < 0)
-			vl53l0_errmsg("%d,CCI Release failed rc %d\n",
-			__LINE__, ret);
+			vl53l0_errmsg("CCI Release failed rc %d\n", ret);
 
-		pinctrl_select_state(data->pinctrl_info.pinctrl,
-			data->pinctrl_info.gpio_state_suspend);
-
-		msm_camera_request_gpio_table(
-			data->gconf.cam_gpio_req_tbl,
-			data->gconf.cam_gpio_req_tbl_size, 0);
-
-		gpio_set_value_cansleep(
-			data->gconf.cam_gpio_req_tbl[0].gpio, 0);
-
-		stmvl53l0_vreg_control(data, 0);
+		/* actual power down */
+		if (data->device_type == MSM_CAMERA_PLATFORM_DEVICE) {
+			ret = stmvl53l0_vreg_control(data, 0);
+			if (ret < 0) {
+				vl53l0_errmsg(
+					"stmvl53l0_vreg_control failed %d\n",
+					__LINE__);
+				return ret;
+			}
+		}
 	}
 	data->power_up = 0;
 	vl53l0_dbgmsg("End\n");
@@ -450,6 +412,7 @@ int stmvl53l0_power_down_cci(void *cci_object)
 int stmvl53l0_init_cci(void)
 {
 	int ret = 0;
+
 	vl53l0_dbgmsg("Enter\n");
 
 	/* register as a platform device */
@@ -465,6 +428,7 @@ int stmvl53l0_init_cci(void)
 void stmvl53l0_exit_cci(void *cci_object)
 {
 	struct cci_data *data = (struct cci_data *)cci_object;
+
 	vl53l0_dbgmsg("Enter\n");
 
 	if (data && data->client->cci_client)
@@ -472,4 +436,4 @@ void stmvl53l0_exit_cci(void *cci_object)
 
 	vl53l0_dbgmsg("End\n");
 }
-
+#endif /* end of CAMERA_CCI */
