@@ -876,8 +876,13 @@ EXPORT_SYMBOL(file_path);
  */
 int vfs_open(const struct path *path, struct file *file)
 {
+	struct dentry *dentry = d_real(path->dentry, NULL);
+
+	if (IS_ERR(dentry))
+		return PTR_ERR(dentry);
+
 	file->f_path = *path;
-	return do_dentry_open(file, d_backing_inode(path->dentry), NULL);
+	return do_dentry_open(file, d_backing_inode(dentry), NULL);
 }
 
 struct file *dentry_open(const struct path *path, int flags,
