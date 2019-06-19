@@ -284,15 +284,15 @@ static int lg_panel_prepare(struct drm_panel *panel)
 	err = mipi_dsi_dcs_write(ctx->link, MIPI_DCS_SET_GAMMA_CURVE,
 				 (u8[]){ 0x02 }, 1);
 	if (err < 0) {
-		DRM_DEV_ERROR(panel->dev,
-			      "failed to set gamma curve: %d\n", err);
+		DRM_DEV_ERROR(panel->dev, "failed to set gamma curve: %d\n",
+			      err);
 		goto poweroff;
 	}
 
-	err = mipi_dsi_dcs_set_tear_on(ctx->link, MIPI_DSI_DCS_TEAR_MODE_VBLANK);
+	err = mipi_dsi_dcs_set_tear_on(ctx->link,
+				       MIPI_DSI_DCS_TEAR_MODE_VBLANK);
 	if (err < 0) {
-		DRM_DEV_ERROR(panel->dev,
-			      "failed to set tear on: %d\n", err);
+		DRM_DEV_ERROR(panel->dev, "failed to set tear on: %d\n", err);
 		goto poweroff;
 	}
 
