@@ -103,7 +103,7 @@ DECLARE_EVENT_CLASS(xhci_log_ctx,
 			((HCC_64BYTE_CONTEXT(xhci->hcc_params) + 1) * 32) *
 			((ctx->type == XHCI_CTX_TYPE_INPUT) + ep_num + 1));
 	),
-	TP_printk("\nctx_64=%d, ctx_type=%u, ctx_dma=@%llx, ctx_va=@%p",
+	TP_printk("\nctx_64=%d, ctx_type=%u, ctx_dma=@%llx, ctx_va=@%pK",
 			__entry->ctx_64, __entry->ctx_type,
 			(unsigned long long) __entry->ctx_dma, __entry->ctx_va
 	)
@@ -134,7 +134,7 @@ DECLARE_EVENT_CLASS(xhci_log_event,
 		memcpy(__get_dynamic_array(trb), trb_va,
 			sizeof(struct xhci_generic_trb));
 	),
-	TP_printk("\ntrb_dma=@%llx, trb_va=@%p, status=%08x, flags=%08x",
+	TP_printk("\ntrb_dma=@%llx, trb_va=@%pK, status=%08x, flags=%08x",
 			(unsigned long long) __entry->dma, __entry->va,
 			__entry->status, __entry->flags
 	)
@@ -143,6 +143,76 @@ DECLARE_EVENT_CLASS(xhci_log_event,
 DEFINE_EVENT(xhci_log_event, xhci_cmd_completion,
 	TP_PROTO(void *trb_va, struct xhci_generic_trb *ev),
 	TP_ARGS(trb_va, ev)
+);
+
+DECLARE_EVENT_CLASS(xhci_log_urb,
+	TP_PROTO(struct urb *urb),
+	TP_ARGS(urb),
+	TP_STRUCT__entry(
+		__field(void *, urb)
+		__field(unsigned int, pipe)
+		__field(unsigned int, stream)
+		__field(int, status)
+		__field(unsigned int, flags)
+		__field(int, num_mapped_sgs)
+		__field(int, num_sgs)
+		__field(int, length)
+		__field(int, actual)
+		__field(int, epnum)
+		__field(int, dir_in)
+		__field(int, type)
+	),
+	TP_fast_assign(
+		__entry->urb = urb;
+		__entry->pipe = urb->pipe;
+		__entry->stream = urb->stream_id;
+		__entry->status = urb->status;
+		__entry->flags = urb->transfer_flags;
+		__entry->num_mapped_sgs = urb->num_mapped_sgs;
+		__entry->num_sgs = urb->num_sgs;
+		__entry->length = urb->transfer_buffer_length;
+		__entry->actual = urb->actual_length;
+		__entry->epnum = usb_endpoint_num(&urb->ep->desc);
+		__entry->dir_in = usb_endpoint_dir_in(&urb->ep->desc);
+		__entry->type = usb_endpoint_type(&urb->ep->desc);
+	),
+	TP_printk("ep%d%s-%s: urb %p pipe %u length %d/%d sgs %d/%d stream %d flags %08x",
+			__entry->epnum, __entry->dir_in ? "in" : "out",
+			({ char *s;
+			switch (__entry->type) {
+			case USB_ENDPOINT_XFER_INT:
+				s = "intr";
+				break;
+			case USB_ENDPOINT_XFER_CONTROL:
+				s = "control";
+				break;
+			case USB_ENDPOINT_XFER_BULK:
+				s = "bulk";
+				break;
+			case USB_ENDPOINT_XFER_ISOC:
+				s = "isoc";
+				break;
+			default:
+				s = "UNKNOWN";
+			} s; }), __entry->urb, __entry->pipe, __entry->actual,
+			__entry->length, __entry->num_mapped_sgs,
+			__entry->num_sgs, __entry->stream, __entry->flags
+		)
+);
+
+DEFINE_EVENT(xhci_log_urb, xhci_urb_enqueue,
+	TP_PROTO(struct urb *urb),
+	TP_ARGS(urb)
+);
+
+DEFINE_EVENT(xhci_log_urb, xhci_urb_giveback,
+	TP_PROTO(struct urb *urb),
+	TP_ARGS(urb)
+);
+
+DEFINE_EVENT(xhci_log_urb, xhci_urb_dequeue,
+	TP_PROTO(struct urb *urb),
+	TP_ARGS(urb)
 );
 
 #endif /* __XHCI_TRACE_H */

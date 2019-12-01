@@ -15,7 +15,14 @@
 #include <linux/seq_file.h>
 #include <linux/debugfs.h>
 #include <linux/pm_wakeirq.h>
+#include <linux/types.h>
 #include <trace/events/power.h>
+#include <linux/irq.h>
+#include <linux/irqdesc.h>
+
+#ifdef CONFIG_FIH_DUMP_WAKELOCK
+#include <linux/msm_drm_notify.h>
+#endif
 
 #include "power.h"
 
@@ -53,6 +60,14 @@ static void split_counters(unsigned int *cnt, unsigned int *inpr)
 static unsigned int saved_count;
 
 static DEFINE_SPINLOCK(events_lock);
+
+#ifdef CONFIG_FIH_DUMP_WAKELOCK
+#define POLLING_DUMP_WAKELOCK_SECS      (60)
+#define POLLING_DUMP_WAKELOCK_1ST_SECS  (1)
+
+static void dump_wakelocks(unsigned long data);
+static DEFINE_TIMER(dump_wakelock_timer, dump_wakelocks, 0, 0);
+#endif /* CONFIG_FIH_DUMP_WAKELOCK */
 
 static void pm_wakeup_timer_fn(unsigned long data);
 
@@ -804,6 +819,38 @@ void pm_wakeup_event(struct device *dev, unsigned int msec)
 }
 EXPORT_SYMBOL_GPL(pm_wakeup_event);
 
+void pm_get_active_wakeup_sources(char *pending_wakeup_source, size_t max)
+{
+	struct wakeup_source *ws, *last_active_ws = NULL;
+	int len = 0;
+	bool active = false;
+	int srcuidx;
+
+	srcuidx = srcu_read_lock(&wakeup_srcu);
+	list_for_each_entry_rcu(ws, &wakeup_sources, entry) {
+		if (ws->active && len < max) {
+			if (!active)
+				len += scnprintf(pending_wakeup_source, max,
+						"Pending Wakeup Sources: ");
+			len += scnprintf(pending_wakeup_source + len, max - len,
+				"%s ", ws->name);
+			active = true;
+		} else if (!active &&
+			   (!last_active_ws ||
+			    ktime_to_ns(ws->last_time) >
+			    ktime_to_ns(last_active_ws->last_time))) {
+			last_active_ws = ws;
+		}
+	}
+	if (!active && last_active_ws) {
+		scnprintf(pending_wakeup_source, max,
+				"Last active Wakeup Source: %s",
+				last_active_ws->name);
+	}
+	srcu_read_unlock(&wakeup_srcu, srcuidx);
+}
+EXPORT_SYMBOL_GPL(pm_get_active_wakeup_sources);
+
 void pm_print_active_wakeup_sources(void)
 {
 	struct wakeup_source *ws;
@@ -876,11 +923,127 @@ void pm_wakeup_clear(void)
 
 void pm_system_irq_wakeup(unsigned int irq_number)
 {
+	struct irq_desc *desc;
+	const char *name = "null";
+
 	if (pm_wakeup_irq == 0) {
+		if (msm_show_resume_irq_mask) {
+			desc = irq_to_desc(irq_number);
+			if (desc == NULL)
+				name = "stray irq";
+			else if (desc->action && desc->action->name)
+				name = desc->action->name;
+
+			#ifdef CONFIG_FIH_SUSPEND_RESUME_LOG
+			pr_warn("[PM] %s: %d triggered %s\n", __func__,
+					irq_number, name);
+			#else
+			pr_warn("%s: %d triggered %s\n", __func__,
+					irq_number, name);
+			#endif
+
+		}
 		pm_wakeup_irq = irq_number;
 		pm_system_wakeup();
 	}
 }
+#ifdef CONFIG_FIH_DUMP_WAKELOCK
+static int print_active_wakeup_source_stats(struct wakeup_source *ws)
+{
+	unsigned long flags;
+	ktime_t active_time;
+	int ret = 0;
+
+	spin_lock_irqsave(&ws->lock, flags);
+
+	if (ws->active) {
+		ktime_t now = ktime_get();
+
+		active_time = ktime_sub(now, ws->last_time);
+
+		pr_info("[PM]active wake lock %s, active_time=%lld ms\n",
+			ws->name, ktime_to_ms(active_time));
+	}
+
+	spin_unlock_irqrestore(&ws->lock, flags);
+
+	return ret;
+}
+
+ /* Caller must acquire the list_lock spinlock */
+static void print_active_locks(void)
+{
+	struct wakeup_source *ws;
+	int srcuidx;
+
+	srcuidx = srcu_read_lock(&wakeup_srcu);
+	list_for_each_entry_rcu(ws, &wakeup_sources, entry)
+	print_active_wakeup_source_stats(ws);
+	srcu_read_unlock(&wakeup_srcu, srcuidx);
+}
+
+static void dump_wakelocks(unsigned long data)
+{
+	pr_info("[PM]--- dump_wakelocks ---\n");
+
+	print_active_locks();
+
+	mod_timer(&dump_wakelock_timer, jiffies + POLLING_DUMP_WAKELOCK_SECS*HZ);
+}
+
+static int fb_notifier_callback(struct notifier_block *self, unsigned long event, void *data)
+{
+	struct msm_drm_notifier *evdata = data;
+	int *blank = NULL;
+	static bool add = false;
+
+	if (!evdata || !evdata->data) {
+		pr_err("pms !data\n");
+		return 0;
+	}
+
+	if (evdata->id != MSM_DRM_PRIMARY_DISPLAY) {
+		pr_err("pms not primary display.(%d)\n", evdata->id);
+		return 0;
+	}
+
+	blank = evdata->data;
+	if (*blank != MSM_DRM_BLANK_POWERDOWN && *blank != MSM_DRM_BLANK_UNBLANK) {
+		pr_err("pms drm *blank = %d\n", *blank);
+		return 0;
+	}
+
+	if (*blank == MSM_DRM_BLANK_POWERDOWN) {
+		if (!add) {
+			pr_info("[PM] add dump_wakelock_timer\n");
+			mod_timer(&dump_wakelock_timer, jiffies + POLLING_DUMP_WAKELOCK_1ST_SECS*HZ);
+			add = true;
+		}
+	} else if (*blank == MSM_DRM_BLANK_UNBLANK) {
+		if (del_timer(&dump_wakelock_timer)) {
+			pr_info("[PM] del dump_wakelock_timer\n");
+			add = false;
+		}
+	}
+
+	return 0;
+}
+
+static struct notifier_block pms_drm_notif;
+static void setup_wakelock_dump(void)
+{
+	int retval = 0;
+
+	memset(&pms_drm_notif, 0, sizeof(pms_drm_notif));
+	pms_drm_notif.notifier_call = fb_notifier_callback;
+
+	retval = msm_drm_register_client(&pms_drm_notif);
+	if (retval)
+		pr_err("%s: Unable to register pms_drm_notif: %d\n", __func__, retval);
+	else
+		pr_info("%s: Success to register pms_drm_notif: %d\n", __func__, retval);
+}
+#endif /* CONFIG_FIH_DUMP_WAKELOCK */
 
 /**
  * pm_get_wakeup_count - Read the number of registered wakeup events.
@@ -1011,7 +1174,7 @@ static int print_wakeup_source_stats(struct seq_file *m,
 		active_time = ktime_set(0, 0);
 	}
 
-	seq_printf(m, "%-12s\t%lu\t\t%lu\t\t%lu\t\t%lu\t\t%lld\t\t%lld\t\t%lld\t\t%lld\t\t%lld\n",
+	seq_printf(m, "%-32s\t%lu\t\t%lu\t\t%lu\t\t%lu\t\t%lld\t\t%lld\t\t%lld\t\t%lld\t\t%lld\n",
 		   ws->name, active_count, ws->event_count,
 		   ws->wakeup_count, ws->expire_count,
 		   ktime_to_ms(active_time), ktime_to_ms(total_time),
@@ -1032,7 +1195,7 @@ static int wakeup_sources_stats_show(struct seq_file *m, void *unused)
 	struct wakeup_source *ws;
 	int srcuidx;
 
-	seq_puts(m, "name\t\tactive_count\tevent_count\twakeup_count\t"
+	seq_puts(m, "name\t\t\t\t\tactive_count\tevent_count\twakeup_count\t"
 		"expire_count\tactive_since\ttotal_time\tmax_time\t"
 		"last_change\tprevent_suspend_time\n");
 
@@ -1063,6 +1226,9 @@ static int __init wakeup_sources_debugfs_init(void)
 {
 	wakeup_sources_stats_dentry = debugfs_create_file("wakeup_sources",
 			S_IRUGO, NULL, NULL, &wakeup_sources_stats_fops);
+#ifdef CONFIG_FIH_DUMP_WAKELOCK
+	setup_wakelock_dump();
+#endif
 	return 0;
 }
 

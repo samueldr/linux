@@ -37,6 +37,10 @@
 #include <linux/of.h>
 #include <linux/of_address.h>
 
+#ifdef CONFIG_FIH
+#include <fih/fih_mem.h>
+#endif
+
 #define RAMOOPS_KERNMSG_HDR "===="
 #define MIN_MEM_SIZE 4096UL
 
@@ -550,6 +554,12 @@ static int ramoops_parse_dt(struct platform_device *pdev,
 	return 0;
 }
 
+void notrace ramoops_console_write_buf(const char *buf, size_t size)
+{
+	struct ramoops_context *cxt = &oops_cxt;
+	persistent_ram_write(cxt->cprz, buf, size);
+}
+
 static int ramoops_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
@@ -758,6 +768,14 @@ static void ramoops_register_dummy(void)
 
 static int __init ramoops_init(void)
 {
+	#ifdef CONFIG_FIH
+	mem_size = FIH_MEM_PSTORE_SIZE;
+	mem_address = FIH_MEM_PSTORE_ADDR;
+	ramoops_console_size = 256 * 1024UL;
+	ramoops_ftrace_size = 256 * 1024UL;
+	ramoops_pmsg_size = 512 * 1024UL;
+	#endif
+
 	ramoops_register_dummy();
 	return platform_driver_register(&ramoops_driver);
 }

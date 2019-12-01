@@ -113,6 +113,8 @@ source "drivers/usb/chipidea/Kconfig"
 
 source "drivers/usb/isp1760/Kconfig"
 
+source "drivers/usb/pd/Kconfig"
+
 comment "USB port drivers"
 
 if USB
@@ -190,4 +192,5 @@ config USB_ULPI_BUS
 	  To compile this driver as a module, choose M here: the module will
 	  be called ulpi.
 
+source "drivers/usb/tusb544/Kconfig"
 endif # USB_SUPPORT
