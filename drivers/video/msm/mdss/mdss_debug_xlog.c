@@ -227,6 +227,7 @@ static void mdss_xlog_dump_all(void)
 	mdss_dbg_xlog.xlog_user_buf[off] = '\0';
 }
 
+#ifdef CONFIG_DEBUG_FS
 u32 get_dump_range(struct dump_offset *range_node, size_t max_offset)
 {
 	u32 length = 0;
@@ -241,6 +242,7 @@ u32 get_dump_range(struct dump_offset *range_node, size_t max_offset)
 
 	return length;
 }
+#endif
 
 static void mdss_dump_debug_bus(u32 bus_dump_flag,
 	u32 **dump_mem)
@@ -427,6 +429,7 @@ static void mdss_dump_vbif_debug_bus(u32 bus_dump_flag,
 	pr_info("========End VBIF Debug bus=========\n");
 }
 
+#ifdef CONFIG_DEBUG_FS
 void mdss_dump_reg(const char *dump_name, u32 reg_dump_flag,
 	char *addr, int len, u32 **dump_mem, phys_addr_t *regs_phys, bool from_isr)
 {
@@ -492,6 +495,7 @@ void mdss_dump_reg(const char *dump_name, u32 reg_dump_flag,
 	if (!from_isr)
 		mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_OFF);
 }
+#endif
 
 static void mdss_dump_reg_by_ranges(struct mdss_debug_base *dbg,
 	u32 reg_dump_flag)

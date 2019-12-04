@@ -4426,6 +4426,7 @@ static ssize_t mdss_mdp_cmd_autorefresh_store(struct device *dev,
 }
 
 
+#ifdef CONFIG_DEBUG_FS
 /* Print the last CRC Value read for batch mode */
 static ssize_t mdss_mdp_misr_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
@@ -4450,6 +4451,7 @@ static ssize_t mdss_mdp_misr_show(struct device *dev,
 
 	return ret;
 }
+#endif
 
 /*
  * Enable crc batch mode. By enabling this mode through sysfs
@@ -4529,8 +4531,10 @@ static ssize_t mdss_mdp_misr_store(struct device *dev,
 	return len;
 }
 
+#ifdef CONFIG_DEBUG_FS
 static DEVICE_ATTR(msm_misr_en, S_IRUGO | S_IWUSR,
 	mdss_mdp_misr_show, mdss_mdp_misr_store);
+#endif
 static DEVICE_ATTR(msm_cmd_autorefresh_en, S_IRUGO | S_IWUSR,
 	mdss_mdp_cmd_autorefresh_show, mdss_mdp_cmd_autorefresh_store);
 static DEVICE_ATTR(vsync_event, S_IRUGO, mdss_mdp_vsync_show_event, NULL);
@@ -4552,7 +4556,9 @@ static struct attribute *mdp_overlay_sysfs_attrs[] = {
 	&dev_attr_lineptr_value.attr,
 	&dev_attr_ad.attr,
 	&dev_attr_dyn_pu.attr,
+#ifdef CONFIG_DEBUG_FS
 	&dev_attr_msm_misr_en.attr,
+#endif
 	&dev_attr_msm_cmd_autorefresh_en.attr,
 	&dev_attr_hist_event.attr,
 	&dev_attr_bl_event.attr,

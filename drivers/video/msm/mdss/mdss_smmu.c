@@ -463,7 +463,9 @@ int mdss_smmu_fault_handler(struct iommu_domain *domain, struct device *dev,
 	if (i == MDSS_IOMMU_MAX_DOMAIN)
 		goto end;
 
+#ifdef CONFIG_DEBUG_FS
 	mdss_mdp_debug_mid(mid);
+#endif
 end:
 	return -ENOSYS;
 }
