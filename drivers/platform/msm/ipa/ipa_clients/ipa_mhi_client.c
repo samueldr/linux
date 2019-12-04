@@ -465,6 +465,8 @@ fail:
 #else
 static void ipa_mhi_debugfs_init(void) {}
 static void ipa_mhi_debugfs_destroy(void) {}
+static int ipa_mhi_read_write_host(enum ipa_mhi_dma_dir dir, void *dev_addr,
+	u64 host_addr, int size) {}
 #endif /* CONFIG_DEBUG_FS */
 
 static union IpaHwMhiDlUlSyncCmdData_t ipa_cached_dl_ul_sync_info;
@@ -2314,10 +2316,12 @@ int ipa_mhi_destroy_all_channels(void)
 	return 0;
 }
 
+#ifdef CONFIG_DEBUG_FS
 static void ipa_mhi_debugfs_destroy(void)
 {
 	debugfs_remove_recursive(dent);
 }
+#endif
 
 /**
  * ipa_mhi_destroy() - Destroy MHI IPA
