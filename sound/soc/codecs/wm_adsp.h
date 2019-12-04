@@ -186,9 +186,7 @@ static inline void wm_adsp_init_debugfs(struct wm_adsp *dsp,
 {
 }
 
-void wm_adsp_cleanup_debugfs(struct wm_adsp *dsp)
-{
-}
+void wm_adsp_cleanup_debugfs(struct wm_adsp *dsp);
 #endif
 
 int wm_adsp1_event(struct snd_soc_dapm_widget *w,
