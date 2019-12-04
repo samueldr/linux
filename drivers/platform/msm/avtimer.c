@@ -271,6 +271,7 @@ EXPORT_SYMBOL(avcs_core_disable_power_collapse);
 
 static void reset_work(struct work_struct *work)
 {
+#ifdef SND_SOC_QDSP6V2
 	if (q6core_is_adsp_ready()) {
 		avcs_core_disable_power_collapse(1);
 		avtimer.num_retries = Q6_READY_MAX_RETRIES;
@@ -285,6 +286,7 @@ static void reset_work(struct work_struct *work)
 							__func__);
 		avtimer.num_retries = Q6_READY_MAX_RETRIES;
 	}
+#endif
 }
 
 int avcs_core_query_timer(uint64_t *avtimer_tick)
