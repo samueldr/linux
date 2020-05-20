@@ -7579,6 +7579,8 @@ static void intel_crtc_disable_noatomic(struct intel_crtc *crtc,
 		to_intel_bw_state(dev_priv->bw_obj.state);
 	struct intel_cdclk_state *cdclk_state =
 		to_intel_cdclk_state(dev_priv->cdclk.obj.state);
+	struct intel_dbuf_state *dbuf_state =
+		to_intel_dbuf_state(dev_priv->dbuf.obj.state);
 	struct intel_crtc_state *crtc_state =
 		to_intel_crtc_state(crtc->base.state);
 	enum intel_display_power_domain domain;
@@ -7651,6 +7653,8 @@ static void intel_crtc_disable_noatomic(struct intel_crtc *crtc,
 	cdclk_state->min_cdclk[pipe] = 0;
 	cdclk_state->min_voltage_level[pipe] = 0;
 	cdclk_state->active_pipes &= ~BIT(pipe);
+
+	dbuf_state->active_pipes &= ~BIT(pipe);
 
 	bw_state->data_rate[pipe] = 0;
 	bw_state->num_active_planes[pipe] = 0;
@@ -12500,7 +12504,7 @@ static int icl_check_nv12_planes(struct intel_crtc_state *crtc_state)
 			continue;
 
 		for_each_intel_plane_on_crtc(&dev_priv->drm, crtc, linked) {
-			if (!icl_is_nv12_y_plane(linked->id))
+			if (!icl_is_nv12_y_plane(dev_priv, linked->id))
 				continue;
 
 			if (crtc_state->active_planes & BIT(linked->id))
@@ -12546,6 +12550,10 @@ static int icl_check_nv12_planes(struct intel_crtc_state *crtc_state)
 				plane_state->cus_ctl |= PLANE_CUS_PLANE_7;
 			else if (linked->id == PLANE_SPRITE4)
 				plane_state->cus_ctl |= PLANE_CUS_PLANE_6;
+			else if (linked->id == PLANE_SPRITE3)
+				plane_state->cus_ctl |= PLANE_CUS_PLANE_5_RKL;
+			else if (linked->id == PLANE_SPRITE2)
+				plane_state->cus_ctl |= PLANE_CUS_PLANE_4_RKL;
 			else
 				MISSING_CASE(linked->id);
 		}
@@ -14008,10 +14016,10 @@ static void verify_wm_state(struct intel_crtc *crtc,
 	hw_enabled_slices = intel_enabled_dbuf_slices_mask(dev_priv);
 
 	if (INTEL_GEN(dev_priv) >= 11 &&
-	    hw_enabled_slices != dev_priv->enabled_dbuf_slices_mask)
+	    hw_enabled_slices != dev_priv->dbuf.enabled_slices)
 		drm_err(&dev_priv->drm,
 			"mismatch in DBUF Slices (expected 0x%x, got 0x%x)\n",
-			dev_priv->enabled_dbuf_slices_mask,
+			dev_priv->dbuf.enabled_slices,
 			hw_enabled_slices);
 
 	/* planes */
@@ -14552,9 +14560,7 @@ static int intel_modeset_checks(struct intel_atomic_state *state)
 	state->modeset = true;
 	state->active_pipes = intel_calc_active_pipes(state, dev_priv->active_pipes);
 
-	state->active_pipe_changes = state->active_pipes ^ dev_priv->active_pipes;
-
-	if (state->active_pipe_changes) {
+	if (state->active_pipes != dev_priv->active_pipes) {
 		ret = _intel_atomic_lock_global_state(state);
 		if (ret)
 			return ret;
@@ -15205,29 +15211,6 @@ static void intel_commit_modeset_enables(struct intel_atomic_state *state)
 	}
 }
 
-static void icl_dbuf_slice_pre_update(struct intel_atomic_state *state)
-{
-	struct drm_i915_private *dev_priv = to_i915(state->base.dev);
-	u8 hw_enabled_slices = dev_priv->enabled_dbuf_slices_mask;
-	u8 required_slices = state->enabled_dbuf_slices_mask;
-	u8 slices_union = hw_enabled_slices | required_slices;
-
-	/* If 2nd DBuf slice required, enable it here */
-	if (INTEL_GEN(dev_priv) >= 11 && slices_union != hw_enabled_slices)
-		icl_dbuf_slices_update(dev_priv, slices_union);
-}
-
-static void icl_dbuf_slice_post_update(struct intel_atomic_state *state)
-{
-	struct drm_i915_private *dev_priv = to_i915(state->base.dev);
-	u8 hw_enabled_slices = dev_priv->enabled_dbuf_slices_mask;
-	u8 required_slices = state->enabled_dbuf_slices_mask;
-
-	/* If 2nd DBuf slice is no more required disable it */
-	if (INTEL_GEN(dev_priv) >= 11 && required_slices != hw_enabled_slices)
-		icl_dbuf_slices_update(dev_priv, required_slices);
-}
-
 static void skl_commit_modeset_enables(struct intel_atomic_state *state)
 {
 	struct drm_i915_private *dev_priv = to_i915(state->base.dev);
@@ -15468,9 +15451,7 @@ static void intel_atomic_commit_tail(struct intel_atomic_state *state)
 	if (state->modeset)
 		intel_encoders_update_prepare(state);
 
-	/* Enable all new slices, we might need */
-	if (state->modeset)
-		icl_dbuf_slice_pre_update(state);
+	intel_dbuf_pre_plane_update(state);
 
 	/* Now enable the clocks, plane, pipe, and connectors that we set up. */
 	dev_priv->display.commit_modeset_enables(state);
@@ -15525,9 +15506,7 @@ static void intel_atomic_commit_tail(struct intel_atomic_state *state)
 			dev_priv->display.optimize_watermarks(state, crtc);
 	}
 
-	/* Disable all slices, we don't need */
-	if (state->modeset)
-		icl_dbuf_slice_post_update(state);
+	intel_dbuf_post_plane_update(state);
 
 	for_each_oldnew_intel_crtc_in_state(state, crtc, old_crtc_state, new_crtc_state, i) {
 		intel_post_plane_update(state, crtc);
@@ -17421,10 +17400,14 @@ void intel_modeset_init_hw(struct drm_i915_private *i915)
 {
 	struct intel_cdclk_state *cdclk_state =
 		to_intel_cdclk_state(i915->cdclk.obj.state);
+	struct intel_dbuf_state *dbuf_state =
+		to_intel_dbuf_state(i915->dbuf.obj.state);
 
 	intel_update_cdclk(i915);
 	intel_dump_cdclk_config(&i915->cdclk.hw, "Current CDCLK");
 	cdclk_state->logical = cdclk_state->actual = i915->cdclk.hw;
+
+	dbuf_state->enabled_slices = i915->dbuf.enabled_slices;
 }
 
 static int sanitize_watermarks_add_affected(struct drm_atomic_state *state)
@@ -17666,7 +17649,8 @@ static void intel_mode_config_init(struct drm_i915_private *i915)
 	if (IS_I845G(i915) || IS_I865G(i915)) {
 		mode_config->cursor_width = IS_I845G(i915) ? 64 : 512;
 		mode_config->cursor_height = 1023;
-	} else if (IS_GEN(i915, 2)) {
+	} else if (IS_I830(i915) || IS_I85X(i915) ||
+		   IS_I915G(i915) || IS_I915GM(i915)) {
 		mode_config->cursor_width = 64;
 		mode_config->cursor_height = 64;
 	} else {
@@ -17709,6 +17693,10 @@ int intel_modeset_init_noirq(struct drm_i915_private *i915)
 	intel_mode_config_init(i915);
 
 	ret = intel_cdclk_init(i915);
+	if (ret)
+		return ret;
+
+	ret = intel_dbuf_init(i915);
 	if (ret)
 		return ret;
 
@@ -18228,6 +18216,8 @@ static void intel_modeset_readout_hw_state(struct drm_device *dev)
 	struct drm_i915_private *dev_priv = to_i915(dev);
 	struct intel_cdclk_state *cdclk_state =
 		to_intel_cdclk_state(dev_priv->cdclk.obj.state);
+	struct intel_dbuf_state *dbuf_state =
+		to_intel_dbuf_state(dev_priv->dbuf.obj.state);
 	enum pipe pipe;
 	struct intel_crtc *crtc;
 	struct intel_encoder *encoder;
@@ -18258,7 +18248,8 @@ static void intel_modeset_readout_hw_state(struct drm_device *dev)
 			    enableddisabled(crtc_state->hw.active));
 	}
 
-	dev_priv->active_pipes = cdclk_state->active_pipes = active_pipes;
+	dev_priv->active_pipes = cdclk_state->active_pipes =
+		dbuf_state->active_pipes = active_pipes;
 
 	readout_plane_state(dev_priv);
 
