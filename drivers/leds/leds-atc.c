@@ -23,6 +23,7 @@
 #include <linux/power_supply.h>
 #include <linux/spmi.h>
 
+#define LED_TRIGGER_DEFAULT		"none"
 #define LED_CFG_MASK	0x06
 #define LED_CFG_SHIFT   1
 #define LED_ON		0x03
@@ -38,6 +39,7 @@ struct atc_led_data {
 	struct power_supply	*bms_psy;
 	struct spmi_device	*spmi_dev;
 	u32			addr;
+	bool   default_on;
 };
 
 static int
@@ -70,6 +72,8 @@ static void atc_led_set(struct led_classdev *led_cdev,
 	u8 val;
 	struct atc_led_data *led;
 
+	dev_info(led_cdev, "%s: value: %d\n", __func__, value);
+
 	led = container_of(led_cdev, struct atc_led_data, cdev);
 
 	if (value > LED_ON)
@@ -95,6 +99,7 @@ static int atc_leds_probe(struct spmi_device *spmi)
 	struct atc_led_data *led;
 	struct resource *led_resource;
 	struct device_node *node;
+	const char *temp_string;
 	u32 offset;
 	int rc;
 	u8 reg;
@@ -133,6 +138,24 @@ static int atc_leds_probe(struct spmi_device *spmi)
 		return -ENODEV;
 	}
 
+	/* From leds-qpnp.c */
+	led->cdev.default_trigger = LED_TRIGGER_DEFAULT;
+	rc = of_property_read_string(node, "linux,default-trigger",
+		&temp_string);
+	if (!rc)
+		led->cdev.default_trigger = temp_string;
+	else if (rc != -EINVAL)
+		return rc;
+
+	led->default_on = false;
+	rc = of_property_read_string(node, "qcom,default-state",
+		&temp_string);
+	if (!rc) {
+		if (strncmp(temp_string, "on", sizeof("on")) == 0)
+			led->default_on = true;
+	} else if (rc != -EINVAL)
+		return rc;
+
 	rc = spmi_ext_register_readl(led->spmi_dev->ctrl, led->spmi_dev->sid,
 			led->addr, &reg, 1);
 	if (rc)
@@ -155,6 +178,12 @@ static int atc_leds_probe(struct spmi_device *spmi)
 
 	dev_set_drvdata(&spmi->dev, led);
 	dev_info(&spmi->dev, "%s success\n", __func__);
+
+	if (led->default_on) {
+		dev_info(&spmi->dev, "%s: Default on\n", __func__);
+		atc_led_set(&(led->cdev), led->cdev.max_brightness);
+	}
+
 	return 0;
 }
 
