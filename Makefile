@@ -1859,3 +1859,10 @@ FORCE:
 # Declare the contents of the .PHONY variable as phony.  We keep that
 # information in a variable so we can use it in if_changed and friends.
 .PHONY: $(PHONY)
+
+# What the heck mediatek...
+# The includes everywhere assume these folders are available. Mostly.
+# They are not.
+KBUILD_CFLAGS	+= -I$(srctree)/drivers/misc/mediatek/teei/300/common/include/
+KBUILD_CFLAGS	+= -I$(srctree)/drivers/misc/mediatek/teei/300/public/
+KBUILD_CFLAGS	+= -I$(srctree)/drivers/misc/mediatek/teei/300/tz_driver/include/
