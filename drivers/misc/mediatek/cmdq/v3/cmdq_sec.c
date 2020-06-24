@@ -80,7 +80,7 @@ static struct list_head gCmdqSecContextList;
 #include "cmdqsectl_api.h"
 
 #if defined(CONFIG_MICROTRUST_TEE_SUPPORT)
-#include "isee_kernel_api.h"
+#include <isee_kernel_api.h>
 #endif
 
 /* secure context to cmdqSecTL */

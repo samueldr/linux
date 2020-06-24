@@ -67,7 +67,7 @@
 
 
 #if defined(CONFIG_MICROTRUST_TEE_SUPPORT)
-#include "isee_kernel_api.h"
+#include <isee_kernel_api.h>
 #define DRM_M4U_DRV_DRIVER_ID   (0x977aa)
 #endif
 
