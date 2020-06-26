@@ -2105,7 +2105,7 @@ static int mtkfb_fbinfo_init(struct fb_info *info)
 
 	var.transp.offset = 24;
 	var.red.length = 8;
-#if 0
+#if 1
 	var.red.offset = 16;
 	var.red.length = 8;
 	var.green.offset = 8;
