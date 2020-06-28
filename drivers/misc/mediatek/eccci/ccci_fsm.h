@@ -92,7 +92,7 @@ struct ccci_fsm_command {
 #define CCCI_CMD_FLAG_WAIT_FOR_COMPLETE (1 << 0)
 #define CCCI_CMD_FLAG_FLIGHT_MODE (1 << 1)
 
-#define EVENT_POLL_INTEVAL 500 /* ms */
+#define EVENT_POLL_INTEVAL 10 /* ms */
 #define BOOT_TIMEOUT 10000
 #define MD_EX_CCIF_TIMEOUT 10000
 #define MD_EX_REC_OK_TIMEOUT 10000
@@ -106,5 +106,5 @@ int ccci_fsm_append_event(struct ccci_modem *md, CCCI_FSM_EVENT event_id,
 	unsigned char *data, unsigned int length);
 
 #ifndef CONFIG_MTK_ECCCI_C2K
-extern void c2k_reset_modem(void);
+extern void c2k_reset_modem(int type);
 #endif

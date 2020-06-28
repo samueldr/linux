@@ -25,6 +25,9 @@ typedef enum{
 	IMGSENSOR_MODE_VIDEO,
 	IMGSENSOR_MODE_HIGH_SPEED_VIDEO,
 	IMGSENSOR_MODE_SLIM_VIDEO,
+	//dingyisheng@wind-mobi.com 20170902 begin
+	IMGSENSOR_MODE_CUSTOM1,
+	//dingyisheng@wind-mobi.com 20170902 end
 } IMGSENSOR_MODE;
 
 //表示几种（不同工作模式状态下）的sensor参数信息
@@ -86,6 +89,9 @@ typedef struct imgsensor_info_struct {
 	imgsensor_mode_struct normal_video;//normal video  scenario relative information
 	imgsensor_mode_struct hs_video;	//high speed video scenario relative information
 	imgsensor_mode_struct slim_video;	//slim video for VT scenario relative information
+	//dingyisheng@wind-mobi.com 20170902 begin
+	imgsensor_mode_struct custom1;
+	//dingyisheng@wind-mobi.com 20170902 end
 	
 	kal_uint8  ae_shut_delay_frame;	//shutter delay frame for AE cycle
 	kal_uint8  ae_sensor_gain_delay_frame;	//sensor gain delay frame for AE cycle
@@ -99,7 +105,9 @@ typedef struct imgsensor_info_struct {
 	kal_uint8  video_delay_frame;	//enter video delay frame num
 	kal_uint8  hs_video_delay_frame;	//enter high speed video  delay frame num
 	kal_uint8  slim_video_delay_frame;	//enter slim video delay frame num
-  
+	//dingyisheng@wind-mobi.com 20170902 begin
+	kal_uint8  custom1_delay_frame; 
+	//dingyisheng@wind-mobi.com 20170902 end
 	kal_uint8  margin;				//sensor framelength & shutter margin 
 	kal_uint32 min_shutter;			//min shutter
 	kal_uint32 max_frame_length;	//max framelength by sensor register's limitation

@@ -493,8 +493,8 @@ void screen_logger_add_message(char *obj, message_mode mode, char *message)
 			case MESSAGE_APPEND:
 				len = strlen(p->message) + strlen(message);
 				tmp1 = kmalloc(sizeof(char) * (len + 1), GFP_KERNEL);
-				strcpy(tmp1, p->message);
-				strcat(tmp1, message);
+				strncpy(tmp1, p->message, strlen(p->message));
+				strncat(tmp1, message, strlen(message));
 				tmp2 = p->message;
 				p->message = tmp1;
 				kfree(tmp2);
@@ -507,7 +507,8 @@ void screen_logger_add_message(char *obj, message_mode mode, char *message)
 	}
 	if (1 == add_new) {
 		screen_logger *logger = kmalloc(sizeof(screen_logger), GFP_KERNEL);
-
+		if (!logger)
+			return;
 		logger->obj = kstrdup(obj, GFP_KERNEL);
 		logger->message = kstrdup(message, GFP_KERNEL);
 		list_add_tail(&logger->list, &logger_head.list);

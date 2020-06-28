@@ -13,6 +13,9 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * General Public License for more details.
  *
+ * Version:1.0
+ *        V1.0:2012/05/01,create file.
+ *
  */
 
 #ifndef TPD_CUSTOM_GT9XX_H__
@@ -41,6 +44,7 @@
 #endif
 #include <linux/interrupt.h>
 #include <linux/time.h>
+#include <linux/rtpm_prio.h>
 
 #include <linux/proc_fs.h>
 #include <linux/uaccess.h>
@@ -92,9 +96,12 @@ extern u8 gup_init_update_proc(struct i2c_client *client);
 extern u8 gup_init_fw_proc(struct i2c_client *client);
 extern s32 gtp_i2c_read(struct i2c_client *client, u8 *buf, s32 len);
 extern s32 gtp_i2c_write(struct i2c_client *client, u8 *buf, s32 len);
-extern int i2c_write_bytes(struct i2c_client *client, u16 addr, u8 *txbuf, int len);
-extern int i2c_read_bytes(struct i2c_client *client, u16 addr, u8 *rxbuf, int len);
-extern s32 gtp_i2c_read_dbl_check(struct i2c_client *client, u16 addr, u8 *rxbuf, int len);
+extern int i2c_write_bytes(struct i2c_client *client, u16 addr, u8 *txbuf,
+			   int len);
+extern int i2c_read_bytes(struct i2c_client *client, u16 addr, u8 *rxbuf,
+			  int len);
+extern s32 gtp_i2c_read_dbl_check(struct i2c_client *client, u16 addr,
+				  u8 *rxbuf, int len);
 extern void gtp_get_chip_type(struct i2c_client *client);
 s32 gup_fw_download_proc(void *dir, u8 dwn_mode);
 u8 gtp_fw_startup(struct i2c_client *client);
@@ -103,9 +110,6 @@ u8 gup_clk_calibration(void);
 extern s32 gup_enter_update_mode(struct i2c_client *client);
 extern void gup_leave_update_mode(void);
 extern s32 gup_update_proc(void *dir);
-
-
-
 
 /* ***************************PART1:ON/OFF define******************************* */
 #define GTP_CUSTOM_CFG        0
@@ -229,7 +233,6 @@ enum CHIP_TYPE_T {
 #endif
 extern enum CHIP_TYPE_T gtp_chip_type;
 
-
 #define GTP_REG_MATRIX_DRVNUM           0x8069
 #define GTP_REG_MATRIX_SENNUM           0x806A
 #define GTP_REG_RQST                    0x8043
@@ -272,7 +275,6 @@ extern enum CHIP_TYPE_T gtp_chip_type;
 
 #define RESOLUTION_LOC              3
 #define TRIGGER_LOC                 8
-
 
 #define MAX_TRANSACTION_LENGTH        8
 #define TPD_I2C_NUMBER				1
@@ -5730,4 +5732,4 @@ static unsigned char gtp_default_FW[] = {
 	0xef, 0xdf, 0xff, 0xff, 0xc6, 0x13,
 };
 #endif
-#endif				/* TOUCHPANEL_H__ */
+#endif /* TOUCHPANEL_H__ */

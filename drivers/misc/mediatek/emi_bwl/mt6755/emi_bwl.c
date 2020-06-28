@@ -209,15 +209,18 @@ DRIVER_ATTR(ddr_type, 0644, ddr_type_show, ddr_type_store);
 static ssize_t con_sce_show(struct device_driver *driver, char *buf)
 {
 	char *ptr = buf;
+#if 0
 	int i = 0;
-
-	if (cur_con_sce >= NR_CON_SCE)
+#endif
+	if (cur_con_sce >= NR_CON_SCE) {
 		ptr += sprintf(ptr, "none\n");
+		return strlen(buf);
+	}
 	else
 		ptr += sprintf(ptr, "current scenario: %s\n",
 		con_sce_str[cur_con_sce]);
 
-#if 1
+#if 0
 	ptr += sprintf(ptr, "%s\n", con_sce_str[cur_con_sce]);
 	ptr += sprintf(ptr, "EMI_ARBA = 0x%x\n",  readl(IOMEM(EMI_ARBA)));
 	ptr += sprintf(ptr, "EMI_ARBB = 0x%x\n",  readl(IOMEM(EMI_ARBB)));

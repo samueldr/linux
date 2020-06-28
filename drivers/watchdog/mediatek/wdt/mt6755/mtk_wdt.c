@@ -247,8 +247,10 @@ void mtk_wdt_restart(enum wd_restart_type type)
 
 	if (!toprgu_base) {
 		toprgu_base = of_iomap(np_rgu, 0);
-		if (!toprgu_base)
+		if (!toprgu_base) {
 			pr_debug("RGU iomap failed\n");
+			return;
+		}
 		/* pr_debug("RGU base: 0x%p  RGU irq: %d\n", toprgu_base, wdt_irq_id); */
 	}
 #endif
@@ -411,6 +413,7 @@ int mtk_wdt_swsysret_config(int bit, int set_value)
 		 wdt_sys_val);
 	return 0;
 }
+EXPORT_SYMBOL(mtk_wdt_swsysret_config);
 
 int mtk_wdt_request_en_set(int mark_bit, WD_REQ_CTL en)
 {
@@ -629,6 +632,7 @@ int mtk_wdt_swsysret_config(int bit, int set_value)
 {
 	return 0;
 }
+EXPORT_SYMBOL(mtk_wdt_swsysret_config);
 
 int mtk_wdt_request_mode_set(int mark_bit, WD_REQ_MODE mode)
 {

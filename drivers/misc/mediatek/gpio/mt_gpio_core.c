@@ -33,8 +33,10 @@
 #include <mt-plat/mt_gpio.h>
 #include <mt-plat/mt_gpio_core.h>
 #include <mach/gpio_const.h>
-
-
+//add by qiangang@wind-mobi.com 20171217 begin
+extern int sim_proc_init(void);
+extern void sim_proc_deinit(void);
+//add by qiangang@wind-mobi.com 20171217 end
 /***********************/
 struct mt_gpio_ops {
 /* char name[MT_GPIO_MAX_NAME]; */
@@ -739,12 +741,16 @@ static int __init mt_gpio_init(void)
 	GPIOLOG("version: %s\n", VERSION);
 
 	ret = platform_driver_register(&gpio_driver);
+	
+	sim_proc_init();//add by qiangang@wind-mobi.com 20171217 
+	
 	return ret;
 }
 
 /*---------------------------------------------------------------------------*/
 static void __exit mt_gpio_exit(void)
 {
+	sim_proc_deinit();//add by qiangang@wind-mobi.com 20171217 
 	platform_driver_unregister(&gpio_driver);
 }
 

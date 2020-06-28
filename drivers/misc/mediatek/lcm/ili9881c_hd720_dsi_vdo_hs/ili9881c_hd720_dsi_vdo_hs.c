@@ -61,6 +61,7 @@ static LCM_UTIL_FUNCS lcm_util;
 #define read_reg                                            lcm_util.dsi_read_reg()
 #define read_reg_v2(cmd, buffer, buffer_size)                lcm_util.dsi_dcs_read_lcm_reg_v2(cmd, buffer, buffer_size)
 
+extern int esd_check_alarm; //add by qiangang 20171205
 extern struct pinctrl *lcmbiasctrl;
 extern struct pinctrl_state *lcmbias_enable;
 extern struct pinctrl_state *lcmbias_disable;
@@ -84,16 +85,16 @@ static struct LCM_setting_table lcm_initialization_setting1[] =
     {0x04,1,{0x13}},
     {0x05,1,{0x00}},
     {0x06,1,{0x04}},
-    {0x07,1,{0x02}},
+    {0x07,1,{0x00}},
     {0x08,1,{0x00}},
-    {0x09,1,{0x28}},
-    {0x0a,1,{0x28}},
+    {0x09,1,{0x14}},
+    {0x0a,1,{0x14}},
     {0x0b,1,{0x00}},
     {0x0c,1,{0x01}},
     {0x0d,1,{0x00}},
     {0x0e,1,{0x00}},
-    {0x0f,1,{0x16}},
-    {0x10,1,{0x16}},
+    {0x0f,1,{0x14}},
+    {0x10,1,{0x14}},
     {0x11,1,{0x00}},
     {0x12,1,{0x00}},
     {0x13,1,{0x00}},
@@ -111,7 +112,7 @@ static struct LCM_setting_table lcm_initialization_setting1[] =
     {0x1f,1,{0x80}},
     {0x20,1,{0x02}},
     {0x21,1,{0x03}},
-    {0x22,1,{0x02}},
+    {0x22,1,{0x00}},
     {0x23,1,{0x00}},
     {0x24,1,{0x00}},
     {0x25,1,{0x00}},
@@ -225,6 +226,8 @@ static struct LCM_setting_table lcm_initialization_setting1[] =
     {0x35,1,{0x1f}},
     {0xb5,1,{0x06}},
 	{0x33,1,{0x14}},
+	{0x38,1,{0x01}},
+	{0x39,1,{0x00}},
 
     //CMD_Page 1
     {0xFF,3,{0x98,0x81,0x01}},
@@ -233,53 +236,53 @@ static struct LCM_setting_table lcm_initialization_setting1[] =
     {0x31,1,{0x00}},               //column inversion
     {0x53,1,{0x83}},               //VCOM1
     {0x55,1,{0x9c}},               //VCOM2
-    {0x50,1,{0xc7}},               // VREG1OUT
-    {0x51,1,{0xc4}},               // VREG2OUT
+    {0x50,1,{0x95}},               // VREG1OUT
+    {0x51,1,{0x92}},               // VREG2OUT
     {0x60,1,{0x1a}},               //SDT
 	{0x62,1,{0x00}},
 	{0x63,1,{0x00}}, 
 
 
     {0xA0,1,{0x02}},        //VP255 Gamma P
-    {0xA1,1,{0x22}},        //VP251
-    {0xA2,1,{0x31}},        //VP247
-    {0xA3,1,{0x15}},        //VP243
-    {0xA4,1,{0x19}},               //VP239
-    {0xA5,1,{0x2b}},               //VP231
-    {0xA6,1,{0x1f}},               //VP219
-    {0xA7,1,{0x20}},               //VP203
-    {0xA8,1,{0x92}},               //VP175
+    {0xA1,1,{0x0b}},        //VP251
+    {0xA2,1,{0x16}},        //VP247
+    {0xA3,1,{0x12}},        //VP243
+    {0xA4,1,{0x14}},               //VP239
+    {0xA5,1,{0x26}},               //VP231
+    {0xA6,1,{0x1c}},               //VP219
+    {0xA7,1,{0x1e}},               //VP203
+    {0xA8,1,{0x58}},               //VP175
     {0xA9,1,{0x1c}},               //VP144
     {0xAA,1,{0x28}},               //VP111
-    {0xAB,1,{0x7c}},               //VP80
-    {0xAC,1,{0x1b}},               //VP52
-    {0xAD,1,{0x1b}},               //VP36
-    {0xAE,1,{0x4f}},               //VP24
-    {0xAF,1,{0x23}},               //VP16
-    {0xB0,1,{0x29}},               //VP12
-    {0xB1,1,{0x56}},               //VP8
-    {0xB2,1,{0x5f}},               //VP4
+    {0xAB,1,{0x4d}},               //VP80
+    {0xAC,1,{0x18}},               //VP52
+    {0xAD,1,{0x17}},               //VP36
+    {0xAE,1,{0x4a}},               //VP24
+    {0xAF,1,{0x1e}},               //VP16
+    {0xB0,1,{0x27}},               //VP12
+    {0xB1,1,{0x49}},               //VP8
+    {0xB2,1,{0x59}},               //VP4
     {0xB3,1,{0x3f}},               //VP0
 
     {0xC0,1,{0x02}},      //VN255 GAMMA N
-    {0xC1,1,{0x22}},               //VN251
-    {0xC2,1,{0x31}},               //VN247
-    {0xC3,1,{0x15}},               //VN243
-    {0xC4,1,{0x19}},               //VN239
-    {0xC5,1,{0x2b}},               //VN231
-    {0xC6,1,{0x1f}},               //VN219
-    {0xC7,1,{0x20}},               //VN203
-    {0xC8,1,{0x92}},               //VN175
-    {0xC9,1,{0x1c}},               //VN144
-    {0xCA,1,{0x28}},               //VN111
-    {0xCB,1,{0x7c}},               //VN80
-    {0xCC,1,{0x1b}},               //VN52
+    {0xC1,1,{0x11}},               //VN251
+    {0xC2,1,{0x1b}},               //VN247
+    {0xC3,1,{0x10}},               //VN243
+    {0xC4,1,{0x11}},               //VN239
+    {0xC5,1,{0x23}},               //VN231
+    {0xC6,1,{0x17}},               //VN219
+    {0xC7,1,{0x1a}},               //VN203
+    {0xC8,1,{0x64}},               //VN175
+    {0xC9,1,{0x1a}},               //VN144
+    {0xCA,1,{0x26}},               //VN111
+    {0xCB,1,{0x5b}},               //VN80
+    {0xCC,1,{0x1c}},               //VN52
     {0xCD,1,{0x1b}},               //VN36
     {0xCE,1,{0x4f}},               //VN24
-    {0xCF,1,{0x23}},               //VN16
+    {0xCF,1,{0x25}},               //VN16
     {0xD0,1,{0x29}},               //VN12
-    {0xD1,1,{0x56}},               //VN8
-    {0xD2,1,{0x5f}},               //VN4
+    {0xD1,1,{0x51}},               //VN8
+    {0xD2,1,{0x68}},               //VN4
     {0xD3,1,{0x3f}},               //VN0
 
     //CMD_Page 0
@@ -391,18 +394,18 @@ static void lcm_get_params(LCM_PARAMS *params)
 		// params->dsi.word_count=480*3;	
 		//DSI CMD mode need set these two bellow params, different to 6577   
 		// params->dsi.vertical_active_line=800;   
-    params->dsi.vertical_sync_active                = 8; //4
-    params->dsi.vertical_backporch                       = 24;  //14
-    params->dsi.vertical_frontporch                       = 16;  //16
+    params->dsi.vertical_sync_active                = 2; //8; //4
+    params->dsi.vertical_backporch                       = 6; //24;  //14 8
+    params->dsi.vertical_frontporch                       = 7; //16;  //16 5
 		params->dsi.vertical_active_line				= FRAME_HEIGHT;     
-    params->dsi.horizontal_sync_active                = 40;   //4
+    params->dsi.horizontal_sync_active                = 10; //40;   //4
     params->dsi.horizontal_backporch                = 40;  //60
-    params->dsi.horizontal_frontporch                = 60;    //60
+    params->dsi.horizontal_frontporch                = 50; //60;    //60
     //params->dsi.horizontal_blanking_pixel                = 60;
 		params->dsi.horizontal_active_pixel				= FRAME_WIDTH;  
     params->dsi.ssc_disable=1;
 		params->dsi.HS_TRAIL=15;
-        params->dsi.PLL_CLOCK = 207;    //wangjun@wind-mobi.com 20170531
+        params->dsi.PLL_CLOCK = 228;    //wangjun@wind-mobi.com 20170531
 	    params->dsi.cont_clock=0;   
 	    params->dsi.esd_check_enable = 1;
 	    params->dsi.customization_esd_check_enable      = 1;
@@ -438,8 +441,16 @@ static void lcm_init(void)
     SET_RESET_PIN(0);
     MDELAY(10);
     SET_RESET_PIN(1);
-	MDELAY(120);
-
+	//add by qiangang 20171205 begin
+	if(esd_check_alarm)
+	{
+		printk("qiangang lcm ili9881_hd720_dsi_vdo_hs  120 \n");	  
+		MDELAY(120); //for esd abnormal delay time 
+	}else{
+		printk("qiangang lcm ili9881_hd720_dsi_vdo_hs  10 \n");	
+		MDELAY(10); //normal powerkey press delay time
+	}
+	//add by qiangang 20171205 end
     push_table(lcm_initialization_setting1, sizeof(lcm_initialization_setting1) / sizeof(struct LCM_setting_table), 1);
 
 	printk("lcm ili9881_hd720_dsi_vdo_hs %s \n",__func__);	  

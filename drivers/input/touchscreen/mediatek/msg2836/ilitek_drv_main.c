@@ -2446,12 +2446,14 @@ void DrvTouchDevicePowerOn(void)
 #ifdef CONFIG_PLATFORM_USE_ANDROID_SDK_6_UPWARD
     if (MS_TS_MSG_IC_GPIO_RST >= 0 && MS_TS_MSG_IC_GPIO_RST != 1) // MS_TS_MSG_IC_GPIO_RST must be a value other than 1
     {
-        tpd_gpio_output(MS_TS_MSG_IC_GPIO_RST, 1);
-        mdelay(10); 
+/* wangbing@wind-mobi.com 20171205 begin >> note: optomize the resume supend time */
+        // tpd_gpio_output(MS_TS_MSG_IC_GPIO_RST, 1);
+        // mdelay(10); 
         tpd_gpio_output(MS_TS_MSG_IC_GPIO_RST, 0);
-        mdelay(100);
+        mdelay(25);
         tpd_gpio_output(MS_TS_MSG_IC_GPIO_RST, 1);
-        mdelay(25); 
+        mdelay(25);
+/* wangbing@wind-mobi.com 20171205 end */
     }
 #else
     if (MS_TS_MSG_IC_GPIO_RST > 0)
@@ -10685,7 +10687,7 @@ s32 DrvTouchDeviceRegisterFingerTouchInterruptHandler(void)
         if (pDeviceNode)
         {
             of_property_read_u32_array(pDeviceNode, "debounce", ints, ARRAY_SIZE(ints));
-            gpio_set_debounce(ints[0], ints[1]);
+            //gpio_set_debounce(ints[0], ints[1]);
             
             _gIrq = irq_of_parse_and_map(pDeviceNode, 0);
             if (_gIrq == 0)
@@ -15087,6 +15089,9 @@ void MsDrvInterfaceTouchDeviceSuspend(struct device *pDevice)
 //void MsDrvInterfaceTouchDeviceSuspend(struct early_suspend *pSuspend)
 //#endif //CONFIG_PLATFORM_USE_ANDROID_SDK_6_UPWARD
 {
+/* wangbing@wind-mobi.com 20171205 begin >> note: int i = 0 */
+    int i = 0;
+/* wangbing@wind-mobi.com 20171205 end */
     DBG(&g_I2cClient->dev, "*** %s() ***\n", __func__);
 
 #ifdef CONFIG_ENABLE_CHARGER_DETECTION
@@ -15131,11 +15136,18 @@ void MsDrvInterfaceTouchDeviceSuspend(struct device *pDevice)
             }
         }
         else {
-			g_GestureWakeupMode[0] = g_GestureWakeupMode_wind;  //add by qiangang 20170823 
+            g_GestureWakeupMode[0] = g_GestureWakeupMode_wind;  //add by qiangang 20170823 
             if (g_GestureWakeupMode[0] != 0x00000000 || g_GestureWakeupMode[1] != 0x00000000)
             {
                 DrvOpenGestureWakeup(&g_GestureWakeupMode[0]);
                 enable_irq_wake(_gIrq);
+/* wangbing@wind-mobi.com 20171205 begin >> note: gesture suspend released the touch point */
+                for(i = 0; i < 5; i++)
+                {
+                    DrvFingerTouchReleased(0, 0, i);
+                    input_sync(g_InputDevice);
+                }
+/* wangbing@wind-mobi.com 20171205 end */
                 return;
             }
         }
@@ -15149,8 +15161,12 @@ void MsDrvInterfaceTouchDeviceSuspend(struct device *pDevice)
     }
 #endif //CONFIG_ENABLE_HOTKNOT  
 
+/* wangbing@wind-mobi.com 20171205 begin >> note: delete excess code in suspend func */
+#if 0
     DrvFingerTouchReleased(0, 0, 0); // Send touch end for clearing point touch
     input_sync(g_InputDevice);
+#endif
+/* wangbing@wind-mobi.com 20171205 end */
 
     DrvDisableFingerTouchReport();
 
@@ -15164,7 +15180,15 @@ void MsDrvInterfaceTouchDeviceSuspend(struct device *pDevice)
         DrvTouchDeviceRegulatorPowerOn(false);
 #endif //CONFIG_ENABLE_REGULATOR_POWER_ON               
 #endif //CONFIG_PLATFORM_USE_ANDROID_SDK_6_UPWARD
-    }    
+    }
+
+/* wangbing@wind-mobi.com 20171205 begin >> note: gesture suspend released the touch point */
+    for(i = 0; i < 5; i++)
+    {
+        DrvFingerTouchReleased(0, 0, i);
+        input_sync(g_InputDevice);
+    }
+/* wangbing@wind-mobi.com 20171205 end */
 }
 
 //#ifdef CONFIG_PLATFORM_USE_ANDROID_SDK_6_UPWARD
@@ -15174,6 +15198,15 @@ void MsDrvInterfaceTouchDeviceResume(struct device *pDevice)
 //#endif //CONFIG_PLATFORM_USE_ANDROID_SDK_6_UPWARD
 {
     DBG(&g_I2cClient->dev, "*** %s() ***\n", __func__);
+
+/* wangbing@wind-mobi.com 20171205 begin >> note: delete excess code in resume func */
+#if 0
+//add by qiangang@wind-mobi.com 20171120 begin
+	DrvFingerTouchReleased(0,0,0);
+	input_sync(g_InputDevice);
+//add by qiangang@wind-mobi.com 20171120 end
+#endif
+/* wangbing@wind-mobi.com 20171205 end */
 
     if (g_IsUpdateFirmware != 0) // Check whether update frimware is finished
     {
@@ -15295,6 +15328,7 @@ void MsDrvInterfaceTouchDeviceResume(struct device *pDevice)
 }
 #endif //CONFIG_ENABLE_NOTIFIER_FB
 
+#define TEST_WIND 0x01
 /* probe function is used for matching and initializing input device */
 s32 /*__devinit*/ MsDrvInterfaceTouchDeviceProbe(struct i2c_client *pClient, const struct i2c_device_id *pDeviceId)
 {
@@ -15331,30 +15365,35 @@ s32 /*__devinit*/ MsDrvInterfaceTouchDeviceProbe(struct i2c_client *pClient, con
 
 #ifdef CONFIG_WIND_DEVICE_INFO
 printk("qiangang g_ChipType = %d\n",g_ChipType);
+        {
+                u16 fwvr;
+                u16 ver;
+                DrvGetCustomerFirmwareVersion(&ver, &fwvr, &_gFwVersion);
+                wind_device_info.ctp_module_info.fwvr = fwvr;
+                wind_device_info.ctp_module_info.vendor = ver;
+        }
+
+
  if (g_ChipType == CHIP_TYPE_MSG26XXM)
  	sprintf(wind_device_info.ctp_module_info.ic_name,"MSG26XXM");
- else if(g_ChipType == CHIP_TYPE_MSG28XX)
+ if(g_ChipType == CHIP_TYPE_MSG28XX)
 	sprintf(wind_device_info.ctp_module_info.ic_name,"CHIP_TYPE_MSG28XX");
- else if(g_ChipType == CHIP_TYPE_MSG21XXA)
+ if(g_ChipType == CHIP_TYPE_MSG22XX)
+        sprintf(wind_device_info.ctp_module_info.ic_name,"CHIP_TYPE_MSG22XX");
+ if(g_ChipType == CHIP_TYPE_MSG21XXA)
 	sprintf(wind_device_info.ctp_module_info.ic_name,"CHIP_TYPE_MSG21XXA");
- else if(g_ChipType == CHIP_TYPE_MSG22XX)
-	sprintf(wind_device_info.ctp_module_info.ic_name,"CHIP_TYPE_MSG22XX");
     
-	{	
-		u16 fwvr;
-		u16 ver;
-		DrvGetCustomerFirmwareVersion(&ver, &fwvr, &_gFwVersion);
-		wind_device_info.ctp_module_info.fwvr = fwvr;
-		wind_device_info.ctp_module_info.vendor = ver;  
-	}
 #endif	
 	
 //qiangang@wind-mobi.com at 20170727 end
-
+//qiangang@wind-mobi.com at 20171128 begin
 #ifdef CONFIG_UPDATE_FIRMWARE_BY_SW_ID
+if(FACTORY_BOOT != get_boot_mode())
+{
     DrvCheckFirmwareUpdateBySwId();
+}
 #endif //CONFIG_UPDATE_FIRMWARE_BY_SW_ID
-
+//qiangang@wind-mobi.com at 20171128 end
 #ifdef CONFIG_ENABLE_CHARGER_DETECTION
     INIT_DELAYED_WORK(&g_ChargerPlugInOutCheckWork, _DrvChargerPlugInOutCheck);
     g_ChargerPlugInOutCheckWorkqueue = create_workqueue("charger_plug_in_out_check");

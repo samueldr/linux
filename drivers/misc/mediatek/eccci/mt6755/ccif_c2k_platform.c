@@ -115,9 +115,19 @@ int md_ccif_get_modem_hw_info(struct platform_device *dev_ptr,
 				     &dev_cfg->capability);
 
 		hw_info->ap_ccif_base = (unsigned long)of_iomap(dev_ptr->dev.of_node, 0);
+		if (!hw_info->ap_ccif_base) {
+			CCCI_ERROR_LOG(dev_cfg->index, TAG, "%s: hw_info->ap_ccif_base of_iomap failed\n",
+				       dev_ptr->dev.of_node->full_name);
+		return -1;
+		}
 		/*hw_info->md_ccif_base = hw_info->ap_ccif_base+0x1000; */
 		node = of_find_compatible_node(NULL, NULL, "mediatek,MD_CCIF1");
 		hw_info->md_ccif_base = (unsigned long)of_iomap(node, 0);
+		if (!hw_info->md_ccif_base) {
+			CCCI_ERROR_LOG(dev_cfg->index, TAG, "%s: hw_info->md_ccif_base of_iomap failed\n",
+				       node->full_name);
+		return -1;
+		}
 
 		hw_info->ap_ccif_irq_id =
 		    irq_of_parse_and_map(dev_ptr->dev.of_node, 0);
@@ -154,9 +164,19 @@ int md_ccif_get_modem_hw_info(struct platform_device *dev_ptr,
 				     &dev_cfg->capability);
 
 		hw_info->ap_ccif_base = (unsigned long)of_iomap(dev_ptr->dev.of_node, 0);
+		if (!hw_info->ap_ccif_base) {
+			CCCI_ERROR_LOG(dev_cfg->index, TAG, "%s: hw_info->ap_ccif_base of_iomap failed\n",
+				       dev_ptr->dev.of_node->full_name);
+			return -1;
+		}
 		/*hw_info->md_ccif_base = hw_info->ap_ccif_base+0x1000; */
 		node = of_find_compatible_node(NULL, NULL, "mediatek,md_ccif1");
 		hw_info->md_ccif_base = (unsigned long)of_iomap(node, 0);
+		if (!hw_info->md_ccif_base) {
+			CCCI_ERROR_LOG(dev_cfg->index, TAG, "%s: hw_info->md_ccif_base of_iomap failed\n",
+				       node->full_name);
+			return -1;
+		}
 
 		hw_info->ap_ccif_irq_id =
 		    irq_of_parse_and_map(dev_ptr->dev.of_node, 0);
@@ -171,7 +191,11 @@ int md_ccif_get_modem_hw_info(struct platform_device *dev_ptr,
 		    (unsigned long)of_iomap(dev_ptr->dev.of_node, 1);
 		hw_info->md3_pccif_base =
 		    (unsigned long)of_iomap(dev_ptr->dev.of_node, 2);
-
+		if (!(hw_info->md1_pccif_base && hw_info->md3_pccif_base)) {
+			CCCI_ERROR_LOG(dev_cfg->index, TAG, "%s: hw_info->md_pccif_base of_iomap failed\n",
+				       dev_ptr->dev.of_node->full_name);
+			return -1;
+		}
 		node =
 		    of_find_compatible_node(NULL, NULL, "mediatek,infracfg_ao");
 		hw_info->infra_ao_base = (unsigned long)of_iomap(node, 0);
@@ -186,6 +210,12 @@ int md_ccif_get_modem_hw_info(struct platform_device *dev_ptr,
 		apmixed_base = (unsigned long)of_iomap(node, 0);
 		node = of_find_compatible_node(NULL, NULL, "mediatek,infracfg");
 		apinfra_base = (unsigned long)of_iomap(node, 0);
+		if (!(hw_info->infra_ao_base && hw_info->sleep_base && hw_info->toprgu_base &&
+			apmixed_base && apinfra_base)) {
+			CCCI_ERROR_LOG(dev_cfg->index, TAG, "%s: hw_info->... of_iomap failed\n", node->full_name);
+			return -1;
+		}
+
 
 		CCCI_NORMAL_LOG(dev_cfg->index, TAG,
 			     "infra_ao_base=0x%lx, sleep_base=0x%lx, toprgu_base=0x%lx\n",

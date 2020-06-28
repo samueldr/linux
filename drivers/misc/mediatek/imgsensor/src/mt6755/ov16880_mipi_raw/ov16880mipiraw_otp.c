@@ -71,7 +71,7 @@ static bool _read_eeprom(u16 addr, BYTE* data, u32 size )
 
 bool read_eeprom( u16 addr, BYTE* data, u32 size)
 {
-	addr = 0x0801;
+	addr = 0x0841;  //dingyisheng@wind-mobi.com 20171222
 	size = 496+876;
 	LOG_INF("read ov16880 eeprom, addr = %d; size = %d\n", addr, size);
 	if(!get_done || last_size != size || last_offset != addr) 

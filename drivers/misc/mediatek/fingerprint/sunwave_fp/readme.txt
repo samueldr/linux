@@ -14,5 +14,5 @@ config SUNWAVE_FP
 
 
 # Sunwave 2-2: Please edit kernel-3.18/drivers/input/fingerprint/Makefile to add SUNWAVE_FP option.
-obj-$(CONFIG_SUNWAVE_FP) += sunwave/
+obj-$(CONFIG_SUNWAVE_FP) += sunwave_fp/
 

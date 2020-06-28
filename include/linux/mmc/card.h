@@ -145,6 +145,10 @@ struct mmc_ext_csd {
 	u8                      raw_device_life_time_B; /*269*/
 #endif
     // wangjun@wind-mobi.com 20170818 end
+	u8			pre_eol_info;		/* 267 */
+	u8			device_life_time_est_typ_a;	/* 268 */
+	u8			device_life_time_est_typ_b;	/* 269 */
+
 #ifdef CONFIG_MTK_EMMC_CQ_SUPPORT
 	#define MMC_CMDQ_MODE_EN	(1)
 	u8			cmdq_support;
@@ -425,7 +429,6 @@ unsigned int		mmc_total_size;
 // wangjun@wind-mobi.com 20170818 end
 #endif
 };
-
 
 /*
  * This function fill contents in mmc_part.

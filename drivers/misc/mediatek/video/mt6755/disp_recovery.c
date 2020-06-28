@@ -78,6 +78,8 @@ static unsigned int esd_check_mode;
 static unsigned int esd_check_enable;
 static unsigned int esd_init;
 
+int esd_check_alarm = 0; //add by qiangang 20171205
+
 unsigned int get_esd_check_mode(void)
 {
 	return esd_check_mode;
@@ -540,14 +542,17 @@ static int primary_display_check_recovery_worker_kthread(void *data)
 			i = 0;/*repeat*/
 			do {
 				ret = primary_display_esd_check();
-
+//add by qiangang 20171205 begin to send a flag to ili9881 driver
 				if (ret == 1) {
 					DISPERR("[ESD]esd check fail, will do esd recovery. try=%d\n", i);
+					esd_check_alarm = 1;
 					primary_display_esd_recovery();
 					recovery_done = 1;
-				} else
+				} else{
+					esd_check_alarm = 0;
 					break;
-
+				}
+//add by qiangang 20171205 end to send a flag to ili9881 driver
 			} while (++i < esd_try_cnt);
 
 			if (ret == 1) {

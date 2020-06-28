@@ -55,7 +55,6 @@
 #include <asm/io.h>
 #include <asm/sizes.h>
 #include "val_types_private.h"
-#include "hal_types_private.h"
 #include "val_api_private.h"
 #include "val_log.h"
 #include "drv_api.h"
@@ -68,6 +67,9 @@
 #include <linux/uaccess.h>
 #include <linux/compat.h>
 #endif
+
+/* memory signature for memory protection */
+#define MEM_SIGNATURE 0x56636F64
 
 #define VDO_HW_WRITE(ptr, data)     mt_reg_sync_writel(data, ptr)
 #define VDO_HW_READ(ptr)           (*((volatile unsigned int * const)(ptr)))
@@ -197,8 +199,6 @@ static VAL_UINT32_T gu4VdecLockThreadId;
 VAL_ULONG_T KVA_VENC_IRQ_ACK_ADDR, KVA_VENC_IRQ_STATUS_ADDR, KVA_VENC_BASE;
 VAL_ULONG_T KVA_VDEC_MISC_BASE, KVA_VDEC_VLD_BASE, KVA_VDEC_BASE, KVA_VDEC_GCON_BASE;
 VAL_UINT32_T VENC_IRQ_ID, VDEC_IRQ_ID;
-
-extern void __attribute__((weak)) met_mmsys_tag(const char *tag, unsigned int value);
 
 /* #define KS_POWER_WORKAROUND */
 
@@ -513,18 +513,12 @@ void enc_isr(void)
 
 static irqreturn_t video_intr_dlr(int irq, void *dev_id)
 {
-	if (met_mmsys_tag)
-		met_mmsys_tag("VDEC", grVcodecDecHWLock.eDriverType | 0x100);
-
 	dec_isr();
 	return IRQ_HANDLED;
 }
 
 static irqreturn_t video_intr_dlr2(int irq, void *dev_id)
 {
-	if (met_mmsys_tag)
-		met_mmsys_tag("VENC", grVcodecEncHWLock.eDriverType | 0x100);
-
 	enc_isr();
 	return IRQ_HANDLED;
 }
@@ -544,6 +538,7 @@ static long vcodec_alloc_non_cache_buffer(unsigned long arg)
 		return -EFAULT;
 	}
 
+	rTempMem.u4MemSign = MEM_SIGNATURE;
 	rTempMem.u4ReservedSize /*kernel va*/ =
 		(VAL_ULONG_T)dma_alloc_coherent(0, rTempMem.u4MemSize, (dma_addr_t *)&rTempMem.pvMemPa, GFP_KERNEL);
 	if ((0 == rTempMem.u4ReservedSize) || (0 == rTempMem.pvMemPa)) {
@@ -584,6 +579,16 @@ static long vcodec_free_non_cache_buffer(unsigned long arg)
 	ret = copy_from_user(&rTempMem, user_data_addr, sizeof(VAL_MEMORY_T));
 	if (ret) {
 		MODULE_MFV_LOGE("[ERROR] VCODEC_FREE_NON_CACHE_BUFFER, copy_from_user failed: %lu\n", ret);
+		return -EFAULT;
+	}
+
+	if (rTempMem.u4MemSign != MEM_SIGNATURE) {
+		MODULE_MFV_LOGE("[ERROR] VCODEC_FREE_NON_CACHE_BUFFER, memory illegal: %d\n",
+		rTempMem.u4MemSign);
+		return -EFAULT;
+	}
+	if (rTempMem.u4MemSize == 0 || rTempMem.u4ReservedSize == 0) {
+		MODULE_MFV_LOGE("[ERROR] VCODEC_FREE_NON_CACHE_BUFFER, memory size illegal\n");
 		return -EFAULT;
 	}
 

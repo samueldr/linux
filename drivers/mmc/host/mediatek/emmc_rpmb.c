@@ -89,7 +89,8 @@ do {\
 } while (0)
 
 #if (defined(CONFIG_MICROTRUST_TEE_SUPPORT))
-#define RPMB_DATA_BUFF_SIZE (1024 * 33)
+#define RPMB_DATA_BUFF_SIZE (1024 * 24)
+#define RPMB_ONE_FRAME_SIZE (512)
 static unsigned char *rpmb_buffer;
 #endif
 
@@ -1471,23 +1472,28 @@ static int emmc_rpmb_open(struct inode *inode, struct file *file)
 #endif
 	return 0;
 }
-/* zhangkaiyuan@wind-mobi.com 20170901 begin */
+
 static long emmc_rpmb_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	int err = 0;
-	struct mmc_card *card = mtk_msdc_host[0]->mmc->card;
+	struct mmc_card *card;
 	struct rpmb_ioc_param param;
 	int ret = 0;
 #if (defined(CONFIG_MICROTRUST_TEE_SUPPORT))
 	u32 rpmb_size = 0;
 	struct rpmb_infor rpmbinfor;
+
 	memset(&rpmbinfor, 0, sizeof(struct rpmb_infor));
 #endif
 
-	/* MSG(INFO, "%s, !!!!!!!!!!!!\n", __func__); */
+	/* MSG(INFO, "%s, !!!!!!!!!!!!\n", __func__);    */
+	if (!mtk_msdc_host[0] || !mtk_msdc_host[0]->mmc || !mtk_msdc_host[0]->mmc->card)
+		return -1;
+
+	card = mtk_msdc_host[0]->mmc->card;
 
 	err = copy_from_user(&param, (void *)arg, sizeof(param));
-	if (err < 0) {
+	if (err != 0) {
 		MSG(ERR, "%s, err=%x\n", __func__, err);
 		return -1;
 	}
@@ -1499,7 +1505,7 @@ static long emmc_rpmb_ioctl(struct file *file, unsigned int cmd, unsigned long a
 			return -1;
 		}
 		err = copy_from_user(&rpmb_size, (void *)arg, 4);
-		if (err < 0) {
+		if (err != 0) {
 			MSG(ERR, "%s, err=%x\n", __func__, err);
 			return -1;
 		}
@@ -1508,18 +1514,19 @@ static long emmc_rpmb_ioctl(struct file *file, unsigned int cmd, unsigned long a
 		if (rpmbinfor.size <= (RPMB_DATA_BUFF_SIZE-4)) {
 			MSG(INFO, "%s, rpmbinfor.size is %d!\n", __func__, rpmbinfor.size);
 			err = copy_from_user(rpmb_buffer, (void *)arg, 4 + rpmbinfor.size);
-			if (err < 0) {
+			if (err != 0) {
 				MSG(ERR, "%s, err=%x\n", __func__, err);
 				return -1;
 			}
 			rpmbinfor.data_frame = (rpmb_buffer + 4);
 		} else {
-			MSG(ERR, "%s, rpmbinfor.size(%d+4) is overflow (%d)!\n", __func__, rpmbinfor.size, RPMB_DATA_BUFF_SIZE);
+			MSG(ERR, "%s, rpmbinfor.size(%d+4) is overflow (%d)!\n",
+					__func__, rpmbinfor.size, RPMB_DATA_BUFF_SIZE);
 			return -1;
 		}
 	}
 #endif
-/* zhangkaiyuan@wind-mobi.com 20170901 end */
+
 	switch (cmd) {
 
 	case RPMB_IOCTL_PROGRAM_KEY:
@@ -1537,7 +1544,7 @@ static long emmc_rpmb_ioctl(struct file *file, unsigned int cmd, unsigned long a
 		ret = emmc_rpmb_req_read_data(card, &param);
 
 		err = copy_to_user((void *)arg, &param, sizeof(param));
-		if (err < 0) {
+		if (err != 0) {
 			MSG(ERR, "%s, err=%x\n", __func__, err);
 			return -1;
 		}
@@ -1555,7 +1562,9 @@ static long emmc_rpmb_ioctl(struct file *file, unsigned int cmd, unsigned long a
 #if (defined(CONFIG_MICROTRUST_TEE_SUPPORT))
 	case RPMB_IOCTL_SOTER_WRITE_DATA:
 
-		ret = ut_rpmb_req_write_data(card, (struct s_rpmb *)(rpmbinfor.data_frame), rpmbinfor.size/1024);
+			ret = ut_rpmb_req_write_data(card,
+					(struct s_rpmb *)(rpmbinfor.data_frame),
+					rpmbinfor.size / RPMB_ONE_FRAME_SIZE);
 
 		if (ret) {
 			MSG(ERR, "%s, emmc_rpmb_req_handle IO error!!!(%x)\n", __func__, ret);
@@ -1563,12 +1572,18 @@ static long emmc_rpmb_ioctl(struct file *file, unsigned int cmd, unsigned long a
 		}
 
 		ret = copy_to_user((void *)arg, rpmb_buffer, 4 + rpmbinfor.size);
+		if (ret != 0) {
+			MSG(ERR, "%s, err=%x\n", __func__, ret);
+			return -1;
+		}
 
 	    break;
 
 	case RPMB_IOCTL_SOTER_READ_DATA:
 
-		ret = ut_rpmb_req_read_data(card, (struct s_rpmb *)(rpmbinfor.data_frame), rpmbinfor.size/1024);
+			ret = ut_rpmb_req_read_data(card,
+					(struct s_rpmb *)(rpmbinfor.data_frame),
+					rpmbinfor.size / RPMB_ONE_FRAME_SIZE);
 
 		if (ret) {
 			MSG(ERR, "%s, emmc_rpmb_req_handle IO error!!!(%x)\n", __func__, ret);
@@ -1576,6 +1591,10 @@ static long emmc_rpmb_ioctl(struct file *file, unsigned int cmd, unsigned long a
 		}
 
 		ret = copy_to_user((void *)arg, rpmb_buffer, 4 + rpmbinfor.size);
+		if (ret != 0) {
+			MSG(ERR, "%s, err=%x\n", __func__, ret);
+			return -1;
+		}
 
 	    break;
 

@@ -1,3 +1,17 @@
+/*
+ * Copyright (c) 2015-2017 MICROTRUST Incorporated
+ * All Rights Reserved.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ */
+
 #include <linux/stddef.h>
 #include <linux/mm.h>
 #include <linux/swap.h>
@@ -63,7 +77,7 @@ static inline void rmv_page_order(struct page *page)
  */
 static inline
 struct page *ut_rmqueue_smallest(struct zone *zone, unsigned int order,
-	int migratetype)
+									int migratetype)
 {
 	unsigned int current_order;
 	struct free_area *area;
@@ -86,13 +100,15 @@ struct page *ut_rmqueue_smallest(struct zone *zone, unsigned int order,
 		do {
 			page = list_entry(free_list_ent, struct page, lru);
 
-		if ((unsigned long)(page_to_phys(page)) >= UT_MAX_MEM) {
-				IMSG_DEBUG("[%s][%d] FAILED! ORDER = %d page_to_phys(page) = %lx\n", __func__, __LINE__, current_order, (unsigned long)page_to_phys(page));
+			if ((unsigned long)(page_to_phys(page)) >= UT_MAX_MEM) {
+				IMSG_DEBUG("[%s][%d] FAILED! ORDER = %d page_to_phys(page) = %lx\n",
+				__func__, __LINE__, current_order, (unsigned long)page_to_phys(page));
 				page_found = 0;
 				free_list_ent = free_list_ent->next;
 
 			} else {
-				IMSG_DEBUG("[%s][%d] SUCCESS! ORDER = %d page_to_phys(page) = %lx\n", __func__, __LINE__, current_order, (unsigned long)page_to_phys(page));
+				IMSG_DEBUG("[%s][%d] SUCCESS! ORDER = %d page_to_phys(page) = %lx\n",
+				__func__, __LINE__, current_order, (unsigned long)page_to_phys(page));
 				page_found = 1;
 				break;
 			}
@@ -116,7 +132,7 @@ struct page *ut_rmqueue_smallest(struct zone *zone, unsigned int order,
  * Call me with the zone->lock already held.
  */
 static struct page *ut_rmqueue(struct zone *zone, unsigned int order,
-int migratetype)
+								int migratetype)
 {
 	struct page *page;
 
@@ -133,8 +149,8 @@ int migratetype)
  */
 static inline
 struct page *ut_buffered_rmqueue(struct zone *preferred_zone,
-struct zone *zone, int order, gfp_t gfp_flags,
-int migratetype)
+									struct zone *zone, int order, gfp_t gfp_flags,
+									int migratetype)
 {
 	unsigned long flags;
 	struct page *page;
@@ -154,8 +170,8 @@ again:
 
 		if (list_empty(list)) {
 			pcp->count += rmqueue_bulk(zone, 0,
-			pcp->batch, list,
-			migratetype, cold);
+										pcp->batch, list,
+										migratetype, cold);
 
 			if (unlikely(list_empty(list)))
 				goto failed;
@@ -175,10 +191,10 @@ again:
 				}
 
 				list_ent = list_ent->prev;
-		} while (list_ent != list);
+			} while (list_ent != list);
 
 			if (page_found == 0)
-				goto singal_page_fail;
+				goto signal_page_fail;
 
 		} else {
 			list_ent = list->next;
@@ -194,10 +210,10 @@ again:
 				}
 
 				list_ent = list_ent->next;
-		} while (list_ent != list);
+			} while (list_ent != list);
 
 			if (page_found == 0)
-				goto singal_page_fail;
+				goto signal_page_fail;
 
 		}
 
@@ -220,7 +236,7 @@ again:
 
 		spin_lock_irqsave(&zone->lock, flags);
 
-singal_page_fail:
+signal_page_fail:
 		page = ut_rmqueue(zone, order, migratetype);
 		spin_unlock(&zone->lock);
 
@@ -229,7 +245,7 @@ singal_page_fail:
 
 #if !defined(CONFIG_CMA) || !defined(CONFIG_MTK_SVP) /* SVP 16 */
 		__mod_zone_freepage_state(zone, -(1 << order),
-		get_pageblock_migratetype(page));
+									get_pageblock_migratetype(page));
 #else
 		__mod_zone_page_state(zone, NR_FREE_PAGES, -(1 << order));
 #endif
@@ -255,8 +271,8 @@ failed:
  */
 static struct page *
 ut_get_page_from_freelist(gfp_t gfp_mask, nodemask_t *nodemask, unsigned int order,
-struct zonelist *zonelist, int high_zoneidx, int alloc_flags,
-struct zone *preferred_zone, int migratetype)
+							struct zonelist *zonelist, int high_zoneidx, int alloc_flags,
+							struct zone *preferred_zone, int migratetype)
 {
 	struct zoneref *z;
 	struct page *page = NULL;
@@ -273,7 +289,7 @@ zonelist_scan:
 	 * See also cpuset_zone_allowed() comment in kernel/cpuset.c.
 	 */
 	for_each_zone_zonelist_nodemask(zone, z, zonelist,
-	high_zoneidx, nodemask) {
+									high_zoneidx, nodemask) {
 #if 1
 
 		if (IS_ENABLED(CONFIG_NUMA) && zlc_active &&
@@ -300,7 +316,7 @@ zonelist_scan:
 			mark = zone->watermark[alloc_flags & ALLOC_WMARK_MASK];
 
 			if (zone_watermark_ok(zone, order, mark,
-			classzone_idx, alloc_flags))
+									classzone_idx, alloc_flags))
 				goto try_this_zone;
 
 			if (IS_ENABLED(CONFIG_NUMA) &&
@@ -342,7 +358,7 @@ zonelist_scan:
 
 				/* did we reclaim enough */
 				if (zone_watermark_ok(zone, order, mark,
-				classzone_idx, alloc_flags))
+										classzone_idx, alloc_flags))
 					goto try_this_zone;
 
 				/*
@@ -366,7 +382,7 @@ zonelist_scan:
 
 try_this_zone:
 		page = ut_buffered_rmqueue(preferred_zone, zone, order,
-		gfp_mask, migratetype);
+									gfp_mask, migratetype);
 
 		if (page)
 			break;
@@ -405,7 +421,7 @@ this_zone_full:
 
 			if (svp_is_in_range(vpfn)) {
 				IMSG_ERROR("%s %d: pfn: %lu in _forbid_cma_alloc %d\n",
-				__func__, __LINE__, vpfn, _forbid_cma_alloc);
+							__func__, __LINE__, vpfn, _forbid_cma_alloc);
 				dump_stack();
 			}
 		}
@@ -422,7 +438,7 @@ this_zone_full:
  */
 struct page *
 ut_alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order,
-struct zonelist *zonelist, nodemask_t *nodemask)
+						struct zonelist *zonelist, nodemask_t *nodemask)
 {
 	enum zone_type high_zoneidx = gfp_zone(gfp_mask);
 	struct zone *preferred_zone;
@@ -462,8 +478,8 @@ retry_cpuset:
 
 	/* The preferred zone is used for statistics later */
 	first_zones_zonelist(zonelist, high_zoneidx,
-	nodemask ? : &cpuset_current_mems_allowed,
-	&preferred_zone);
+							nodemask ? : &cpuset_current_mems_allowed,
+							&preferred_zone);
 
 	if (!preferred_zone)
 		goto out;
@@ -484,9 +500,8 @@ retry_cpuset:
 	if (high_zoneidx >= ZONE_HIGHMEM) {
 #endif
 
-		if (migratetype == MIGRATE_MOVABLE) {
+		if (migratetype == MIGRATE_MOVABLE)
 			migratetype = preferred_mt;
-		}
 
 #ifdef CONFIG_HIGHMEM
 	}
@@ -496,8 +511,8 @@ retry_cpuset:
 
 	/* First allocation attempt */
 	page = ut_get_page_from_freelist(gfp_mask|__GFP_HARDWALL, nodemask, order,
-	zonelist, high_zoneidx, alloc_flags,
-	preferred_zone, migratetype);
+										zonelist, high_zoneidx, alloc_flags,
+										preferred_zone, migratetype);
 
 #ifdef __LOG_PAGE_ALLOC_ORDER__
 
@@ -538,13 +553,13 @@ out:
 
 static inline struct page *
 ut_alloc_pages(gfp_t gfp_mask, unsigned int order,
-struct zonelist *zonelist)
+				struct zonelist *zonelist)
 {
 	return ut_alloc_pages_nodemask(gfp_mask, order, zonelist, NULL);
 }
 
 static inline struct page *__ut_alloc_pages_node(int nid, gfp_t gfp_mask,
-unsigned int order)
+											unsigned int order)
 {
 	/* Unknown node is current node */
 	if (nid < 0)

@@ -62,7 +62,10 @@ stCAM_CAL_FUNC_STRUCT g_camCalCMDFunc[] = {
 stCAM_CAL_LIST_STRUCT g_camCalList[] = {
 	{OV23850_SENSOR_ID, 0xA0, CMD_AUTO, cam_cal_check_mtk_cid},
 	{OV23850_SENSOR_ID, 0xA8, CMD_AUTO, cam_cal_check_mtk_cid},
+	{S5K3M2_SENSOR_ID, 0xA0, CMD_AUTO, cam_cal_check_mtk_cid},
 	{IMX214_SENSOR_ID, 0xA0, CMD_AUTO, cam_cal_check_mtk_cid},
+	{IMX214_MONO_SENSOR_ID, 0xA0, CMD_AUTO, cam_cal_check_mtk_cid},
+	{S5K5E2YA_SENSOR_ID, 0x00, CMD_MAIN, cam_cal_check_double_eeprom},
 	{S5K2X8_SENSOR_ID, 0xA0, CMD_AUTO, cam_cal_check_mtk_cid},
 	// zhaozhensen@wind-mobi.com 20161018 begin
 	{IMX258_SENSOR_ID, 0xA0, CMD_GT24C32A, cam_cal_check_mtk_cid},
@@ -78,18 +81,27 @@ stCAM_CAL_LIST_STRUCT g_camCalList[] = {
 	//yeshaobo@wind-mobi.com 20170412 end
 	//dingyisheng@wind-mobi.com 20170412 begin
 	{S5K3P3SX_SENSOR_ID, 0xA0, CMD_GT24C32A, cam_cal_check_mtk_cid},
+	{HI846_SENSOR_ID_HLT, 0xA0, CMD_GT24C32A, cam_cal_check_mtk_cid},
 	{S5K3P3_SENSOR_ID, 0xA8, CMD_GT24C32A, cam_cal_check_mtk_cid},
 	//dingyisheng@wind-mobi.com 20170412 end
 	// zhaozhensen@wind-mobi.com 20161018 end
 	{IMX377_SENSOR_ID, 0xA0, CMD_AUTO, cam_cal_check_mtk_cid},
 
-	{IMX214_MONO_SENSOR_ID, 0xA0, CMD_AUTO, cam_cal_check_mtk_cid},
-	{S5K5E2YA_SENSOR_ID, 0x00, CMD_DEV1, cam_cal_check_double_eeprom},
+	{IMX258_SENSOR_ID, 0xA0, CMD_AUTO, cam_cal_check_mtk_cid},/*Dream: main1*/
+	{IMX258_MONO_SENSOR_ID, 0xA0, CMD_AUTO, cam_cal_check_mtk_cid},/*Dream: main2*/
+	/*{OV8865_SENSOR_ID, 0xA0, CMD_AUTO, cam_cal_check_mtk_cid},Dream: sub1 for 4cam*/
+	/*{S5K5E8YX_SENSOR_ID, 0xA0, CMD_AUTO, cam_cal_check_mtk_cid},Dream: sub2 for 4cam*/
 
-	{S5K2P8_SENSOR_ID, 0xA2, CMD_AUTO, cam_cal_check_mtk_cid},
-	{OV8858_SENSOR_ID, 0xA2, CMD_AUTO, cam_cal_check_mtk_cid},
+	{S5K5E2YA_SENSOR_ID, 0x00, CMD_MAIN, cam_cal_check_double_eeprom},
+
+	{IMX338_SENSOR_ID, 0xA0, CMD_AUTO, cam_cal_check_mtk_cid},/*O main */
+	{OV8858_SENSOR_ID, 0xA8, CMD_AUTO, cam_cal_check_mtk_cid},/*O sub */
+
+	{S5K2P8_SENSOR_ID, 0xA2, CMD_AUTO, cam_cal_check_mtk_cid},/*J main */
+	{OV8858_SENSOR_ID, 0xA2, CMD_AUTO, cam_cal_check_mtk_cid},/*J sub */
 	{OV16880_SENSOR_ID,0xA0,CMD_AUTO,cam_cal_check_mtk_cid},
 	{OV16880_SENSOR_ID_HLT,0xA8,CMD_AUTO,cam_cal_check_mtk_cid},
+	//{HI846_SENSOR_ID_HLT,0xA0,CMD_AUTO,cam_cal_check_mtk_cid},
 	/*  ADD before this line */
 	{0, 0, CMD_NONE, 0} /*end of list*/
 };

@@ -158,11 +158,6 @@ static struct zram_table_entry *search_node_in_zram_tree(struct zram_table_entry
 		pr_err("[zram][search_node_in_zram_tree] input_node is NULL\n");
 		return NULL;
 	}
-	if (current_node == NULL) {
-		*new_node = new;
-		*parent_node = NULL;
-		return NULL;
-	}
 
 	while (*new) {
 		current_node = rb_entry(*new, struct zram_table_entry, node);
@@ -765,7 +760,12 @@ static void zram_free_page(struct zram *zram, size_t index)
 			zram_clear_flag(meta, index, ZRAM_ZERO);
 			atomic64_dec(&zram->stats.zero_pages);
 		}
+#ifdef CONFIG_ZSM
+		if (!zsm_test_flag_index(meta, index, ZRAM_ZSM_NODE))
+			return;
+#else
 		return;
+#endif
 	}
 #ifdef CONFIG_ZSM
 	if (!zram_test_flag(meta, index, ZRAM_ZERO) && zsm_test_flag_index(meta, index, ZRAM_ZSM_NODE)) {
@@ -853,13 +853,13 @@ static int zram_decompress_page(struct zram *zram, char *mem, u32 index)
 
 	if (!handle || zram_test_flag(meta, index, ZRAM_ZERO)) {
 		bit_spin_unlock(ZRAM_ACCESS, &meta->table[index].value);
-		clear_page(mem);
+		memset(mem, 0, PAGE_SIZE);
 		return 0;
 	}
 
 	cmem = zs_map_object(meta->mem_pool, handle, ZS_MM_RO);
 	if (size == PAGE_SIZE)
-		copy_page(mem, cmem);
+		memcpy(mem, cmem, PAGE_SIZE);
 #ifndef CONFIG_MT_ENG_BUILD
 	else
 		ret = zcomp_decompress(zram->comp, cmem, size, mem);
@@ -1130,7 +1130,7 @@ static int zram_bvec_write(struct zram *zram, struct bio_vec *bvec, u32 index,
 
 	if ((clen == PAGE_SIZE) && !is_partial_io(bvec)) {
 		src = kmap_atomic(page);
-		copy_page(cmem, src);
+		memcpy(cmem, src, PAGE_SIZE);
 		kunmap_atomic(src);
 	} else {
 #ifdef CONFIG_MT_ENG_BUILD
@@ -1167,7 +1167,9 @@ static int zram_bvec_write(struct zram *zram, struct bio_vec *bvec, u32 index,
 	 * before overwriting unused sectors.
 	 */
 	bit_spin_lock(ZRAM_ACCESS, &meta->table[index].value);
+#ifndef CONFIG_ZSM
 	zram_free_page(zram, index);
+#endif
 	meta->table[index].handle = handle;
 	zram_set_obj_size(meta, index, clen);
 #ifdef CONFIG_ZSM

@@ -158,7 +158,7 @@ enum power_supply_property {
 	/* Add for battery voltage/temp */
 	POWER_SUPPLY_PROP_batt_vol,
 	POWER_SUPPLY_PROP_batt_temp,
-	POWER_SUPPLY_PROP_charge_counter,          //renyongwei@wind-mobi.com 20170923 add
+	POWER_SUPPLY_PROP_charge_count,          //renyongwei@wind-mobi.com 20170923 add
 	POWER_SUPPLY_PROP_bat_current,          //liulinsheng@wind-mobi.com 20171002 add
 	POWER_SUPPLY_PROP_usb_ntc,           //liulinsheng@wind-mobi.com 20170309
 	//liulinsheng@wind-mobi.com  for ap temp check	

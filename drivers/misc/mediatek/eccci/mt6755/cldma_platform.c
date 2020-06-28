@@ -119,6 +119,12 @@ int md_cd_get_modem_hw_info(struct platform_device *dev_ptr, struct ccci_dev_cfg
 		hw_info->cldma_md_pdn_base = (unsigned long)of_iomap(dev_ptr->dev.of_node, 3);
 		hw_info->ap_ccif_base = (unsigned long)of_iomap(dev_ptr->dev.of_node, 4);
 		hw_info->md_ccif_base = (unsigned long)of_iomap(dev_ptr->dev.of_node, 5);
+		if (!(hw_info->cldma_ap_ao_base && hw_info->cldma_md_ao_base && hw_info->cldma_ap_pdn_base &&
+			hw_info->cldma_md_pdn_base && hw_info->ap_ccif_base && hw_info->md_ccif_base)) {
+			CCCI_ERROR_LOG(dev_cfg->index, TAG, "%s: hw_info of_iomap failed\n",
+				       dev_ptr->dev.of_node->full_name);
+			return -1;
+		}
 		hw_info->cldma_irq_id = irq_of_parse_and_map(dev_ptr->dev.of_node, 0);
 		hw_info->ap_ccif_irq_id = irq_of_parse_and_map(dev_ptr->dev.of_node, 1);
 		hw_info->md_wdt_irq_id = irq_of_parse_and_map(dev_ptr->dev.of_node, 2);
@@ -149,6 +155,11 @@ int md_cd_get_modem_hw_info(struct platform_device *dev_ptr, struct ccci_dev_cfg
 #endif
 		node = of_find_compatible_node(NULL, NULL, "mediatek,APMIXED");
 		hw_info->ap_mixed_base = (unsigned long)of_iomap(node, 0);
+		if (!hw_info->ap_mixed_base) {
+			CCCI_ERROR_LOG(dev_cfg->index, TAG, "%s: hw_info->ap_mixed_base of_iomap failed\n",
+				       node->full_name);
+			return -1;
+		}
 		break;
 	default:
 		return -1;

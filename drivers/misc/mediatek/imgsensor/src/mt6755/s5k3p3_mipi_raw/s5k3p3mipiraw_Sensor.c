@@ -36,7 +36,9 @@
 #include "s5k3p3mipiraw_Sensor.h"
 
 #define PFX "S5K3P3_camera_sensor"
-#define LOG_INF(format, args...)	pr_debug(PFX "[%s] " format, __FUNCTION__, ##args)
+//dingyisheng@wind-mobi.com 20171103 begin
+#define LOG_INF(format, args...)	pr_err(PFX "[%s] " format, __FUNCTION__, ##args)
+//dingyisheng@wind-mobi.com 20171103 end
 
 #define PDAF_Support
 
@@ -46,7 +48,7 @@ static DEFINE_SPINLOCK(imgsensor_drv_lock);
 static imgsensor_info_struct imgsensor_info = {
 	.sensor_id = S5K3P3_SENSOR_ID,
 
-	.checksum_value =0x7b925d1d,
+	.checksum_value =0xffb1ec31, //  modify by qiangang 0x7b925d1d
 
 	.pre = {
         .pclk = 560000000,              //record different mode's pclk

@@ -144,7 +144,25 @@ static __init int boot_trace_cmdline(char *str)
 	update_buf_size(buf_size);
 	return 0;
 }
-__setup("boot_trace", boot_trace_cmdline);
+__setup("androidboot.boot_trace", boot_trace_cmdline);
+
+/* If boot tracing is on.Ignore tracing off command.*/
+bool boot_ftrace_check(unsigned long trace_en)
+{
+	bool boot_complete = false;
+
+	if (boot_trace != true || trace_en)
+		return false;
+
+#ifdef CONFIG_MTPROF
+	boot_complete = boot_finish;
+#endif
+	if (!boot_complete) {
+		pr_info("Capturing boot ftrace,Ignore tracing off.\n");
+		return true;
+	}
+	return false;
+}
 
 #include <linux/rtc.h>
 void print_enabled_events(struct trace_buffer *buf, struct seq_file *m)
@@ -221,6 +239,7 @@ static void ftrace_events_enable(int enable)
 
 
 		trace_set_clr_event("mtk_events", NULL, 1);
+		trace_set_clr_event("mtk_nand", NULL, 1);
 		trace_set_clr_event("ipi", NULL, 1);
 
 		trace_set_clr_event("met_bio", NULL, 1);

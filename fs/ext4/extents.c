@@ -871,6 +871,13 @@ ext4_find_extent(struct inode *inode, ext4_lblk_t block,
 	eh = ext_inode_hdr(inode);
 	depth = ext_depth(inode);
 
+	if (depth < 0 || depth > EXT4_MAX_EXTENT_DEPTH) {
+		EXT4_ERROR_INODE(inode, "inode has invalid extent depth: %d",
+				 depth);
+		ret = -EIO;
+		goto err;
+	}
+
 	if (path) {
 		ext4_ext_drop_refs(path);
 		if (depth > path[0].p_maxdepth) {
@@ -3546,7 +3553,8 @@ static int ext4_ext_convert_to_initialized(handle_t *handle,
 	 */
 	split_flag |= ee_block + ee_len <= eof_block ? EXT4_EXT_MAY_ZEROOUT : 0;
 
-	if (EXT4_EXT_MAY_ZEROOUT & split_flag)
+	if ((EXT4_EXT_MAY_ZEROOUT & split_flag) &&
+	    !ext4_encrypted_inode(inode))
 		max_zeroout = sbi->s_extent_max_zeroout_kb >>
 			(inode->i_sb->s_blocksize_bits - 10);
 

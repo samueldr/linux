@@ -599,6 +599,11 @@ static int cpufreq_stat_notifier_policy(struct notifier_block *nb,
 	struct cpufreq_frequency_table *table, *pos;
 	unsigned int cpu_num, cpu = policy->cpu;
 
+/* wangbing@wind-mobi.com 20171201 begin */
+	if (val == CPUFREQ_REMOVE_POLICY)
+		__cpufreq_stats_free_table(policy);
+/* wangbing@wind-mobi.com 20171201 end */
+
 	if (val == CPUFREQ_UPDATE_POLICY_CPU) {
 		cpufreq_stats_update_policy_cpu(policy);
 		return 0;
@@ -621,8 +626,13 @@ static int cpufreq_stat_notifier_policy(struct notifier_block *nb,
 
 	if (val == CPUFREQ_CREATE_POLICY)
 		ret = __cpufreq_stats_create_table(policy, table, count);
+
+/* wangbing@wind-mobi.com 20171201 begin */
+#if 0
 	else if (val == CPUFREQ_REMOVE_POLICY)
 		__cpufreq_stats_free_table(policy);
+#endif
+/* wangbing@wind-mobi.com 20171201 end */
 
 	return ret;
 }

@@ -145,7 +145,6 @@ extern int user_min_free_kbytes;
 static inline int is_cma_page(struct page *page)
 {
 	unsigned mt = get_pageblock_migratetype(page);
-
 	if (mt == MIGRATE_ISOLATE || mt == MIGRATE_CMA)
 		return true;
 	return false;

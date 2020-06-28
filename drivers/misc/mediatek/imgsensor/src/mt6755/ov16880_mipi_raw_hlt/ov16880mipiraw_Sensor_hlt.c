@@ -231,6 +231,21 @@ static imgsensor_info_struct imgsensor_info = {
 		.mipi_data_lp2hs_settle_dc = 85,//unit , ns
 		.max_framerate = 1200,
 	},
+	//dingyisheng@wind-mobi.com 20171024 begin
+    .custom1 = {
+		.pclk = 288000000,											//record different mode's pclk
+		.linelength = 2512,		/*OV16880 Note: linelength/4,it means line length per lane*/
+		.framelength = 3824,			//record different mode's framelength
+		.startx = 0,					//record different mode's startx of grabwindow
+		.starty = 0,					//record different mode's starty of grabwindow
+		.grabwindow_width = 2336,		//record different mode's width of grabwindow
+		.grabwindow_height = 1752,		//record different mode's height of grabwindow
+		/*	 following for MIPIDataLowPwr2HighSpeedSettleDelayCount by different scenario	*/
+		.mipi_data_lp2hs_settle_dc = 85,//unit , ns
+		/*	 following for GetDefaultFramerateByScenario()	*/
+		.max_framerate = 300,
+	},
+	//dingyisheng@wind-mobi.com 20171024 end	
 	.margin = 8,
 	.min_shutter = 4,
 	.max_frame_length = 0x7fff,
@@ -246,6 +261,9 @@ static imgsensor_info_struct imgsensor_info = {
 	.video_delay_frame = 2,
 	.hs_video_delay_frame = 2,
 	.slim_video_delay_frame = 2,
+	//dingyisheng@wind-mobi.com 20171024 begin
+	.custom1_delay_frame = 3,
+	//dingyisheng@wind-mobi.com 20171024 end
 
 	.isp_driving_current = ISP_DRIVING_2MA,
 	.sensor_interface_type = SENSOR_INTERFACE_TYPE_MIPI,
@@ -276,13 +294,16 @@ static imgsensor_struct imgsensor = {
 
 
 /* Sensor output window information */
-static SENSOR_WINSIZE_INFO_STRUCT imgsensor_winsize_info[5] =
+//dingyisheng@wind-mobi.com 20171024 begin
+static SENSOR_WINSIZE_INFO_STRUCT imgsensor_winsize_info[6] =
 {{ 4704, 3536,	   0,     8, 4704, 3520, 2352, 1760,  8, 2, 2336, 1752,	  0,	0, 2336, 1752}, // Preview
  { 4704, 3536,	   0,     8, 4704, 3520, 4704, 3520, 16, 8, 4672, 3504,	  0,	0, 4672, 3504}, // capture
  { 4704, 3536,	   0,     8, 4704, 3520, 4704, 3520, 216, 558, 4272, 2404,	  0,	0, 4272, 2404}, // video
  { 4704, 3536,	1056,  1040, 2592, 1456, 1296,  728,  8, 4, 1280,  720,	  0,	0, 1280,  720}, //hight speed video
- { 4704, 3536,	1056,  1040, 2592, 1456, 1296,  728,  8, 4, 1280,  720,	  0,	0, 1280,  720}}; // slim video
-
+ { 4704, 3536,	1056,  1040, 2592, 1456, 1296,  728,  8, 4, 1280,  720,	  0,	0, 1280,  720}, // slim video
+ { 4704, 3536,	   0,     8, 4704, 3520, 2352, 1760,  8, 2, 2336, 1752,	  0,	0, 2336, 1752}, // custom1
+//dingyisheng@wind-mobi.com 20171024 begin
+};
 static SET_PD_BLOCK_INFO_T imgsensor_pd_info =
 {
     .i4OffsetX =  96,
@@ -3453,6 +3474,15 @@ static void slim_video_setting(void)
 }
 
 
+//dingyisheng@wind-mobi.com 20171024 begin
+static void custom1_setting(void)
+{
+	LOG_INF("E\n");
+	preview_setting();
+}
+//dingyisheng@wind-mobi.com 20171024 end
+
+
 
 /*************************************************************************
 * FUNCTION
@@ -3487,10 +3517,10 @@ static kal_uint32 get_imgsensor_id(UINT32 *sensor_id)
 				*sensor_id=0x016881;
 			}
 			if (*sensor_id == imgsensor_info.sensor_id) {
-				LOG_INF("i2c write id: 0x%x, sensor id: 0x%x\n", imgsensor.i2c_write_id,*sensor_id);	  
+				LOGE("i2c write id: 0x%x, sensor id: 0x%x\n", imgsensor.i2c_write_id,*sensor_id);	  
 				return ERROR_NONE;
 			}
-			LOG_INF("Read sensor id fail, write id:0x%x ,sensor Id:0x%x,imgsensor_info.sensor_id=0x%x\n", imgsensor.i2c_write_id,*sensor_id,imgsensor_info.sensor_id);
+			LOGE("Read sensor id fail, write id:0x%x ,sensor Id:0x%x,imgsensor_info.sensor_id=0x%x\n", imgsensor.i2c_write_id,*sensor_id,imgsensor_info.sensor_id);
 			retry--;
 		} while(retry > 0);
 		i++;
@@ -3759,6 +3789,27 @@ static kal_uint32 slim_video(MSDK_SENSOR_EXPOSURE_WINDOW_STRUCT *image_window,
 	return ERROR_NONE;
 }	/*	slim_video	 */
 
+//dingyisheng@wind-mobi.com 20171024 begin
+static kal_uint32 custom1(MSDK_SENSOR_EXPOSURE_WINDOW_STRUCT *image_window,
+					  MSDK_SENSOR_CONFIG_STRUCT *sensor_config_data)
+{
+	LOG_INF("E\n");
+
+	spin_lock(&imgsensor_drv_lock);
+	imgsensor.sensor_mode = IMGSENSOR_MODE_CUSTOM1;
+	imgsensor.pclk = imgsensor_info.custom1.pclk;
+	//imgsensor.video_mode = KAL_FALSE;
+	imgsensor.line_length = imgsensor_info.custom1.linelength;
+	imgsensor.frame_length = imgsensor_info.custom1.framelength;
+	imgsensor.min_frame_length = imgsensor_info.custom1.framelength;
+	imgsensor.autoflicker_en = KAL_FALSE;
+	spin_unlock(&imgsensor_drv_lock);
+	custom1_setting();
+	//set_mirror_flip(IMAGE_NORMAL);
+	return ERROR_NONE;
+}	/*	custom1   */
+//dingyisheng@wind-mobi.com 20171024 end
+
 
 
 static kal_uint32 get_resolution(MSDK_SENSOR_RESOLUTION_INFO_STRUCT *sensor_resolution)
@@ -3779,7 +3830,12 @@ static kal_uint32 get_resolution(MSDK_SENSOR_RESOLUTION_INFO_STRUCT *sensor_reso
 
 	sensor_resolution->SensorSlimVideoWidth	 = imgsensor_info.slim_video.grabwindow_width;
 	sensor_resolution->SensorSlimVideoHeight	 = imgsensor_info.slim_video.grabwindow_height;
-
+		
+	//dingyisheng@wind-mobi.com 20171024 begin
+	sensor_resolution->SensorCustom1Width  = imgsensor_info.custom1.grabwindow_width;
+	sensor_resolution->SensorCustom1Height	   = imgsensor_info.custom1.grabwindow_height;
+	//dingyisheng@wind-mobi.com 20171024 end
+	
 	return ERROR_NONE;
 }	/*	get_resolution	*/
 
@@ -3812,7 +3868,10 @@ static kal_uint32 get_info(MSDK_SCENARIO_ID_ENUM scenario_id,
 	sensor_info->VideoDelayFrame = imgsensor_info.video_delay_frame;
 	sensor_info->HighSpeedVideoDelayFrame = imgsensor_info.hs_video_delay_frame;
 	sensor_info->SlimVideoDelayFrame = imgsensor_info.slim_video_delay_frame;
-
+	//dingyisheng@wind-mobi.com 20171024 begin
+	sensor_info->Custom1DelayFrame = imgsensor_info.custom1_delay_frame;
+	//dingyisheng@wind-mobi.com 20171024 end
+	
 	sensor_info->SensorMasterClockSwitch = 0; /* not use */
 	sensor_info->SensorDrivingCurrent = imgsensor_info.isp_driving_current;
 
@@ -3874,6 +3933,14 @@ static kal_uint32 get_info(MSDK_SCENARIO_ID_ENUM scenario_id,
 			sensor_info->MIPIDataLowPwr2HighSpeedSettleDelayCount = imgsensor_info.slim_video.mipi_data_lp2hs_settle_dc;
 
 			break;
+		//dingyisheng@wind-mobi.com 20171024 begin
+		case MSDK_SCENARIO_ID_CUSTOM1:
+			sensor_info->SensorGrabStartX = imgsensor_info.custom1.startx;
+			sensor_info->SensorGrabStartY = imgsensor_info.custom1.starty;
+			sensor_info->MIPIDataLowPwr2HighSpeedSettleDelayCount = imgsensor_info.custom1.mipi_data_lp2hs_settle_dc;
+			break;
+		//dingyisheng@wind-mobi.com 20171024 begin
+			
 		default:
 			sensor_info->SensorGrabStartX = imgsensor_info.pre.startx;
 			sensor_info->SensorGrabStartY = imgsensor_info.pre.starty;
@@ -3909,6 +3976,12 @@ static kal_uint32 control(MSDK_SCENARIO_ID_ENUM scenario_id, MSDK_SENSOR_EXPOSUR
 		case MSDK_SCENARIO_ID_SLIM_VIDEO:
 			slim_video(image_window, sensor_config_data);
 			break;
+		//dingyisheng@wind-mobi.com 20171024 begin
+		case MSDK_SCENARIO_ID_CUSTOM1:
+			custom1(image_window, sensor_config_data);
+			break;
+		//dingyisheng@wind-mobi.com 20171024 end
+		
 		default:
 			LOG_INF("Error ScenarioId setting");
 			preview(image_window, sensor_config_data);
@@ -4018,6 +4091,17 @@ static kal_uint32 set_max_framerate_by_scenario(MSDK_SCENARIO_ID_ENUM scenario_i
 			spin_unlock(&imgsensor_drv_lock);
 			//set_dummy();
 			break;
+		//dingyisheng@wind-mobi.com 20171024 begin
+		case MSDK_SCENARIO_ID_CUSTOM1:
+			frame_length = imgsensor_info.custom1.pclk / framerate * 10 / imgsensor_info.custom1.linelength;
+			spin_lock(&imgsensor_drv_lock);
+			imgsensor.dummy_line = (frame_length > imgsensor_info.custom1.framelength) ? (frame_length - imgsensor_info.custom1.framelength) : 0;
+			imgsensor.frame_length = imgsensor_info.custom1.framelength + imgsensor.dummy_line;
+			imgsensor.min_frame_length = imgsensor.frame_length;
+			spin_unlock(&imgsensor_drv_lock);
+			//set_dummy();
+			break;
+		//dingyisheng@wind-mobi.com 20171024 end
 		default:  //coding with  preview scenario by default
 			frame_length = imgsensor_info.pre.pclk / framerate * 10 / imgsensor_info.pre.linelength;
 			spin_lock(&imgsensor_drv_lock);
@@ -4053,6 +4137,11 @@ static kal_uint32 get_default_framerate_by_scenario(MSDK_SCENARIO_ID_ENUM scenar
 		case MSDK_SCENARIO_ID_SLIM_VIDEO:
 			*framerate = imgsensor_info.slim_video.max_framerate;
 			break;
+		//dingyisheng@wind-mobi.com 20171024 begin
+		case MSDK_SCENARIO_ID_CUSTOM1:
+			*framerate = imgsensor_info.custom1.max_framerate;
+			break;
+		//dingyisheng@wind-mobi.com 20171024 end
 		default:
 			break;
 	}
@@ -4194,6 +4283,11 @@ static kal_uint32 feature_control(MSDK_SENSOR_FEATURE_ENUM feature_id,
 				case MSDK_SCENARIO_ID_SLIM_VIDEO:
 				memcpy((void *)wininfo,(void *)&imgsensor_winsize_info[4],sizeof(SENSOR_WINSIZE_INFO_STRUCT));
 				break;
+				//dingyisheng@wind-mobi.com 20171024 begin
+				case MSDK_SCENARIO_ID_CUSTOM1:
+					memcpy((void *)wininfo,(void *)&imgsensor_winsize_info[5],sizeof(SENSOR_WINSIZE_INFO_STRUCT));
+					break;
+				//dingyisheng@wind-mobi.com 20171024 end
 				case MSDK_SCENARIO_ID_CAMERA_PREVIEW:
 				default:
 				memcpy((void *)wininfo,(void *)&imgsensor_winsize_info[0],sizeof(SENSOR_WINSIZE_INFO_STRUCT));

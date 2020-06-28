@@ -177,6 +177,11 @@ static inline bool kmem_cache_has_cpu_partial(struct kmem_cache *s)
  */
 #define DEBUG_METADATA_FLAGS (SLAB_RED_ZONE | SLAB_POISON | SLAB_STORE_USER)
 
+/*
+ * Disable SLAG_STORE_USER for low memory device
+ */
+#define DEBUG_LOWMEM_FLAGS (SLAB_RED_ZONE | SLAB_POISON)
+
 #define OO_SHIFT	16
 #define OO_MASK		((1 << OO_SHIFT) - 1)
 #define MAX_OBJS_PER_PAGE	32767 /* since page.objects is u15 */
@@ -1202,7 +1207,11 @@ fail:
 
 static int __init setup_slub_debug(char *str)
 {
+#ifdef CONFIG_MTK_LOW_RAM_DEBUG
+	slub_debug = DEBUG_LOWMEM_FLAGS;
+#else
 	slub_debug = DEBUG_DEFAULT_FLAGS;
+#endif
 	if (*str++ != '=' || !*str)
 		/*
 		 * No options specified. Switch on full debugging.
@@ -3406,6 +3415,39 @@ void *__kmalloc_node(size_t size, gfp_t flags, int node)
 EXPORT_SYMBOL(__kmalloc_node);
 #endif
 
+#ifdef CONFIG_HARDENED_USERCOPY
+/*
+ * Rejects objects that are incorrectly sized.
+ *
+ * Returns NULL if check passes, otherwise const char * to name of cache
+ * to indicate an error.
+ */
+const char *__check_heap_object(const void *ptr, unsigned long n,
+				struct page *page)
+{
+	struct kmem_cache *s;
+	unsigned long offset;
+	size_t object_size;
+
+	/* Find object and usable object size. */
+	s = page->slab_cache;
+	object_size = slab_ksize(s);
+
+	/* Reject impossible pointers. */
+	if (ptr < page_address(page))
+		return s->name;
+
+	/* Find offset within object. */
+	offset = (ptr - page_address(page)) % s->size;
+
+	/* Allow address range falling entirely within object size. */
+	if (offset <= object_size && n <= object_size - offset)
+		return NULL;
+
+	return s->name;
+}
+#endif /* CONFIG_HARDENED_USERCOPY */
+
 size_t ksize(const void *object)
 {
 	struct page *page;
@@ -5407,6 +5449,9 @@ static int mtk_memcfg_add_location(struct loc_track *t, struct kmem_cache *s,
 #endif
 			break;
 	}
+	/* copy all addrs if we cannot match track->addr */
+	if (i == TRACK_ADDRS_COUNT)
+		i = 0;
 	cnt = min(MTK_MEMCFG_SLABTRACE_CNT, TRACK_ADDRS_COUNT - i);
 #ifdef MTK_COMPACT_SLUB_TRACK
 	{

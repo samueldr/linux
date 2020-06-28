@@ -1,0 +1,78 @@
+#ifndef __SF_USER_H__
+#define __SF_USER_H__
+
+#include "sf_def.h"
+
+//-----------------------------------------------------------------------------
+
+// platform select
+#define SF_PLATFORM_SEL             SF_TEE_BEANPOD
+// compatible select
+#define SF_COMPATIBLE_SEL           SF_COMPATIBLE_BEANPOD_V2
+// power mode select
+#define SF_POWER_MODE_SEL           PWR_MODE_NOF
+// debug log select
+#define SF_LOG_ENABLE               1
+//-----------------------------------------------------------------------------
+
+/* Dts node. */
+#define COMPATIBLE_SW_FP            "mediatek,mtk_finger"
+
+// for not mtk
+#define COMPATIBLE_RESET_GPIO       "sunwave,gpio_reset"
+#define COMPATIBLE_IRQ_GPIO         "sunwave,gpio_irq"
+#define COMPATIBLE_PWR_GPIO         "sunwave,gpio_pwr"
+
+//for mtk pinctl system
+#define FINGER_POWER_ON             "finger_power_high"
+#define FINGER_POWER_OFF            "finger_power_low"
+#define FINGER_RESET_LOW            "reset_low"
+#define FINGER_RESET_HIGH           "reset_high"
+#define FINGER_INT_SET              "fingerprint_irq"
+#define FINGER_MISO_SET				"miso_spi"
+
+/* regulator VDD select */
+#define SF_VDD_NAME                 "VDD"
+#define SF_VDD_MIN_UV               2800000
+#define SF_VDD_MAX_UV               2800000
+//-----------------------------------------------------------------------------
+
+#define ANDROID_WAKELOCK            1
+#define SF_INT_TRIG_HIGH            0
+//-----------------------------------------------------------------------------
+
+//for mtk6739 kernel4.4 spi speed mode
+#define MTK_6739_SPEED_MODE         0
+//-----------------------------------------------------------------------------
+#if (SF_PLATFORM_SEL == SF_REE_MTK_L5_X)
+//android mtk androidL 5.x none dts config file
+#define MTK_L5_X_POWER_ON           1
+#define MTK_L5_X_IRQ_SET            0
+
+//power GPIO
+#if MTK_L5_X_POWER_ON
+#define  GPIO_SW_PWR_PIN            GPIO_FIGERPRINT_PWR_EN_PIN
+#define  GPIO_SW_PWR_M_GPIO         GPIO_MODE_00SF_BEANPOD_COMPATIBLE_V2
+#endif
+
+//interrupt pin
+#define  GPIO_SW_IRQ_NUM            CUST_EINT_FIGERPRINT_INT_NUM
+#define  GPIO_SW_INT_PIN            GPIO_FIGERPRINT_INT
+
+//reset pin
+#define  GPIO_SW_RST_PIN            GPIO_FIGERPRINT_RST
+#define  GPIO_SW_RST_PIN_M_GPIO     GPIO_MODE_00
+
+#define  GPIO_SW_RST_M_DAIPCMOUT    GPIO_MODE_01
+
+//interrupt mode
+#if MTK_L5_X_IRQ_SET
+#define  GPIO_SW_EINT_PIN_M_GPIO    GPIO_FIGERPRINT_INT_M_GPIO //GPIO_MODE_00
+#define  GPIO_SW_EINT_PIN_M_EINT    GPIO_FIGERPRINT_INT_M_EINT //GPIO_MODE_00
+#endif
+
+#endif
+//-----------------------------------------------------------------------------
+#include "sf_auto.h"
+
+#endif

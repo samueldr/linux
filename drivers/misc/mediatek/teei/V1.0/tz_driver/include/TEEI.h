@@ -1,3 +1,17 @@
+/*
+ * Copyright (c) 2015-2017 MICROTRUST Incorporated
+ * All Rights Reserved.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ */
+
 #ifndef __TZ_TEEI_H__
 #define __TZ_TEEI_H__
 
@@ -5,8 +19,8 @@
 #define ARGS_BLOCK_SIZE 1024
 
 struct sockaddr {
-	unsigned short sa_family;
-	char sa_data[14];
+	unsigned short sa_family; /* 地址族 */
+	char sa_data[14];   /* 14字节协议地址 */
 };
 
 struct in_addr {
@@ -14,10 +28,10 @@ struct in_addr {
 };
 
 struct sockaddr_in {
-	short int sin_family;
-	unsigned short int sin_port;
-	struct in_addr sin_addr;
-	unsigned char sin_zero[8];
+	short int sin_family;   /* 地址族 */
+	unsigned short int sin_port;   /* 端口号 */
+	struct in_addr sin_addr;   /* IP地址 */
+	unsigned char sin_zero[8];   /* 填充0以保持与struct sockaddr同样大小 */
 };
 
 struct TEEI_socket_command {
@@ -89,7 +103,6 @@ struct TEEI_socket_command {
 	} args;
 
 };
-
 
 union TEEI_socket_response_type {
 	int value;

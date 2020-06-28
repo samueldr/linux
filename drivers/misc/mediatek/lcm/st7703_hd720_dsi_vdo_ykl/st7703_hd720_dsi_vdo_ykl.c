@@ -14,6 +14,9 @@
 #endif
 
 #include "lcm_drv.h"
+// qiangang@wind-mobi.com 20170126 begin
+#include <linux/i2c.h>
+// qiangang@wind-mobi.com 20170126 end
 
 // ---------------------------------------------------------------------------
 //  Local Constants
@@ -34,6 +37,7 @@
         #define FALSE 0
 #endif
 
+extern int esd_check_alarm;
 static unsigned int lcm_esd_test        = FALSE;                // only for ESD test
 static char* lcm_name                   = "st7703";             // define the lcm'name
 
@@ -56,7 +60,95 @@ static LCM_UTIL_FUNCS lcm_util;
 #define write_regs(addr, pdata, byte_nums)                      lcm_util.dsi_write_regs(addr, pdata, byte_nums)
 #define read_reg                                                lcm_util.dsi_read_reg()
 #define read_reg_v2(cmd, buffer, buffer_size)                   lcm_util.dsi_dcs_read_lcm_reg_v2(cmd, buffer, buffer_size)
+//add by qiangang 20171025 begin
+// qiangang@wind-mobi.com 20170126 begin
+#define I2C_ID_NAME "tps65132"
+//#define TPS_ADDR 0x3E
 
+static struct i2c_client *tps65132_i2c_client;
+static int tps65132_probe(struct i2c_client *client, const struct i2c_device_id *id);
+static int tps65132_remove(struct i2c_client *client);
+//static unsigned int lcm_compare_id(void);
+
+struct tps65132_dev{
+	struct i2c_client *client;
+};
+
+static const struct i2c_device_id tps65132_id[] = {
+	{I2C_ID_NAME,0},
+	{},
+};
+
+static const struct of_device_id tps65132_of_match[] = {
+	{.compatible = "mediatek,i2c_lcd_bias",},
+	{},
+};
+
+static struct i2c_driver tps65132_iic_driver = {
+	.id_table = tps65132_id,
+	.probe = tps65132_probe,
+	.remove = tps65132_remove,
+	.driver = {
+		.owner = THIS_MODULE,
+		.name = "tps65132",
+		.of_match_table = tps65132_of_match,
+	},
+};
+
+static int tps65132_remove(struct i2c_client *client)
+{
+	printk("tps65132 remove\n");
+	tps65132_i2c_client = NULL;
+	i2c_unregister_device(client);
+	return 0;
+}
+
+int tps65132_write_bytes(unsigned char addr, unsigned char value)
+{
+	int ret = 0;
+	struct i2c_client * client = tps65132_i2c_client;
+	char write_data[2] = {0};
+	printk("TPS:info==>name=%s addr=0x%x\n", client->name, client->addr);
+	write_data[0] = addr;
+	write_data[1] = value;
+	if(client)
+		ret = i2c_master_send(client, write_data,2);
+	if(ret < 0)
+		printk("tps65132 write data fail!\n");
+	return ret;
+}
+
+static int tps65132_probe(struct i2c_client *client, const struct i2c_device_id *id)
+{
+	printk("tps65132_iic_probe\n");
+	printk("TPS_probe:info==>name=%s addr=0x%x\n", client->name, client->addr);
+	tps65132_i2c_client = client;
+	return 0;
+}
+
+static int __init tps65132_iic_init(void)
+{
+	printk("tps65132_iic_init!\n");
+	i2c_add_driver(&tps65132_iic_driver);
+	printk("tps65132_iic_init success\n");
+	return 0;
+}
+
+static void __exit tps65132_iic_exit(void)
+{
+	printk("tps65132_iic_exit!\n");
+	i2c_del_driver(&tps65132_iic_driver);
+
+}
+
+module_init(tps65132_iic_init);
+module_exit(tps65132_iic_exit);
+// qiangang@wind-mobi.com 20170126 end
+
+extern struct pinctrl *lcmbiasctrl;
+extern struct pinctrl_state *lcmbias_enable;
+extern struct pinctrl_state *lcmbias_disable;
+//add by qiangang 20171025 end
 struct LCM_setting_table
 {
         unsigned cmd;
@@ -126,11 +218,12 @@ static void lcm_get_params(LCM_PARAMS *params)
         params->dsi.vertical_backporch                  = 21;
         params->dsi.vertical_frontporch                 = 17;
         params->dsi.vertical_active_line                = FRAME_HEIGHT;
-        params->dsi.horizontal_sync_active              = 10;           // harvey 170902 10->35->4
-        params->dsi.horizontal_backporch                = 30;           // harvey 170902 50->80->30
-        params->dsi.horizontal_frontporch               = 30;           // harvey 170902 50->80->30
+		params->dsi.horizontal_sync_active              = 20;           //20 harvey 171023 10->30->20
+        params->dsi.horizontal_backporch                = 55;           //30 harvey 171023 30->45->30->55
+        params->dsi.horizontal_frontporch               = 50;           //35 harvey 171023 30->45->30->50
+        // params->dsi.horizontal_blanking_pixel           = 60;
         params->dsi.horizontal_active_pixel             = FRAME_WIDTH;
-        params->dsi.PLL_CLOCK                           = 228;
+        params->dsi.PLL_CLOCK                           = 241;//228->241
         params->dsi.ssc_disable                         = 1; //add by qiangang
         params->dsi.cont_clock                          = 0;
         params->dsi.esd_check_enable                    = 1;
@@ -157,7 +250,7 @@ static void lcm_get_params(LCM_PARAMS *params)
         params->dsi.lcm_esd_check_table[3].para_list[1] = 0x03;
         params->dsi.lcm_esd_check_table[3].para_list[2] = 0xB5;
         params->dsi.lcm_esd_check_table[3].para_list[3] = 0x3A;
-
+/*
         params->dsi.lcm_esd_check_table[4].cmd          = 0xBA;
         params->dsi.lcm_esd_check_table[4].count        = 10;
         params->dsi.lcm_esd_check_table[4].para_list[0] = 0x33;
@@ -170,7 +263,7 @@ static void lcm_get_params(LCM_PARAMS *params)
         params->dsi.lcm_esd_check_table[4].para_list[7] = 0x00;
         params->dsi.lcm_esd_check_table[4].para_list[8] = 0x00;
         params->dsi.lcm_esd_check_table[4].para_list[9] = 0x00;
-        
+*/
 // wangbing@wind-mobi.com 20171018 end
         // wangjun@wind-mobi.com 20170828 begin 
 #ifdef CONFIG_MTK_ROUND_CORNER_SUPPORT
@@ -183,9 +276,9 @@ static void lcm_get_params(LCM_PARAMS *params)
 static struct LCM_setting_table lcm_initialization_setting[] =
 {
         {0xB9, 0x03, {0xF1, 0x12, 0x83}},                                               // Set EXTC
-        {0xBA, 0x1B, {0x33, 0x81, 0x05, 0xF9, 0x0C, 0x0C, 0x02, 0x00, 0x00, 0x00,       // Set DSI
-                      0x00, 0x00, 0x00, 0x00, 0x44, 0xA5, 0x00, 0x91, 0x0a, 0x00,
-                      0x00, 0x02, 0x4F, 0x01, 0x03, 0x02, 0x37}},                       // harvey 171019 16th 25->a5,24&25&26th 11,00,00->01,03,02,5&6th 0e->0C
+        {0xBA, 0x1B, {0x33, 0x83, 0x05, 0xF9, 0x0E, 0x0E, 0x20, 0x00, 0x00, 0x00,       // Set DSI
+                      0x00, 0x00, 0x00, 0x00, 0x44, 0x25, 0x00, 0x91, 0x0a, 0x00,
+                      0x00, 0x02, 0x4F, 0x01, 0x03, 0x02, 0x37}},//2nd 81->83 7th 02->20 // harvey 171019 24&25&26th 11,00,00->01,03,02,
         {0xB8, 0x04, {0x75, 0x22, 0x20, 0x03}},                                         // ECP
         {0xB3, 0x0A, {0x10, 0x10, 0x05, 0x05, 0x03, 0xFF, 0x00, 0x00, 0x00, 0x00}},     // SET RGB
         {0xC0, 0x09, {0x73, 0x73, 0x50, 0x50, 0xC0, 0xC0, 0x08, 0x70, 0x00}},           // SCR harvey 170901 5th 00->c0 
@@ -193,29 +286,29 @@ static struct LCM_setting_table lcm_initialization_setting[] =
         {0xCC, 0x01, {0x0B}},//michael  0A or 0B                                        // Set Panel
 		{0xCB, 0x01, {0x02}},//michael  170903 03-01                                    // Set OSC
         {0xB4, 0x01, {0x80}},                                                           // Set Panel inversion
-        {0xB2, 0x03, {0xF0, 0x12, 0xF0}}, //harvey 170901 3th 30->f0                    // Set RSO
+        {0xB2, 0x03, {0xF0, 0x22, 0xF0}}, //2nd 0x12->0x22 for bug 1258652 //harvey 170901 3th 30->f0                    // Set RSO
         {0xE3, 0x0E, {0x00, 0x00, 0x0B, 0x0B, 0x10, 0x10, 0x00, 0x00, 0x00, 0x00,       // Set EQ
                       0xFF, 0x00, 0xC0, 0x10}},
-        {0xC6, 0x05, {0x02, 0x00, 0xCF, 0xFF, 0x01}},//harvey 170903 1ST 00->02         // SCR
-        {0xC1, 0x0C, {0x54, 0x00, 0x1E, 0x1E, 0x77, 0xC1, 0xFF, 0xFF, 0xEE, 0xEE,       // Set POWER
-                      0xEE, 0xEE}},                                                     // harvey 170901 pump  170902 6th F1->C1
+        {0xC6, 0x05, {0x02, 0x40, 0xCF, 0x7F, 0x01}},//harvey 170903 1ST 00->02    2nd00->40   4th ff->7f  // SCR
+        {0xC1, 0x0C, {0x54, 0x00, 0x1E, 0x1E, 0x77, 0xF1, 0xFF, 0xFF, 0xEE, 0xEE,       // modify by qiangang Set POWER
+                      0xEE, 0xEE}},                                                     // harvey 170901 pump  170902 6th F1->C1->F1
         {0xB5, 0x02, {0x07, 0x07}},                                                     // Set POWER
         {0xB6, 0x02, {0x30, 0x30}},                                                     // Set VCOM
         {0xBF, 0x03, {0x02, 0x11, 0x00}},                                               // Set PCR
-        {0xE9, 0x3F, {0X82, 0x10, 0x06, 0x05, 0xA2, 0x0A, 0x90, 0x12, 0x31, 0x23,       // GIP
-                      0x37, 0x83, 0x04, 0x90, 0x27, 0x38, 0x0C, 0x00, 0x03, 0x00,
+        {0xE9, 0x3F, {0X82, 0x10, 0x06, 0x05, 0xA2, 0x0A, 0xA5, 0x12, 0x31, 0x23,       // GIP
+                      0x37, 0x83, 0x04, 0xBC, 0x27, 0x38, 0x0C, 0x00, 0x03, 0x00,
                       0x00, 0x00, 0x0C, 0x00, 0x03, 0x00, 0x00, 0x00, 0x75, 0x75,
                       0x31, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x13, 0x88, 0x64,
                       0x64, 0x20, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x02, 0x88,
                       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                      0x00, 0x00, 0x00}},                                               // harvey 7&14 A5,BC->90,90
+                      0x00, 0x00, 0x00}},                                               //harvey 5th A2->9e
         {0xEA, 0x3D, {0x02, 0x21, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,       // GIP
                       0x00, 0x00, 0x02, 0x46, 0x02, 0x88, 0x88, 0x88, 0x88, 0x88,
                       0x88, 0x64, 0x88, 0x13, 0x57, 0x13, 0x88, 0x88, 0x88, 0x88,
                       0x88, 0x88, 0x75, 0x88, 0x23, 0x20, 0x00, 0x00, 0x02, 0x00,
                       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                      0x00, 0x00, 0x00, 0x00, 0x03, 0x0A, 0x90, 0x00, 0x00, 0x00,
-                      0x00}},                                                           // harvey 170901 36th 14->20 171019 57th A5->90
+                      0x00, 0x00, 0x00, 0x00, 0x03, 0x0A, 0xA5, 0x00, 0x00, 0x00,
+                      0x00}},                                                           // harvey 170901 36th 14->20 
         {0xE0, 0x22, {0x00, 0x09, 0x0E, 0x29, 0x2D, 0x3C, 0x41, 0x37, 0x07, 0x0B,       // Set Gamma
                       0x0D, 0x10, 0x11, 0x0F, 0x10, 0x11, 0x18, 0x00, 0x09, 0x0E,
                       0x29, 0x2D, 0x3C, 0x41, 0x37, 0x07, 0x0B, 0x0D, 0x10, 0x11,
@@ -230,18 +323,37 @@ static struct LCM_setting_table lcm_initialization_setting[] =
 
 static void lcm_init(void)
 {
+// qiangang@wind-mobi.com 20170126 begin
+#define TPS65132_VPOS_REG 0x00
+#define TPS65132_VNEG_REG 0x01
+        char  ucRegData;
+        char uiRet; 
+// qiangang@wind-mobi.com 20170126 end
 #ifdef GPIO_LCD_BIAS_ENP_PIN
         mt_set_gpio_mode(GPIO_LCD_BIAS_ENP_PIN, GPIO_MODE_00);
         mt_set_gpio_dir(GPIO_LCD_BIAS_ENP_PIN, GPIO_DIR_OUT);
         mt_set_gpio_out(GPIO_LCD_BIAS_ENP_PIN, GPIO_OUT_ONE);
 #endif
+        pinctrl_select_state(lcmbiasctrl, lcmbias_enable);
         MDELAY(10);
+// qiangang@wind-mobi.com 20170126 begin
+        ucRegData = 0x0E; //5.4v
+        uiRet = tps65132_write_bytes(TPS65132_VPOS_REG, ucRegData);
+        MDELAY(10);
+        ucRegData = 0x0E; //5.4v
+        uiRet = tps65132_write_bytes(TPS65132_VNEG_REG, ucRegData);
+        MDELAY(10);
+// qiangang@wind-mobi.com 20170126 end
         SET_RESET_PIN(1);
         MDELAY(1);
         SET_RESET_PIN(0);
         MDELAY(10);
         SET_RESET_PIN(1);
-        MDELAY(120);
+        MDELAY(20);
+        if(esd_check_alarm)
+        {
+                MDELAY(100);
+        }
         push_table(lcm_initialization_setting, sizeof(lcm_initialization_setting) / sizeof(struct LCM_setting_table), 1);
 }
 
@@ -254,7 +366,11 @@ static void lcm_suspend(void)
         mt_set_gpio_dir(GPIO_LCD_BIAS_ENP_PIN, GPIO_DIR_OUT);
         mt_set_gpio_out(GPIO_LCD_BIAS_ENP_PIN, GPIO_OUT_ZERO);
 #endif
+        pinctrl_select_state(lcmbiasctrl, lcmbias_disable);  //liukangping
         MDELAY(10);
+		
+		SET_RESET_PIN(0);
+		MDELAY(10);
 }
 
 static void lcm_resume(void)

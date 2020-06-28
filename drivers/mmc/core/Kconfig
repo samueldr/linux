@@ -35,12 +35,11 @@ config ASUS_GET_EMMC_TOTAL_SIZE
 	  work-around for buggy controllers and hardware. Enable
 	  if you are experiencing issues with SD detection.
 
-# wangjun@wind-mobi.com 20170821 begin 
+# wangjun@wind-mobi.com 20170821 begin
 config ASUS_EMMC_NODE
 	bool "Enable ASUS_EMMC_NODE"
 	help
 	  If you say Y here, they will creat emmc_total_size,
-	  emmc_health, emmc_life_A, emmc_life_B node at emmc 
+	  emmc_health, emmc_life_A, emmc_life_B node at emmc
 	  dir for ASUS storage request
-# wangjun@wind-mobi.com 20170821 end 	  
-	  
+# wangjun@wind-mobi.com 20170821 end

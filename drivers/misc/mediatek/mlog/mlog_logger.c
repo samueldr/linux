@@ -125,8 +125,8 @@ static int mlog_buf_len = MLOG_BUF_LEN;
 static unsigned mlog_start;
 static unsigned mlog_end;
 
-static int min_adj = -16;
-static int max_adj = 16;
+static int min_adj = -1000;
+static int max_adj = 1000;
 static int limit_pid = -1;
 
 static struct timer_list mlog_timer;
@@ -145,7 +145,7 @@ static const char mem_size_str[] = ",%6lu";
 static const char acc_count_str[] = ",%7lu";
 static const char pid_str[] = ",[%lu]";
 static const char pname_str[] = ", %s";
-static const char adj_str[] = ", %3ld";
+static const char adj_str[] = ", %5ld";
 
 /*
 buddyinfo
@@ -364,7 +364,7 @@ int mlog_snprint_fmt(char *buf, size_t len)
 		ret += snprintf(buf + ret, len - ret, ", name");
 #endif
 		if (proc_filter & P_ADJ)
-			ret += snprintf(buf + ret, len - ret, ", adj");
+			ret += snprintf(buf + ret, len - ret, ", score_adj");
 		if (proc_filter & P_RSS)
 			ret += snprintf(buf + ret, len - ret, ", rss");
 		if (proc_filter & P_RSWAP)
@@ -452,7 +452,7 @@ int mlog_print_fmt(struct seq_file *m)
 		seq_puts(m, ", name");
 #endif
 		if (proc_filter & P_ADJ)
-			seq_puts(m, ", adj");
+			seq_puts(m, ", score_adj");
 		if (proc_filter & P_RSS)
 			seq_puts(m, ", rss");
 		if (proc_filter & P_RSWAP)
@@ -647,17 +647,6 @@ struct task_struct *find_trylock_task_mm(struct task_struct *t)
 	return NULL;
 }
 
-/*
- * it's copied from lowmemorykiller.c
-*/
-static short lowmem_oom_score_adj_to_oom_adj(short oom_score_adj)
-{
-	if (oom_score_adj == OOM_SCORE_ADJ_MAX)
-		return OOM_ADJUST_MAX;
-	else
-		return ((oom_score_adj * -OOM_DISABLE * 10) / OOM_SCORE_ADJ_MAX + 5) / 10;	/* round */
-}
-
 static void mlog_procinfo(void)
 {
 	struct task_struct *tsk;
@@ -684,11 +673,7 @@ static void mlog_procinfo(void)
 		if (!p->signal)
 			goto unlock_continue;
 
-#ifdef CONFIG_ANDROID_LOW_MEMORY_KILLER_AUTODETECT_OOM_ADJ_VALUES
-		oom_score_adj = lowmem_oom_score_adj_to_oom_adj(p->signal->oom_score_adj);
-#else
-		oom_score_adj = p->signal->oom_adj;
-#endif
+		oom_score_adj = p->signal->oom_score_adj;
 
 		if (max_adj < oom_score_adj || oom_score_adj < min_adj)
 			goto unlock_continue;
@@ -975,6 +960,67 @@ ssize_t dmlog_read(struct file *file, char __user *buf, size_t len, loff_t *ppos
 		cond_resched();
 	}
 	return size;
+}
+
+/* Get mlog_buffer & its offset */
+void mlog_get_buffer(char **ptr, int *size)
+{
+#ifdef CONFIG_MT_ENG_BUILD
+#define MLOG_MSG_LENGTH	(3072)
+#define MLOG_PRINT(args...)	do {\
+					v = MLOG_BUF(start++);\
+					offset = sprintf(msg_pos, args);\
+					msg_pos += offset;\
+					msg_stored += offset;\
+				} while (0)
+
+	static char mlog_msg[MLOG_MSG_LENGTH];
+	unsigned start, end;
+	long v;
+	char *msg_pos;
+	int msg_stored = 0, offset, i;
+
+	msg_pos = mlog_msg;
+	start = mlog_start;
+	end = mlog_end;
+	while ((end - start) <= (mlog_buf_len + 1)) {
+		v = MLOG_BUF(start);
+		start += 1;
+		if (v != MLOG_ID)
+			continue;
+
+		/* bypss type */
+		start += 1;
+
+		/* time */
+		if (MLOG_MSG_LENGTH < (msg_stored + 16))
+			break;
+
+		MLOG_PRINT("%ld.", v);
+		MLOG_PRINT("%ld", v);
+
+		/* status */
+		for (i = 0; i < 17; i++) {
+			if (MLOG_MSG_LENGTH < (msg_stored + 22))
+				break;
+
+			MLOG_PRINT(" %ld", v);
+		}
+
+		if (MLOG_MSG_LENGTH < (msg_stored + 1))
+			break;
+
+		MLOG_PRINT("\n");
+	}
+
+	*ptr = mlog_msg;
+	*size = msg_stored;
+
+#undef MLOG_MSG_LENGTH
+#undef MLOG_PRINT
+#else
+	pr_info("%s: not eng build\n", __func__);
+#endif
 }
 
 static void mlog_timer_handler(unsigned long data)

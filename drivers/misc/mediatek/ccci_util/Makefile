@@ -14,8 +14,17 @@
 #FPGA project no need build-in
 ifndef CONFIG_MTK_FPGA
 
-# ccci_util is build after eccci or later
-ifdef CONFIG_MTK_ECCCI_DRIVER
+# ccci_util is build when ECCCI driver or CCCI driver enabled
+
+ENABLE_CCCI_UTIL=n
+ifeq ($(CONFIG_MTK_ECCCI_DRIVER), y)
+ENABLE_CCCI_UTIL=y
+endif
+ifeq ($(CONFIG_MTK_CCCI_EXT), y)
+ENABLE_CCCI_UTIL=y
+endif
+
+ifeq ($(ENABLE_CCCI_UTIL), y)
 
 ccflags-y += -I$(srctree)/drivers/misc/mediatek/ccci_util
 
@@ -27,6 +36,7 @@ ccci_util_lib-y += ccci_private_log.o
 ccci_util_lib-y += ccci_util_lib_time.o
 ccci_util_lib-y += ccci_util_lib_main.o
 ccci_util_lib-y += ccci_util_ld_md_errno.o
+ccci_util_lib-y += ccci_util_broadcast.o
 
 endif
 

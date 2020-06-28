@@ -23,7 +23,7 @@
  *
  * Project:
  * --------
- *   MT6797  Audio Driver Kernel Function
+ *   MT6583  Audio Driver Kernel Function
  *
  * Description:
  * ------------
@@ -52,8 +52,6 @@
 #include "AudDrv_Afe.h"
 #include "AudDrv_Ana.h"
 #include "AudDrv_Clk.h"
-#include "mt_soc_afe_connection.h"
-#include "mt_soc_afe_control.h"
 #include "mt_soc_digital_type.h"
 
 #include <linux/kernel.h>
@@ -79,23 +77,46 @@
 #include <linux/proc_fs.h>
 #include <linux/string.h>
 #include <linux/mutex.h>
+/*#include <mach/irqs.h>*/
 #include <linux/uaccess.h>
-#include <linux/io.h>
-
 #include <asm/irq.h>
+#include <linux/io.h>
+/*#include <mach/mt_reg_base.h>*/
 #include <asm/div64.h>
+#include <mt-plat/aee.h>
+/*#include <mach/pmic_mt6325_sw.h>
+#include <mach/upmu_common.h>
+#include <mach/upmu_hw.h>
+#include <mach/mt_gpio.h>
+#include <mach/mt_typedefs.h>*/
+#include <mt-plat/upmu_common.h>
+
+#include <linux/clk.h>
+#include <linux/delay.h>
+#include <linux/gpio.h>
+#include <linux/platform_device.h>
+#include <linux/slab.h>
+#include <sound/core.h>
+#include <sound/soc.h>
+#include <sound/soc-dapm.h>
+#include <sound/pcm.h>
+#include <sound/jack.h>
+/* #include <asm/mach-types.h> */
+
+#ifdef DEBUG_AUDDRV
+#define PRINTK_AUDDRV(format, args...) pr_debug(format, ##args)
+#else
+#define PRINTK_AUDDRV(format, args...)
+#endif
 
 /* mutex lock */
 static DEFINE_MUTEX(afe_connection_mutex);
 
-#define Soc_Aud_InterConnectionOutput_Num_Output_MT6755 (28)
-#define Soc_Aud_InterConnectionInput_Num_Input_MT6755 (23)
-
 /**
 * here define conenction table for input and output
 */
-static const char mConnectionTable[Soc_Aud_InterConnectionInput_Num_Input_MT6755]
-	[Soc_Aud_InterConnectionOutput_Num_Output_MT6755] = {
+static const char mConnectionTable[Soc_Aud_InterConnectionInput_Num_Input]
+	[Soc_Aud_InterConnectionOutput_Num_Output] = {
 	/*  0   1   2   3   4   5   6   7   8   9  10  11  12
 	   13  14  15  16  17  18  19  20  21  22  23  24  25  26  27 */
 	{3, 3, 3, 3, 3, 3, -1, 1, 1, 1, 1, -1, -1,
@@ -151,8 +172,8 @@ static const char mConnectionTable[Soc_Aud_InterConnectionInput_Num_Input_MT6755
 /**
 * connection bits of certain bits
 */
-static const char mConnectionbits[Soc_Aud_InterConnectionInput_Num_Input_MT6755]
-	[Soc_Aud_InterConnectionOutput_Num_Output_MT6755] = {
+static const char mConnectionbits[Soc_Aud_InterConnectionInput_Num_Input]
+	[Soc_Aud_InterConnectionOutput_Num_Output] = {
 	/* 0   1   2   3   4   5   6   7   8   9  10  11  12
 	   13  14  15  16  17  18  19  20  21  22  23  24  25  26  27 */
 	{0, 16, 0, 16, 0, 16, -1, 2, 5, 8, 12, -1, -1,
@@ -206,8 +227,8 @@ static const char mConnectionbits[Soc_Aud_InterConnectionInput_Num_Input_MT6755]
 /**
 * connection shift bits of certain bits
 */
-static const char mShiftConnectionbits[Soc_Aud_InterConnectionInput_Num_Input_MT6755]
-	[Soc_Aud_InterConnectionOutput_Num_Output_MT6755] = {
+static const char mShiftConnectionbits[Soc_Aud_InterConnectionInput_Num_Input]
+	[Soc_Aud_InterConnectionOutput_Num_Output] = {
 	/* 0   1   2   3   4   5   6   7   8   9  10  11  12
 	   13  14  15  16  17  18  19  20  21  22  23  24  25 */
 	{10, 26, 10, 26, 10, 19, -1, -1, -1, -1, -1, -1, -1,
@@ -259,8 +280,8 @@ static const char mShiftConnectionbits[Soc_Aud_InterConnectionInput_Num_Input_MT
 /**
 * connection of register
 */
-static const short mConnectionReg[Soc_Aud_InterConnectionInput_Num_Input_MT6755]
-	[Soc_Aud_InterConnectionOutput_Num_Output_MT6755] = {
+static const short mConnectionReg[Soc_Aud_InterConnectionInput_Num_Input]
+	[Soc_Aud_InterConnectionOutput_Num_Output] = {
 	/*   0     1     2     3     4     5     6     7     8     9    10    11    12
 	   13    14    15    16    17    18    19    20    21    22    23    24    25    26    27 */
 	{0x20, 0x20, 0x24, 0x24, 0x28, 0x28, -1, 0x5c, -1, 0x5c, 0x5c, -1, -1,
@@ -315,8 +336,8 @@ static const short mConnectionReg[Soc_Aud_InterConnectionInput_Num_Input_MT6755]
 /**
 * shift connection of register
 */
-static const short mShiftConnectionReg[Soc_Aud_InterConnectionInput_Num_Input_MT6755]
-	[Soc_Aud_InterConnectionOutput_Num_Output_MT6755] = {
+static const short mShiftConnectionReg[Soc_Aud_InterConnectionInput_Num_Input]
+	[Soc_Aud_InterConnectionOutput_Num_Output] = {
 	/*   0     1     2     3     4     5     6     7     8     9    10    11    12
 	   13    14    15    16    17    18    19    20    21    22    23    24    25 */
 	{0x20, 0x20, 0x24, 0x24, 0x28, 0x30, -1, -1, -1, -1, -1, -1, -1,
@@ -368,8 +389,8 @@ static const short mShiftConnectionReg[Soc_Aud_InterConnectionInput_Num_Input_MT
 /**
 * connection state of register
 */
-static char mConnectionState[Soc_Aud_InterConnectionInput_Num_Input_MT6755]
-	[Soc_Aud_InterConnectionOutput_Num_Output_MT6755] = {
+static char mConnectionState[Soc_Aud_InterConnectionInput_Num_Input]
+	[Soc_Aud_InterConnectionOutput_Num_Output] = {
 	/* 0  1  2  3  4  5  6  7  8  9  10 11 12 13 14 15 16 17 18 */
 	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},	/* I00 */
 	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},	/* I01 */
@@ -389,460 +410,6 @@ static char mConnectionState[Soc_Aud_InterConnectionInput_Num_Input_MT6755]
 	/* {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, // I15 */
 	/* {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}  // I16 */
 };
-
-typedef bool (*connection_function)(uint32);
-
-bool SetDl1ToI2s0(uint32 ConnectionState)
-{
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I05,
-			Soc_Aud_InterConnectionOutput_O00);
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I06,
-			Soc_Aud_InterConnectionOutput_O01);
-	return true;
-}
-
-bool SetDl1ToI2s1Dac(uint32 ConnectionState)
-{
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I05,
-			Soc_Aud_InterConnectionOutput_O03);
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I06,
-			Soc_Aud_InterConnectionOutput_O04);
-	return true;
-}
-
-bool SetI2s2Adc2ToVulData2(uint32 ConnectionState)
-{
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I23,
-			Soc_Aud_InterConnectionOutput_O21);
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I24,
-			Soc_Aud_InterConnectionOutput_O22);
-	return true;
-}
-
-bool SetI2s2AdcToVul(uint32 ConnectionState)
-{
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I03,
-			Soc_Aud_InterConnectionOutput_O09);
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I04,
-			Soc_Aud_InterConnectionOutput_O10);
-	return true;
-}
-
-bool SetDl1ToAwb(uint32 ConnectionState)
-{
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I05,
-			Soc_Aud_InterConnectionOutput_O05);
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I06,
-			Soc_Aud_InterConnectionOutput_O06);
-	return true;
-}
-
-bool SetDl2ToAwb(uint32 ConnectionState)
-{
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I07,
-			Soc_Aud_InterConnectionOutput_O05);
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I08,
-			Soc_Aud_InterConnectionOutput_O06);
-	return true;
-}
-
-bool SetDl1ToDaiBtOut(uint32 ConnectionState)
-{
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I05,
-			Soc_Aud_InterConnectionOutput_O02);
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I06,
-			Soc_Aud_InterConnectionOutput_O02);
-	return true;
-}
-
-bool SetModem1InCh1ToI2s3(uint32 ConnectionState)
-{
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I09,
-			Soc_Aud_InterConnectionOutput_O00);
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I09,
-			Soc_Aud_InterConnectionOutput_O01);
-	return true;
-}
-
-bool SetModem2InCh1ToI2s3(uint32 ConnectionState)
-{
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I14,
-			Soc_Aud_InterConnectionOutput_O00);
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I14,
-			Soc_Aud_InterConnectionOutput_O01);
-	return true;
-}
-
-bool SetI2s0Ch2ToModem1OutCh4(uint32 ConnectionState)
-{
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I01,
-			Soc_Aud_InterConnectionOutput_O27);
-	return true;
-}
-
-bool SetI2s0Ch2ToModem2OutCh4(uint32 ConnectionState)
-{
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I01,
-			Soc_Aud_InterConnectionOutput_O24);
-	return true;
-}
-
-bool SetDl2ToI2s1Dac(uint32 ConnectionState)
-{
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I07,
-			Soc_Aud_InterConnectionOutput_O03);
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I08,
-			Soc_Aud_InterConnectionOutput_O04);
-	return true;
-}
-
-bool SetDl2ToI2s1Dac2(uint32 ConnectionState)
-{
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I07,
-			Soc_Aud_InterConnectionOutput_O28);
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I08,
-			Soc_Aud_InterConnectionOutput_O29);
-	return true;
-}
-
-bool SetDl2ToVul(uint32 ConnectionState)
-{
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I07,
-			Soc_Aud_InterConnectionOutput_O09);
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I08,
-			Soc_Aud_InterConnectionOutput_O10);
-	return true;
-}
-
-bool SetI2s0ToHwGain1Out(uint32 ConnectionState)
-{
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I00,
-			Soc_Aud_InterConnectionOutput_O13);
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I01,
-			Soc_Aud_InterConnectionOutput_O14);
-	return true;
-}
-
-bool SetHwGain1InToI2s1Dac(uint32 ConnectionState)
-{
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I10,
-			Soc_Aud_InterConnectionOutput_O03);
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I11,
-			Soc_Aud_InterConnectionOutput_O04);
-	return true;
-}
-
-bool SetHwGain1InToI2s1Dac2(uint32 ConnectionState)
-{
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I10,
-			Soc_Aud_InterConnectionOutput_O28);
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I11,
-			Soc_Aud_InterConnectionOutput_O29);
-	return true;
-}
-
-bool SetI2s0ToAwb(uint32 ConnectionState)
-{
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I00,
-			Soc_Aud_InterConnectionOutput_O05);
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I01,
-			Soc_Aud_InterConnectionOutput_O06);
-	return true;
-}
-
-bool SetModem2InCh1ToModemDai(uint32 ConnectionState)
-{
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I14,
-			Soc_Aud_InterConnectionOutput_O12);
-	return true;
-}
-
-bool SetModem1InCh1ToModemDai(uint32 ConnectionState)
-{
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I09,
-			Soc_Aud_InterConnectionOutput_O12);
-	return true;
-}
-
-bool SetModem2InCh1ToI2s1Dac2(uint32 ConnectionState)
-{
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I14,
-			Soc_Aud_InterConnectionOutput_O28);
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I14,
-			Soc_Aud_InterConnectionOutput_O29);
-	return true;
-}
-
-bool SetModem2InCh2ToI2s1Dac2(uint32 ConnectionState)
-{
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I21,
-			Soc_Aud_InterConnectionOutput_O28);
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I21,
-			Soc_Aud_InterConnectionOutput_O29);
-	return true;
-}
-
-bool SetModem1InCh1ToI2s1Dac2(uint32 ConnectionState)
-{
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I09,
-			Soc_Aud_InterConnectionOutput_O28);
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I09,
-			Soc_Aud_InterConnectionOutput_O29);
-	return true;
-}
-
-bool SetModem1InCh2ToI2s1Dac2(uint32 ConnectionState)
-{
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I22,
-			Soc_Aud_InterConnectionOutput_O28);
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I22,
-			Soc_Aud_InterConnectionOutput_O29);
-	return true;
-}
-
-bool SetDl1Ch1ToModem2OutCh4(uint32 ConnectionState)
-{
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I05,
-			Soc_Aud_InterConnectionOutput_O24);
-	return true;
-}
-
-bool SetDl1ToHwGain1Out(uint32 ConnectionState)
-{
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I15,
-			Soc_Aud_InterConnectionOutput_O13);
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I16,
-			Soc_Aud_InterConnectionOutput_O14);
-	return true;
-}
-
-bool SetMrgI2sInToHwGain1Out(uint32 ConnectionState)
-{
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I15,
-			Soc_Aud_InterConnectionOutput_O13);
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I16,
-			Soc_Aud_InterConnectionOutput_O14);
-	return true;
-}
-
-bool SetMrgI2sInToAwb(uint32 ConnectionState)
-{
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I15,
-			Soc_Aud_InterConnectionOutput_O05);
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I16,
-			Soc_Aud_InterConnectionOutput_O06);
-	return true;
-}
-
-bool SetI2s2AdcToI2s3(uint32 ConnectionState)
-{
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I03,
-			Soc_Aud_InterConnectionOutput_O00);
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I04,
-			Soc_Aud_InterConnectionOutput_O01);
-	return true;
-}
-
-bool SetI2s2AdcToI2s1Dac(uint32 ConnectionState)
-{
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I03,
-			Soc_Aud_InterConnectionOutput_O03);
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I04,
-			Soc_Aud_InterConnectionOutput_O04);
-	return true;
-}
-
-bool SetI2s2AdcToI2s1Dac2(uint32 ConnectionState)
-{
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I03,
-			Soc_Aud_InterConnectionOutput_O28);
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I04,
-			Soc_Aud_InterConnectionOutput_O29);
-	return true;
-}
-
-bool SetI2s2AdcCh1ToI2s3(uint32 ConnectionState)
-{
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I03,
-			Soc_Aud_InterConnectionOutput_O00);
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I03,
-			Soc_Aud_InterConnectionOutput_O01);
-	return true;
-}
-
-bool SetI2s2AdcCh1ToI2s1Dac(uint32 ConnectionState)
-{
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I03,
-			Soc_Aud_InterConnectionOutput_O03);
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I03,
-			Soc_Aud_InterConnectionOutput_O04);
-	return true;
-}
-
-bool SetI2s2AdcCh1ToI2s1Dac2(uint32 ConnectionState)
-{
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I03,
-			Soc_Aud_InterConnectionOutput_O28);
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I03,
-			Soc_Aud_InterConnectionOutput_O29);
-	return true;
-}
-
-bool SetI2s2AdcToModem2Out(uint32 ConnectionState)
-{
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I03,
-			Soc_Aud_InterConnectionOutput_O17);
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I04,
-			Soc_Aud_InterConnectionOutput_O18);
-	return true;
-}
-
-bool SetModem2InCh1ToI2s1Dac(uint32 ConnectionState)
-{
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I14,
-			Soc_Aud_InterConnectionOutput_O03);
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I14,
-			Soc_Aud_InterConnectionOutput_O04);
-	return true;
-}
-
-bool SetDaiBtInToModem2Out(uint32 ConnectionState)
-{
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I02,
-			Soc_Aud_InterConnectionOutput_O17);
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I02,
-			Soc_Aud_InterConnectionOutput_O18);
-	return true;
-}
-
-bool SetModem2InCh1ToDaiBtOut(uint32 ConnectionState)
-{
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I14,
-			Soc_Aud_InterConnectionOutput_O02);
-	return true;
-}
-
-bool SetI2s2AdcToModem1Out(uint32 ConnectionState)
-{
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I03,
-			Soc_Aud_InterConnectionOutput_O07);
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I04,
-			Soc_Aud_InterConnectionOutput_O08);
-	return true;
-}
-
-bool SetModem1InCh1ToI2s1Dac(uint32 ConnectionState)
-{
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I09,
-			Soc_Aud_InterConnectionOutput_O03);
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I09,
-			Soc_Aud_InterConnectionOutput_O04);
-	return true;
-}
-
-bool SetDaiBtInToModem1Out(uint32 ConnectionState)
-{
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I02,
-			Soc_Aud_InterConnectionOutput_O07);
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I02,
-			Soc_Aud_InterConnectionOutput_O08);
-	return true;
-}
-
-bool SetModem1InCh1ToDaiBtOut(uint32 ConnectionState)
-{
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I09,
-			Soc_Aud_InterConnectionOutput_O02);
-	return true;
-}
-
-bool SetModem2InCh1ToAwbCh1(uint32 ConnectionState)
-{
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I14,
-			Soc_Aud_InterConnectionOutput_O05);
-	return true;
-}
-
-bool SetModem1InCh1ToAwbCh1(uint32 ConnectionState)
-{
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I09,
-			Soc_Aud_InterConnectionOutput_O05);
-	return true;
-}
-
-bool SetI2s0ToVul(uint32 ConnectionState)
-{
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I00,
-			Soc_Aud_InterConnectionOutput_O09);
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I01,
-			Soc_Aud_InterConnectionOutput_O10);
-	return true;
-}
-
-bool SetDl1ToMrgI2sOut(uint32 ConnectionState)
-{
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I05,
-			Soc_Aud_InterConnectionOutput_O00);
-	SetConnectionState(ConnectionState, Soc_Aud_InterConnectionInput_I06,
-			Soc_Aud_InterConnectionOutput_O01);
-	return true;
-}
-
-typedef struct connection_link_t {
-	uint32 input;
-	uint32 output;
-	connection_function connectionFunction;
-} connection_link_t;
-
-static const connection_link_t mConnectionLink[] = {
-	{Soc_Aud_AFE_IO_Block_MEM_DL1, Soc_Aud_AFE_IO_Block_I2S3, SetDl1ToI2s0},
-	{Soc_Aud_AFE_IO_Block_MEM_DL1, Soc_Aud_AFE_IO_Block_I2S1_DAC, SetDl1ToI2s1Dac},
-	{Soc_Aud_AFE_IO_Block_I2S2_ADC_2, Soc_Aud_AFE_IO_Block_MEM_VUL_DATA2, SetI2s2Adc2ToVulData2},
-	{Soc_Aud_AFE_IO_Block_I2S2_ADC, Soc_Aud_AFE_IO_Block_MEM_VUL, SetI2s2AdcToVul},
-	{Soc_Aud_AFE_IO_Block_MEM_DL1, Soc_Aud_AFE_IO_Block_MEM_AWB, SetDl1ToAwb},
-	{Soc_Aud_AFE_IO_Block_MEM_DL2, Soc_Aud_AFE_IO_Block_MEM_AWB, SetDl2ToAwb},
-	{Soc_Aud_AFE_IO_Block_MEM_DL1, Soc_Aud_AFE_IO_Block_DAI_BT_OUT, SetDl1ToDaiBtOut},
-	{Soc_Aud_AFE_IO_Block_MODEM_PCM_1_I_CH1, Soc_Aud_AFE_IO_Block_I2S3, SetModem1InCh1ToI2s3},
-	{Soc_Aud_AFE_IO_Block_MODEM_PCM_2_I_CH1, Soc_Aud_AFE_IO_Block_I2S3, SetModem2InCh1ToI2s3},
-	{Soc_Aud_AFE_IO_Block_I2S0_CH2, Soc_Aud_AFE_IO_Block_MODEM_PCM_1_O_CH4, SetI2s0Ch2ToModem1OutCh4},
-	{Soc_Aud_AFE_IO_Block_I2S0_CH2, Soc_Aud_AFE_IO_Block_MODEM_PCM_2_O_CH4, SetI2s0Ch2ToModem2OutCh4},
-	{Soc_Aud_AFE_IO_Block_MEM_DL2, Soc_Aud_AFE_IO_Block_I2S1_DAC, SetDl2ToI2s1Dac},
-	{Soc_Aud_AFE_IO_Block_MEM_DL2, Soc_Aud_AFE_IO_Block_I2S1_DAC_2, SetDl2ToI2s1Dac2},
-	{Soc_Aud_AFE_IO_Block_MEM_DL2, Soc_Aud_AFE_IO_Block_MEM_VUL, SetDl2ToVul},
-	{Soc_Aud_AFE_IO_Block_I2S0, Soc_Aud_AFE_IO_Block_HW_GAIN1_OUT, SetI2s0ToHwGain1Out},
-	{Soc_Aud_AFE_IO_Block_HW_GAIN1_IN, Soc_Aud_AFE_IO_Block_I2S1_DAC, SetHwGain1InToI2s1Dac},
-	{Soc_Aud_AFE_IO_Block_HW_GAIN1_IN, Soc_Aud_AFE_IO_Block_I2S1_DAC_2, SetHwGain1InToI2s1Dac2},
-	{Soc_Aud_AFE_IO_Block_I2S0, Soc_Aud_AFE_IO_Block_MEM_AWB, SetI2s0ToAwb},
-	{Soc_Aud_AFE_IO_Block_MODEM_PCM_2_I_CH1, Soc_Aud_AFE_IO_Block_MEM_MOD_DAI, SetModem2InCh1ToModemDai},
-	{Soc_Aud_AFE_IO_Block_MODEM_PCM_1_I_CH1, Soc_Aud_AFE_IO_Block_MEM_MOD_DAI, SetModem1InCh1ToModemDai},
-	{Soc_Aud_AFE_IO_Block_MODEM_PCM_2_I_CH1, Soc_Aud_AFE_IO_Block_I2S1_DAC_2, SetModem2InCh1ToI2s1Dac2},
-	{Soc_Aud_AFE_IO_Block_MODEM_PCM_2_I_CH2, Soc_Aud_AFE_IO_Block_I2S1_DAC_2, SetModem2InCh2ToI2s1Dac2},
-	{Soc_Aud_AFE_IO_Block_MODEM_PCM_1_I_CH1, Soc_Aud_AFE_IO_Block_I2S1_DAC_2, SetModem1InCh1ToI2s1Dac2},
-	{Soc_Aud_AFE_IO_Block_MODEM_PCM_1_I_CH2, Soc_Aud_AFE_IO_Block_I2S1_DAC_2, SetModem1InCh2ToI2s1Dac2},
-	{Soc_Aud_AFE_IO_Block_MEM_DL1_CH1, Soc_Aud_AFE_IO_Block_MODEM_PCM_2_O_CH4, SetDl1Ch1ToModem2OutCh4},
-	{Soc_Aud_AFE_IO_Block_MEM_DL1, Soc_Aud_AFE_IO_Block_HW_GAIN1_OUT, SetDl1ToHwGain1Out},
-	{Soc_Aud_AFE_IO_Block_MRG_I2S_IN, Soc_Aud_AFE_IO_Block_HW_GAIN1_OUT, SetMrgI2sInToHwGain1Out},
-	{Soc_Aud_AFE_IO_Block_MRG_I2S_IN, Soc_Aud_AFE_IO_Block_MEM_AWB, SetMrgI2sInToAwb},
-	{Soc_Aud_AFE_IO_Block_I2S2_ADC, Soc_Aud_AFE_IO_Block_I2S3, SetI2s2AdcToI2s3},
-	{Soc_Aud_AFE_IO_Block_I2S2_ADC, Soc_Aud_AFE_IO_Block_I2S1_DAC, SetI2s2AdcToI2s1Dac},
-	{Soc_Aud_AFE_IO_Block_I2S2_ADC, Soc_Aud_AFE_IO_Block_I2S1_DAC_2, SetI2s2AdcToI2s1Dac2},
-	{Soc_Aud_AFE_IO_Block_I2S2_ADC_CH1, Soc_Aud_AFE_IO_Block_I2S3, SetI2s2AdcCh1ToI2s3},
-	{Soc_Aud_AFE_IO_Block_I2S2_ADC_CH1, Soc_Aud_AFE_IO_Block_I2S1_DAC, SetI2s2AdcCh1ToI2s1Dac},
-	{Soc_Aud_AFE_IO_Block_I2S2_ADC_CH1, Soc_Aud_AFE_IO_Block_I2S1_DAC_2, SetI2s2AdcCh1ToI2s1Dac2},
-	{Soc_Aud_AFE_IO_Block_I2S2_ADC, Soc_Aud_AFE_IO_Block_MODEM_PCM_2_O, SetI2s2AdcToModem2Out},
-	{Soc_Aud_AFE_IO_Block_MODEM_PCM_2_I_CH1, Soc_Aud_AFE_IO_Block_I2S1_DAC, SetModem2InCh1ToI2s1Dac},
-	{Soc_Aud_AFE_IO_Block_DAI_BT_IN, Soc_Aud_AFE_IO_Block_MODEM_PCM_2_O, SetDaiBtInToModem2Out},
-	{Soc_Aud_AFE_IO_Block_MODEM_PCM_2_I_CH1, Soc_Aud_AFE_IO_Block_DAI_BT_OUT, SetModem2InCh1ToDaiBtOut},
-	{Soc_Aud_AFE_IO_Block_I2S2_ADC, Soc_Aud_AFE_IO_Block_MODEM_PCM_1_O, SetI2s2AdcToModem1Out},
-	{Soc_Aud_AFE_IO_Block_MODEM_PCM_1_I_CH1, Soc_Aud_AFE_IO_Block_I2S1_DAC, SetModem1InCh1ToI2s1Dac},
-	{Soc_Aud_AFE_IO_Block_DAI_BT_IN, Soc_Aud_AFE_IO_Block_MODEM_PCM_1_O, SetDaiBtInToModem1Out},
-	{Soc_Aud_AFE_IO_Block_MODEM_PCM_1_I_CH1, Soc_Aud_AFE_IO_Block_DAI_BT_OUT, SetModem1InCh1ToDaiBtOut},
-	{Soc_Aud_AFE_IO_Block_MODEM_PCM_2_I_CH1, Soc_Aud_AFE_IO_Block_MEM_AWB_CH1, SetModem2InCh1ToAwbCh1},
-	{Soc_Aud_AFE_IO_Block_MODEM_PCM_1_I_CH1, Soc_Aud_AFE_IO_Block_MEM_AWB_CH1, SetModem1InCh1ToAwbCh1},
-	{Soc_Aud_AFE_IO_Block_I2S0, Soc_Aud_AFE_IO_Block_MEM_VUL, SetI2s0ToVul},
-	{Soc_Aud_AFE_IO_Block_MEM_DL1, Soc_Aud_AFE_IO_Block_MRG_I2S_OUT, SetDl1ToMrgI2sOut}
-};
-static const int CONNECTION_LINK_NUM = sizeof(mConnectionLink) / sizeof(mConnectionLink[0]);
 
 static bool CheckBitsandReg(short regaddr, char bits)
 {
@@ -943,110 +510,3 @@ bool SetConnectionState(uint32 ConnectionState, uint32 Input, uint32 Output)
 	return true;
 }
 EXPORT_SYMBOL(SetConnectionState);
-
-connection_function GetConnectionFunction(uint32 Aud_block_In, uint32 Aud_block_Out)
-{
-	connection_function connectionFunction = 0;
-	int i = 0;
-
-	for (i = 0; i < CONNECTION_LINK_NUM; i++) {
-		if ((mConnectionLink[i].input == Aud_block_In) &&
-				(mConnectionLink[i].output == Aud_block_Out)) {
-			return mConnectionLink[i].connectionFunction;
-		}
-	}
-	return connectionFunction;
-}
-
-bool SetIntfConnectionState(uint32 ConnectionState, uint32 Aud_block_In, uint32 Aud_block_Out)
-{
-	bool ret = false;
-	connection_function connectionFunction = GetConnectionFunction(Aud_block_In, Aud_block_Out);
-
-	if (0 == connectionFunction) {
-		pr_warn("no this connection function\n");
-		return ret;
-	}
-	return connectionFunction(ConnectionState);
-}
-EXPORT_SYMBOL(SetIntfConnectionState);
-
-bool SetIntfConnectionFormat(uint32 ConnectionFormat, uint32 Aud_block)
-{
-	switch (Aud_block) {
-	case Soc_Aud_AFE_IO_Block_I2S3:
-	{
-		SetoutputConnectionFormat(ConnectionFormat,
-				Soc_Aud_InterConnectionOutput_O00);
-		SetoutputConnectionFormat(ConnectionFormat,
-				Soc_Aud_InterConnectionOutput_O01);
-		break;
-	}
-	case Soc_Aud_AFE_IO_Block_I2S1_DAC:
-	{
-		SetoutputConnectionFormat(ConnectionFormat,
-				Soc_Aud_InterConnectionOutput_O03);
-		SetoutputConnectionFormat(ConnectionFormat,
-				Soc_Aud_InterConnectionOutput_O04);
-		break;
-	}
-	case Soc_Aud_AFE_IO_Block_MEM_VUL:
-	{
-		SetoutputConnectionFormat(ConnectionFormat,
-				Soc_Aud_InterConnectionOutput_O09);
-		SetoutputConnectionFormat(ConnectionFormat,
-				Soc_Aud_InterConnectionOutput_O10);
-		break;
-	}
-	case Soc_Aud_AFE_IO_Block_MEM_VUL_DATA2:
-	{
-		SetoutputConnectionFormat(ConnectionFormat,
-				Soc_Aud_InterConnectionOutput_O21);
-		SetoutputConnectionFormat(ConnectionFormat,
-				Soc_Aud_InterConnectionOutput_O22);
-		break;
-	}
-	case Soc_Aud_AFE_IO_Block_DAI_BT_OUT:
-	{
-		SetoutputConnectionFormat(ConnectionFormat,
-				Soc_Aud_InterConnectionOutput_O02);
-		break;
-	}
-	case Soc_Aud_AFE_IO_Block_I2S1_DAC_2:
-	{
-		SetoutputConnectionFormat(ConnectionFormat,
-				Soc_Aud_InterConnectionOutput_O28);
-		SetoutputConnectionFormat(ConnectionFormat,
-				Soc_Aud_InterConnectionOutput_O29);
-		break;
-	}
-	case Soc_Aud_AFE_IO_Block_MEM_MOD_DAI:
-	{
-		SetoutputConnectionFormat(ConnectionFormat,
-				Soc_Aud_InterConnectionOutput_O12);
-		break;
-	}
-	case Soc_Aud_AFE_IO_Block_MEM_AWB:
-	{
-		SetoutputConnectionFormat(ConnectionFormat,
-				Soc_Aud_InterConnectionOutput_O05);
-		SetoutputConnectionFormat(ConnectionFormat,
-				Soc_Aud_InterConnectionOutput_O06);
-		break;
-	}
-	case Soc_Aud_AFE_IO_Block_MRG_I2S_OUT:
-	{
-		SetoutputConnectionFormat(ConnectionFormat,
-				Soc_Aud_InterConnectionOutput_O00);
-		SetoutputConnectionFormat(ConnectionFormat,
-				Soc_Aud_InterConnectionOutput_O01);
-		break;
-	}
-	default:
-		pr_warn("no this Aud_block = %d\n", Aud_block);
-		break;
-	}
-	return true;
-}
-EXPORT_SYMBOL(SetIntfConnectionFormat);
-

@@ -91,6 +91,10 @@
 
 #include "mtk_pep_intf.h"
 #include "mtk_pep20_intf.h"
+
+#ifdef CONFIG_TCPC_CLASS
+#include "tcpm.h"
+#endif
 //liulinsheng 20170412 begin
 #ifdef CONFIG_AUAS_USB_NTC_SUPPORT
 #include <linux/switch.h>
@@ -196,7 +200,7 @@ kal_bool chargin_hw_init_done;
 /* // Thermal related flags */
 /* ///////////////////////////////////////////////////////////////////////////////////////// */
 /* 0:nothing, 1:enable batTT&chrTimer, 2:disable batTT&chrTimer, 3:enable batTT, disable chrTimer */
-int g_battery_thermal_throttling_flag = 3;
+int g_battery_thermal_throttling_flag = 1;
 int battery_cmd_thermal_test_mode = 0;
 int battery_cmd_thermal_test_mode_value = 0;
 int g_battery_tt_check_flag = 0;	/* 0:default enable check batteryTT, 1:default disable check batteryTT */
@@ -316,11 +320,15 @@ unsigned char fg_ipoh_reset;
 static struct workqueue_struct *battery_init_workqueue;
 static struct work_struct battery_init_work;
 
+#ifdef CONFIG_TCPC_CLASS
+static struct tcpc_device *tcpc_dev;
+#endif
+
 /* ////////////////////////////////////////////////////////////////////////////// */
 /* FOR ADB CMD */
 /* ////////////////////////////////////////////////////////////////////////////// */
 /* Dual battery */
-int g_status_smb = POWER_SUPPLY_STATUS_NOT_CHARGING;
+int g_status_smb = POWER_SUPPLY_STATUS_DISCHARGING;
 int g_capacity_smb = 50;
 int g_present_smb = 0;
 /* ADB charging CMD */
@@ -365,7 +373,7 @@ struct battery_data {
 	/* Add for Battery Service */
 	int BAT_batt_vol;
 	int BAT_batt_temp;
-	int BAT_charge_counter;    //renyongwei@wind-mobi.com 20170923 add
+	int BAT_charge_count;    //renyongwei@wind-mobi.com 20170923 add
 	int BAT_bat_current;    //liulinsheng@wind-mobi.com 20171002 add
 #ifdef CONFIG_AUAS_USB_NTC_SUPPORT
 	int BAT_usb_ntc;     //liulinsheng@wind-mobi.com 20170309
@@ -383,6 +391,7 @@ struct battery_data {
 	int BAT_BatterySenseVoltage;
 	int BAT_ISenseVoltage;
 	int BAT_ChargerVoltage;
+	int BAT_CURRENT_NOW;
 	/* Dual battery */
 	int status_smb;
 	int capacity_smb;
@@ -405,6 +414,9 @@ static enum power_supply_property ac_props[] = {
 
 static enum power_supply_property usb_props[] = {
 	POWER_SUPPLY_PROP_ONLINE,
+	POWER_SUPPLY_PROP_CURRENT_MAX,
+	POWER_SUPPLY_PROP_VOLTAGE_MAX,
+	POWER_SUPPLY_PROP_CHARGE_COUNTER
 };
 
 static enum power_supply_property battery_props[] = {
@@ -413,10 +425,14 @@ static enum power_supply_property battery_props[] = {
 	POWER_SUPPLY_PROP_PRESENT,
 	POWER_SUPPLY_PROP_TECHNOLOGY,
 	POWER_SUPPLY_PROP_CAPACITY,
+	POWER_SUPPLY_PROP_CURRENT_NOW,
+	POWER_SUPPLY_PROP_CURRENT_MAX,
+	POWER_SUPPLY_PROP_VOLTAGE_MAX,
+	POWER_SUPPLY_PROP_CHARGE_COUNTER,
 	/* Add for Battery Service */
 	POWER_SUPPLY_PROP_batt_vol,
 	POWER_SUPPLY_PROP_batt_temp,
-	POWER_SUPPLY_PROP_charge_counter,  //renyongwei@wind-mobi.com 20170923 add
+	POWER_SUPPLY_PROP_charge_count,  //renyongwei@wind-mobi.com 20170923 add
 	POWER_SUPPLY_PROP_bat_current,  //liulinsheng@wind-mobi.com 20171002 add
 #ifdef CONFIG_AUAS_USB_NTC_SUPPORT
 	POWER_SUPPLY_PROP_usb_ntc,   //liulinsheng@wind-mobi.com 20170309
@@ -544,6 +560,9 @@ int get_charger_detect_status(void)
 {
 	kal_bool chr_status;
 
+	if (battery_charging_control == NULL)
+		return KAL_FALSE;
+
 	battery_charging_control(CHARGING_CMD_GET_CHARGER_DET_STATUS, &chr_status);
 	return chr_status;
 }
@@ -561,6 +580,11 @@ kal_bool bat_is_ext_power(void)
 /* ///////////////////////////////////////////////////////////////////////////////////////// */
 /* // PMIC PCHR Related APIs */
 /* ///////////////////////////////////////////////////////////////////////////////////////// */
+int __attribute__((weak)) mtk_chr_reset_aicr_upper_bound(void)
+{
+	return 0;
+}
+
 kal_bool upmu_is_chr_det(void)
 {
 #if !defined(CONFIG_POWER_EXT)
@@ -608,6 +632,11 @@ kal_bool upmu_is_chr_det(void)
 }
 EXPORT_SYMBOL(upmu_is_chr_det);
 
+void __attribute__ ((weak))
+	battery_disable_batfet(void)
+{
+	pr_notice("battery_disable_batfet do not implement");
+}
 
 void wake_up_bat(void)
 {
@@ -738,6 +767,16 @@ static int usb_get_property(struct power_supply *psy,
 		val->intval = data->USB_ONLINE;
 #endif
 		break;
+	case POWER_SUPPLY_PROP_VOLTAGE_MAX:
+		val->intval = 5000000;
+		break;
+	case POWER_SUPPLY_PROP_CURRENT_MAX:
+		val->intval = 500000;
+		break;
+	case POWER_SUPPLY_PROP_CHARGE_COUNTER:
+		val->intval = battery_meter_get_QMAX25() * 1000;
+		/* QMAX from battery, ma to ua */
+		break;
 	default:
 		ret = -EINVAL;
 		break;
@@ -768,14 +807,14 @@ static int battery_get_property(struct power_supply *psy,
 		val->intval = data->BAT_CAPACITY;
 		break;
 	case POWER_SUPPLY_PROP_batt_vol:
-		val->intval = data->BAT_batt_vol;
+		val->intval = data->BAT_batt_vol * 1000;
 		break;
 	case POWER_SUPPLY_PROP_batt_temp:
 		val->intval = data->BAT_batt_temp;
 		break;
 	//renyongwei@wind-mobi.com 20170923 begin
-	case POWER_SUPPLY_PROP_charge_counter:
-		val->intval = data->BAT_charge_counter;
+	case POWER_SUPPLY_PROP_charge_count:
+		val->intval = data->BAT_charge_count;
 		break;
 	//renyongwei@wind-mobi.com 20170923 end
 	//liulinsheng@wind-mobi.com 20170923 begin
@@ -816,6 +855,20 @@ static int battery_get_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_ChargerVoltage:
 		val->intval = data->BAT_ChargerVoltage;
 		break;
+	case POWER_SUPPLY_PROP_CURRENT_NOW:
+		val->intval = data->BAT_CURRENT_NOW; /* charge_current */
+		break;
+	case POWER_SUPPLY_PROP_CURRENT_MAX:
+		val->intval = 3000000;
+		break;
+	case POWER_SUPPLY_PROP_VOLTAGE_MAX:
+		val->intval = 5000000;
+		break;
+	case POWER_SUPPLY_PROP_CHARGE_COUNTER:
+		val->intval = battery_meter_get_QMAX25() * 1000;
+		/* QMAX from battery, ma to ua */
+		break;
+
 		/* Dual battery */
 	case POWER_SUPPLY_PROP_status_smb:
 		val->intval = data->status_smb;
@@ -900,7 +953,7 @@ static struct battery_data battery_main = {
 	.BAT_CAPACITY = 100,
 	.BAT_batt_vol = 4200,
 	.BAT_batt_temp = 22,
-	.BAT_charge_counter = 0,         //renyongwei@wind-mobi.com 20170923 add
+	.BAT_charge_count = 0,         //renyongwei@wind-mobi.com 20170923 add
 	.BAT_bat_current = 0,         //liulinsheng@wind-mobi.com 20171002 add
 #ifdef CONFIG_AUAS_USB_NTC_SUPPORT
 	.BAT_usb_ntc = 25,         //liulinsheng@wind-mobi.com 20170309
@@ -911,13 +964,13 @@ static struct battery_data battery_main = {
 	#endif
 	//liulinsheng@wind-mobi.com  for ap temp check
 	/* Dual battery */
-	.status_smb = POWER_SUPPLY_STATUS_NOT_CHARGING,
+	.status_smb = POWER_SUPPLY_STATUS_DISCHARGING,
 	.capacity_smb = 50,
 	.present_smb = 0,
 	/* ADB CMD discharging */
 	.adjust_power = -1,
 #else
-	.BAT_STATUS = POWER_SUPPLY_STATUS_NOT_CHARGING,
+	.BAT_STATUS = POWER_SUPPLY_STATUS_DISCHARGING,
 	.BAT_HEALTH = POWER_SUPPLY_HEALTH_GOOD,
 	.BAT_PRESENT = 1,
 	.BAT_TECHNOLOGY = POWER_SUPPLY_TECHNOLOGY_LION,
@@ -928,7 +981,7 @@ static struct battery_data battery_main = {
 #endif
 	.BAT_batt_vol = 0,
 	.BAT_batt_temp = 0,
-	.BAT_charge_counter = 0,         //renyongwei@wind-mobi.com 20170923 add
+	.BAT_charge_count = 0,         //renyongwei@wind-mobi.com 20170923 add
 	.BAT_bat_current = 0,         //liulinsheng@wind-mobi.com 20171002 add
 #ifdef CONFIG_AUAS_USB_NTC_SUPPORT
 	.BAT_usb_ntc = 25,         //liulinsheng@wind-mobi.com 20170309
@@ -939,7 +992,7 @@ static struct battery_data battery_main = {
 	#endif
 	//liulinsheng@wind-mobi.com  for ap temp check
 	/* Dual battery */
-	.status_smb = POWER_SUPPLY_STATUS_NOT_CHARGING,
+	.status_smb = POWER_SUPPLY_STATUS_DISCHARGING,
 	.capacity_smb = 50,
 	.present_smb = 0,
 	/* ADB CMD discharging */
@@ -2159,6 +2212,7 @@ static void mt_battery_update_EM(struct battery_data *bat_data)
 	bat_data->BAT_BatterySenseVoltage = BMT_status.bat_vol;
 	bat_data->BAT_ISenseVoltage = BMT_status.Vsense;	/* API */
 	bat_data->BAT_ChargerVoltage = BMT_status.charger_vol;
+	bat_data->BAT_CURRENT_NOW = BMT_status.CURRENT_NOW * 100; /* 0.1mA to uA */
 	/* Dual battery */
 	bat_data->status_smb = g_status_smb;
 	bat_data->capacity_smb = g_capacity_smb;
@@ -2182,7 +2236,6 @@ static void mt_battery_update_EM(struct battery_data *bat_data)
 #endif
 //liqiang@wind-mobi.com 20170321 end 
 			
-
 
 #ifdef CONFIG_MTK_DISABLE_POWER_ON_OFF_VOLTAGE_LIMITATION
 	if (bat_data->BAT_CAPACITY <= 0)
@@ -2260,7 +2313,7 @@ static void battery_update(struct battery_data *bat_data)
 	bat_data->BAT_HEALTH = POWER_SUPPLY_HEALTH_GOOD;
 	bat_data->BAT_batt_vol = BMT_status.bat_vol;
 	bat_data->BAT_batt_temp = BMT_status.temperature * 10;
-	bat_data->BAT_charge_counter = mt_battery_GetBatteryChargeCounter();//renyongwei@wind-mobi.com 20170923 add
+	bat_data->BAT_charge_count = mt_battery_GetBatteryChargeCounter();//renyongwei@wind-mobi.com 20170923 add
 	bat_data->BAT_bat_current = battery_GetBatteryChargecurrent();   //liulinsheng@wind-mobi.com 20171002 add
 	bat_data->BAT_PRESENT = BMT_status.bat_exist;
 #ifdef CONFIG_AUAS_USB_NTC_SUPPORT
@@ -2280,7 +2333,7 @@ static void battery_update(struct battery_data *bat_data)
 		}
 	} else {
 		/* Only Battery */
-		bat_data->BAT_STATUS = POWER_SUPPLY_STATUS_NOT_CHARGING;
+		bat_data->BAT_STATUS = POWER_SUPPLY_STATUS_DISCHARGING;
 	}
 
 //liqiang@wind-mobi.com 20170310 begin
@@ -2359,18 +2412,41 @@ printk("wind-log:battery_update UI_SOC_BATLIFE = %d, UI_SOC2 = %d, SOC=%d\n ",BM
 #endif
 //liulinsheng 20170412 begin
 #ifdef CONFIG_AUAS_USB_NTC_SUPPORT
+//printk("ryw [%s][%d] BAT_usb_ntc = %d usb_temp_reach = %d\n", __func__, __LINE__, bat_data->BAT_usb_ntc, usb_temp_reach);
 if(bat_data->BAT_usb_ntc >= 70 ){
 	usb_temp_reach = 1;
-	BMT_status.bat_charging_state = CHR_ERROR;
+	BMT_status.bat_charging_state = CHR_ERROR;//lightning icon && Vbat
+	//BMT_status.charger_type = CHARGER_UNKNOWN;//led
+	//battery_charging_control(CHARGING_CMD_SET_SUSPEND_CHARGE, NULL);//Vbus
 	switch_set_state(&fps_switch_data, 1);
-	printk("liulinshengusb_ntc too high =%d\n",bat_data->BAT_usb_ntc);
+	//printk("liulinshengusb_ntc too high =%d\n",bat_data->BAT_usb_ntc);
 }
-if(usb_temp_reach == 1 && bat_data->BAT_usb_ntc <= 60){
+//if(usb_temp_reach == 1 && bat_data->BAT_usb_ntc >= 60 && bat_data->BAT_usb_ntc <= 70)
+if(usb_temp_reach == 1 && bat_data->BAT_usb_ntc <= 60)
+{
 	usb_temp_reach = 0;
-	 BMT_status.bat_charging_state = CHR_PRE;
+	BMT_status.bat_charging_state = CHR_PRE;
 	switch_set_state(&fps_switch_data, 0);
-	printk("liulinshengusb_ntc too low =%d\n",bat_data->BAT_usb_ntc);
+	//BMT_status.bat_charging_state = CHR_ERROR;
+	//BMT_status.charger_type = CHARGER_UNKNOWN;
+	//battery_charging_control(CHARGING_CMD_SET_SUSPEND_CHARGE, NULL);
+	//printk("liulinshengusb_ntc middle =%d\n",bat_data->BAT_usb_ntc);
 }
+#if 0
+if(usb_temp_reach == 1 && bat_data->BAT_usb_ntc <= 60)
+{
+	BMT_status.bat_charging_state = CHR_ERROR;//led close && icon open 
+	BMT_status.charger_type = CHARGER_UNKNOWN;
+	battery_charging_control(CHARGING_CMD_SET_SUSPEND_CHARGE, NULL); 
+	if(BMT_status.charger_exist == KAL_FALSE)
+	{
+		usb_temp_reach = 0;
+		switch_set_state(&fps_switch_data, 0);
+		battery_charging_control(CHARGING_CMD_SET_RECOVER_CHARGE, NULL);
+	}
+	//printk("liulinshengusb_ntc too low =%d\n",bat_data->BAT_usb_ntc);
+}
+#endif
 #endif
 //liulinsheng 20170412 end
 	if (update_cnt == 6) {
@@ -2762,9 +2838,9 @@ static void mt_battery_average_method_init(BATTERY_AVG_ENUM type, unsigned int *
 				}
 				#else
 				if ((BMT_status.charger_type == STANDARD_CHARGER)
-					#if defined(CONFIG_MTK_DUAL_INPUT_CHARGER_SUPPORT)
+#if defined(CONFIG_MTK_DUAL_INPUT_CHARGER_SUPPORT)
 				    && (DISO_data.diso_state.cur_vdc_state == DISO_ONLINE)
-					#endif
+#endif
 				    )
 					data = batt_cust_data.ac_charger_current / 100;
 				#endif
@@ -2789,9 +2865,9 @@ static void mt_battery_average_method_init(BATTERY_AVG_ENUM type, unsigned int *
 				}
 			#else
 				if ((BMT_status.charger_type == STANDARD_CHARGER)
-					#if defined(CONFIG_MTK_DUAL_INPUT_CHARGER_SUPPORT)
+#if defined(CONFIG_MTK_DUAL_INPUT_CHARGER_SUPPORT)
 				    && (DISO_data.diso_state.cur_vdc_state == DISO_ONLINE)
-					#endif
+#endif
 				    )
 					data = batt_cust_data.ac_charger_current / 100;
 			#endif
@@ -2861,6 +2937,9 @@ void mt_battery_GetBatteryData(void)
 	static unsigned char batteryIndex = 0xff;
 	static signed int previous_SOC = -1;
 	kal_bool current_sign;
+#ifdef GM20_LOW_TEMP_SUPPORT
+	int rtc_tmp;
+#endif
 
 	if (batteryIndex == 0xff)
 		batteryIndex = 0;
@@ -2875,6 +2954,17 @@ void mt_battery_GetBatteryData(void)
 		charger_vol = 0;
 	}
 	temperature = battery_meter_get_battery_temperature();
+#ifdef GM20_LOW_TEMP_SUPPORT
+	rtc_tmp = get_rtc_spare_bat_temp_value();
+
+	if (temperature < rtc_tmp * 5 - 20)
+		set_rtc_spare_bat_temp_value((temperature + 20) / 5);
+
+	battery_log(BAT_LOG_CRTI, "rtc_tmp tmp:%d old_rtc:%d new_rtc:%d\n",
+		temperature,
+		rtc_tmp,
+		get_rtc_spare_bat_temp_value());
+#endif
 	temperatureV = battery_meter_get_tempV();
 	temperatureR = battery_meter_get_tempR(temperatureV);
 	ZCV = battery_meter_get_battery_zcv();
@@ -2914,6 +3004,7 @@ void mt_battery_GetBatteryData(void)
 	BMT_status.temperatureR = temperatureR;
 	BMT_status.ZCV = ZCV;
 	BMT_status.IBattery = battery_meter_get_battery_current();
+	BMT_status.CURRENT_NOW = BMT_status.IBattery;
 	current_sign = battery_meter_get_battery_current_sign();
 	BMT_status.IBattery *= (current_sign ? 1 : (-1));
 
@@ -3121,37 +3212,28 @@ static void mt_battery_CheckBatteryStatus(void)
 				battery_log(BAT_LOG_CRTI,
 				    "BMT_status.bat_charging_state START\n");
 	}
-	
+//luguosheng@wind-mobi.com  20180129 begin	
 	 if(g_charger_demoapp_state == 1){ //this for demo app
 	 
-		if(BMT_status.UI_SOC2 >= 60 ){
+		if(BMT_status.UI_SOC2 > 60){
 			BMT_status.bat_charging_state = CHR_ERROR;
 			demoapp_flag = 1;
-				battery_log(BAT_LOG_CRTI,
-				    "BMT_status.bat_charging_state BMT_status.UI_SOC2 = %d Stop\n", BMT_status.UI_SOC2);	
+			battery_log(BAT_LOG_CRTI,"BMT_status.bat_charging_state BMT_status.UI_SOC2 = %d Stop\n", BMT_status.UI_SOC2);	
 			battery_charging_control(CHARGING_CMD_SET_SUSPEND_CHARGE, NULL);               //add by liulinsheng  20171002		
-		}else if(BMT_status.UI_SOC2 < 55 && demoapp_flag == 1){
+		}else if((BMT_status.UI_SOC2 <= 55)  || ((BMT_status.UI_SOC2 > 55) && (demoapp_flag == 0) && (BMT_status.UI_SOC2 < 60))){
+			BMT_status.bat_charging_state = CHR_PRE;			
 			demoapp_flag = 0;
-			BMT_status.bat_charging_state = CHR_PRE;
-			battery_log(BAT_LOG_CRTI,
-				    "BMT_status.bat_charging_state BMT_status.UI_SOC2 = %d start\n", BMT_status.UI_SOC2);	
-		}else if((BMT_status.UI_SOC2 >= 55) && (demoapp_flag == 1) && (BMT_status.UI_SOC2 <= 60)){
+			battery_log(BAT_LOG_CRTI,"(BMT_status.UI_SOC2 <= 55)  || ((BMT_status.UI_SOC2 > 55) && (demoapp_flag == 0) && (BMT_status.UI_SOC2 < 60) BMT_status.UI_SOC2 = %d start\n", BMT_status.UI_SOC2);
+			battery_charging_control(CHARGING_CMD_SET_RECOVER_CHARGE, NULL);
+		}else if((BMT_status.UI_SOC2 > 55) && (demoapp_flag == 1) && (BMT_status.UI_SOC2 <= 60)){			
 			BMT_status.bat_charging_state = CHR_ERROR;
-			battery_log(BAT_LOG_CRTI,
-				"BMT_status.UI_SOC2 >= 55) && (demoapp_flag == 1) && (BMT_status.UI_SOC2 <= 60 UI_SOC2 = %d Stop\n", BMT_status.UI_SOC2);
-				//liulinsheng@wind-mobi.com 20171002 begin
-				if(BMT_status.UI_SOC2 >= 58){
-					battery_charging_control(CHARGING_CMD_SET_SUSPEND_CHARGE, NULL);     
-							battery_log(BAT_LOG_CRTI,
-				"wind-log:suspend_charge-UI_SOC2 = %d Stop\n", BMT_status.UI_SOC2);	
-				}else{
-					battery_charging_control(CHARGING_CMD_SET_RECOVER_CHARGE, NULL);    
-								battery_log(BAT_LOG_CRTI,
-				"wind-log:recover_charge-UI_SOC2 = %d Stop\n", BMT_status.UI_SOC2);	
-				}
-              //liulinsheng@wind-mobi.com 20171002 end
-		}else if((BMT_status.UI_SOC2 >= 55) && (demoapp_flag == 0) && (BMT_status.UI_SOC2 <= 60)){
-		  // do nothing
+			battery_log(BAT_LOG_CRTI,"(BMT_status.UI_SOC2 > 55) && (demoapp_flag == 1) && (BMT_status.UI_SOC2 <= 60) BMT_status.UI_SOC2 = %d", BMT_status.UI_SOC2);
+			battery_charging_control(CHARGING_CMD_SET_RECOVER_CHARGE, NULL); 
+		}else if((BMT_status.UI_SOC2 == 60) && (demoapp_flag == 0)){
+			battery_charging_control(CHARGING_CMD_SET_RECOVER_CHARGE, NULL); 
+			BMT_status.bat_charging_state = CHR_ERROR;
+			demoapp_flag = 1;
+			battery_log(BAT_LOG_CRTI,"(BMT_status.UI_SOC2 == 60) && (demoapp_flag == 0) BMT_status.UI_SOC2 = %d", BMT_status.UI_SOC2);
 		}
 		
 		
@@ -3164,7 +3246,7 @@ static void mt_battery_CheckBatteryStatus(void)
 
 			}
 	}
-	
+//luguosheng@wind-mobi.com  20180129 end	
 #endif
 	//modified by lvwenkang 20161018 end
 	if (mt_battery_CheckChargingTime() != PMU_STATUS_OK) {
@@ -3466,10 +3548,8 @@ CHARGER_TYPE mt_charger_type_detection(void)
 	    (DISO_data.diso_state.cur_vusb_state == DISO_ONLINE)) {
 #endif
 		battery_charging_control(CHARGING_CMD_GET_CHARGER_TYPE, &CHR_Type_num);
-		
-		
-	   BMT_status.charger_type = CHR_Type_num;
-	   //printk( "yutao add mtk secondly judge the charger type is %d !!!!!!!!!\n",BMT_status.charger_type);
+		BMT_status.charger_type = CHR_Type_num;
+
 #if defined(CONFIG_MTK_KERNEL_POWER_OFF_CHARGING)
 #if defined(PUMP_EXPRESS_SERIES)
 		/*if (BMT_status.UI_SOC2 == 100) {
@@ -3590,7 +3670,7 @@ static void mt_battery_charger_detect_check(void)
 				pinctrl_select_state(usbswctrl,usbsw_high);
 				pinctrl_select_state(vdmctrl,vdm_low);
 			}
-			if(in_times_one==3){
+			if(in_times_one==4){ //modified by renyongwei@wind-mobi.com 20171129 begin
 				in_times_one=0;	
 				for(i=0;i<5;i++)
 				{
@@ -3639,10 +3719,16 @@ static void mt_battery_charger_detect_check(void)
 						}
 					}	
 				}
+				//modified by renyongwei@wind-mobi.com 20171129 begin
+				if(chg_id_volt_1>=900000&&chg_id_volt_1<=1500000)	
+				{
+					BMT_status.charger_type=ASUS_2_0A_PB_CHARGER;  
+				}
+				//modified by renyongwei@wind-mobi.com 20171129 end
 				pinctrl_select_state(vdmctrl,vdm_high);
 			}
 				
-			if(in_times_two==5){
+			if(in_times_two==6){ //modified by renyongwei@wind-mobi.com 20171129 begin
 				in_times_one=0;
 				in_times_two=0;
 				for(j=0;j<5;j++)
@@ -3719,7 +3805,7 @@ static void mt_battery_charger_detect_check(void)
 				else if(chg_id_volt_1<=200000&&chg_id_volt_2>=550000&&chg_id_volt_2<=800000)
 				/*liulinsheng@wind-mobi.com 20170803 begin*/
 				#elif (defined CONFIG_WIND_DEF_PRO_E260L)||(defined CONFIG_WIND_DEF_PRO_E262L)
-				else if((chg_id_volt_1<=80000&&chg_id_volt_2>=550000&&chg_id_volt_2<=700000) || (chg_id_volt_1<=180000&&chg_id_volt_2>=590000&&chg_id_volt_2<=750000))//renyongwei@wind-mobi.com 20170926 add
+				else if((chg_id_volt_1<=80000&&chg_id_volt_2>=550000&&chg_id_volt_2<=700000) || (chg_id_volt_1<=180000&&chg_id_volt_2>=590000&&chg_id_volt_2<=750000) ||  (chg_id_volt_1<=180000&&chg_id_volt_2>=1000000&&chg_id_volt_2<=1150000))//lugusoheng@wind-mobi.com 20180123 add
 				/*liulinsheng@wind-mobi.com 20170803 end*/
 				#else
 				else if(chg_id_volt_1<=200000&&chg_id_volt_2>=400000&&chg_id_volt_2<=800000)
@@ -3747,13 +3833,14 @@ static void mt_battery_charger_detect_check(void)
 				
 
 				
-				
-				else if((chg_id_volt_1>=300000&&chg_id_volt_1<=500000&&chg_id_volt_2>=500000&&chg_id_volt_2<=700000))	
+				//modified by renyongwei@wind-mobi.com 20171129 begin
+				/*else if((chg_id_volt_1>=300000&&chg_id_volt_1<=500000&&chg_id_volt_2>=500000&&chg_id_volt_2<=700000))	
 				{
 					BMT_status.charger_type=ASUS_2_0A_PB_CHARGER;
 					
 				   
-				}
+				}*/
+				//modified by renyongwei@wind-mobi.com 20171129 end
 				else
 				{
 					BMT_status.charger_type=OTHER_AC_CHARGER;
@@ -3791,6 +3878,21 @@ static void mt_battery_charger_detect_check(void)
 
 
 	} else {
+#ifdef CONFIG_TCPC_CLASS
+		if (bat_is_kpoc()) {
+			if (!tcpc_dev) {
+				tcpc_dev = tcpc_dev_get_by_name("type_c_port0");
+				if (!tcpc_dev)
+					pr_err("%s get tcpc device type_c_port0 fail\n",
+						__func__);
+			} else
+				typec_state = tcpm_inquire_typec_attach_state(tcpc_dev);
+
+			if (typec_state != TYPEC_UNATTACHED)
+				return;
+		}
+#endif /* CONFIG_TCPC_CLASS */
+
 		wake_unlock(&battery_suspend_lock);
 
 		BMT_status.charger_exist = KAL_FALSE;
@@ -3809,6 +3911,7 @@ static void mt_battery_charger_detect_check(void)
 		battery_log(BAT_LOG_FULL, "[BAT_thread]Cable out \r\n");
 
 		mt_usb_disconnect();
+		hw_bc11_dcd_release();
 
 		battery_log(BAT_LOG_FULL, "[PE+] Cable OUT\n");
 
@@ -3840,17 +3943,38 @@ static void mt_battery_charger_detect_check(void)
 static void mt_kpoc_power_off_check(void)
 {
 #ifdef CONFIG_MTK_KERNEL_POWER_OFF_CHARGING
+#ifdef CONFIG_TCPC_CLASS
+	uint8_t typec_state = TYPEC_UNATTACHED;
+
+	if (!tcpc_dev) {
+		tcpc_dev = tcpc_dev_get_by_name("type_c_port0");
+		if (!tcpc_dev)
+			pr_err("%s get tcpc device type_c_port0 fail\n", __func__);
+	} else
+		typec_state = tcpm_inquire_typec_attach_state(tcpc_dev);
+#endif /* CONFIG_TCPC_CLASS */
+
 	if (g_platform_boot_mode == KERNEL_POWER_OFF_CHARGING_BOOT
 	    || g_platform_boot_mode == LOW_POWER_OFF_CHARGING_BOOT) {
 
 		battery_log(BAT_LOG_CRTI, "[mt_kpoc_power_off_check] chr_vol=%d, boot_mode=%d\r\n",
 		BMT_status.charger_vol, g_platform_boot_mode);
 
-		if ((upmu_is_chr_det() == KAL_FALSE) && (BMT_status.charger_vol < 2500)) {	/* vbus < 2.5V */
+
+#ifdef CONFIG_TCPC_CLASS
+		if ((upmu_is_chr_det() == KAL_FALSE) && (BMT_status.charger_vol < 2500)
+			&& typec_state == TYPEC_UNATTACHED) {	/* vbus < 2.5V */
 			battery_log(BAT_LOG_CRTI,
 				    "[mt_kpoc_power_off_check] Unplug Charger/USB In Kernel Power Off Charging Mode!  Shutdown OS!\r\n");
 			battery_charging_control(CHARGING_CMD_SET_POWER_OFF, NULL);
 		}
+#else
+		if ((upmu_is_chr_det() == KAL_FALSE) && (BMT_status.charger_vol < 2500)) {
+			battery_log(BAT_LOG_CRTI,
+				    "[mt_kpoc_power_off_check] Unplug Charger/USB In Kernel Power Off Charging Mode!  Shutdown OS!\r\n");
+			battery_charging_control(CHARGING_CMD_SET_POWER_OFF, NULL);
+		}
+#endif /* CONFIG_TCPC_CLASS */
 	}
 #endif
 }
@@ -3905,6 +4029,9 @@ void do_chrdet_int_task(void)
 			battery_log(BAT_LOG_CRTI, "[do_chrdet_int_task] charger NOT exist!\n");
 			BMT_status.charger_exist = KAL_FALSE;
 
+			/* Reset AICR's upper bound calculated by AICL */
+			mtk_chr_reset_aicr_upper_bound();
+
 			/* Set AICR to 500mA if it is plugged out */
 			battery_charging_control(CHARGING_CMD_SET_INPUT_CURRENT,
 				&plug_out_aicr);
@@ -3916,8 +4043,14 @@ void do_chrdet_int_task(void)
 #endif
 
 #ifdef CONFIG_MTK_KERNEL_POWER_OFF_CHARGING
+#ifdef CONFIG_TCPC_CLASS
+			if ((g_platform_boot_mode == KERNEL_POWER_OFF_CHARGING_BOOT
+			    || g_platform_boot_mode == LOW_POWER_OFF_CHARGING_BOOT) &&
+				mtk_chr_is_kpoc_shutdown_enable()) {
+#else
 			if (g_platform_boot_mode == KERNEL_POWER_OFF_CHARGING_BOOT
 			    || g_platform_boot_mode == LOW_POWER_OFF_CHARGING_BOOT) {
+#endif /* CONFIG_TCPC_CLASS */
 				battery_log(BAT_LOG_CRTI,
 					    "[pmic_thread_kthread] Unplug Charger/USB In Kernel Power Off Charging Mode!  Shutdown OS!\r\n");
 				battery_charging_control(CHARGING_CMD_SET_POWER_OFF, NULL);
@@ -4024,12 +4157,13 @@ void BAT_thread(void)
 	mt_battery_thermal_check();
 	mt_battery_notify_check();
 
-	if (BMT_status.charger_exist == KAL_TRUE) {
+	if ((BMT_status.charger_exist == KAL_TRUE) && (battery_suspended == KAL_FALSE)) {
 		mt_battery_CheckBatteryStatus();
 		mt_battery_charging_algorithm();
 	}
 
 	mt_kpoc_power_off_check();
+	battery_meter_set_fg_int();
 }
 
 /* ///////////////////////////////////////////////////////////////////////////////////////// */
@@ -4134,8 +4268,6 @@ static long adc_cali_ioctl(struct file *file, unsigned int cmd, unsigned long ar
 	int adc_in_data[2] = { 1, 1 };
 	int adc_out_data[2] = { 1, 1 };
 	int temp_car_tune;
-
-	mutex_lock(&bat_mutex);
 
 	switch (cmd) {
 	case TEST_ADC_CALI_PRINT:
@@ -4242,6 +4374,8 @@ static long adc_cali_ioctl(struct file *file, unsigned int cmd, unsigned long ar
 		break;
 
 	case Set_Charger_Current:	/* For Factory Mode */
+		mutex_lock(&bat_mutex);
+
 		user_data_addr = (int *)arg;
 		ret = copy_from_user(charging_level_data, user_data_addr, 4);
 		g_ftm_battery_flag = KAL_TRUE;
@@ -4279,6 +4413,9 @@ static long adc_cali_ioctl(struct file *file, unsigned int cmd, unsigned long ar
 			charging_level_data[0] = CHARGE_CURRENT_1600_00_MA;
 		else
 			charging_level_data[0] = CHARGE_CURRENT_450_00_MA;
+
+		mutex_unlock(&bat_mutex);
+
 		wake_up_bat();
 		battery_log(BAT_LOG_CRTI, "**** unlocked_ioctl : set_Charger_Current:%d\n",
 			    charging_level_data[0]);
@@ -4331,8 +4468,6 @@ static long adc_cali_ioctl(struct file *file, unsigned int cmd, unsigned long ar
 		g_ADC_Cali = KAL_FALSE;
 		break;
 	}
-
-	mutex_unlock(&bat_mutex);
 
 	return 0;
 }
@@ -4399,7 +4534,7 @@ int charger_hv_detect_sw_thread_handler(void *unused)
 	ktime_t ktime;
 	unsigned int charging_enable;
 	unsigned int hv_voltage = batt_cust_data.v_charger_max * 1000;
-	kal_bool hv_status;
+	kal_bool hv_status = KAL_FALSE;
 
 
 #if defined(CONFIG_MTK_DUAL_INPUT_CHARGER_SUPPORT)
@@ -5020,6 +5155,12 @@ static int battery_probe(struct platform_device *dev)
 
 	mtk_pep_init();
 	mtk_pep20_init();
+
+#ifdef CONFIG_TCPC_CLASS
+	tcpc_dev = tcpc_dev_get_by_name("type_c_port0");
+	if (!tcpc_dev)
+		pr_err("%s get tcpc device type_c_port0 fail\n", __func__);
+#endif
 
 	/* Integrate with Android Battery Service */
 	ret = power_supply_register(&(dev->dev), &ac_main.psy);

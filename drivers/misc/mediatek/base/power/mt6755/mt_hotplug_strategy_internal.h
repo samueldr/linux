@@ -1,7 +1,15 @@
-/**
-* @file    mt_hotplug_strategy_internal.h
-* @brief   hotplug strategy(hps) - internal header file
-*/
+/*
+ * Copyright (C) 2016 MediaTek Inc.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See http://www.gnu.org/licenses/gpl-2.0.html for more details.
+ */
 
 #ifndef __MT_HOTPLUG_STRATEGY_INTERNAL_H__
 #define __MT_HOTPLUG_STRATEGY_INTERNAL_H__
@@ -293,6 +301,9 @@ extern int hps_task_start(void);
 extern void hps_task_stop(void);
 extern void hps_task_wakeup_nolock(void);
 extern void hps_task_wakeup(void);
+
+extern int hps_cpu_up(unsigned int cpu);
+extern int hps_cpu_down(unsigned int cpu);
 
 /*
  * mt_hotplug_strategy_algo.c

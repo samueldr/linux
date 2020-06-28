@@ -43,6 +43,7 @@
     #define FALSE 0
 #endif
 
+extern int esd_check_alarm;
 static unsigned int lcm_esd_test = FALSE;      ///only for ESD test
 // ---------------------------------------------------------------------------
 //  Local Variables
@@ -410,7 +411,7 @@ dsi_set_cmdq(data_array,3, 1);
 data_array[0]=0x00163902;
 data_array[1]=0x037203B4;
 data_array[2]=0x01720372;
-data_array[3]=0x00557C0D;
+data_array[3]=0x00957C0D;
 data_array[4]=0x036B033F;
 data_array[5]=0x056B036B;
 data_array[6]=0x00007C0D;
@@ -433,7 +434,6 @@ data_array[13]=0x60C2B1A0;
 data_array[14]=0x7569645F;
 data_array[15]=0x007F7F7F;
 dsi_set_cmdq(data_array,16, 1);
-MDELAY(5);
 
 data_array[0]=0x00223902;
 data_array[1]=0x000000D3;
@@ -446,7 +446,6 @@ data_array[7]=0x0C0C3337;
 data_array[8]=0x27020227;
 data_array[9]=0x0000400E;
 dsi_set_cmdq(data_array,10, 1);
-MDELAY(5);
 
 data_array[0]=0x002D3902;
 data_array[1]=0x252627D5;
@@ -462,7 +461,6 @@ data_array[10]=0x23202118;
 data_array[11]=0x18181822;
 data_array[12]=0x00000018;
 dsi_set_cmdq(data_array,13, 1);
-MDELAY(5);
 
 data_array[0]=0x002D3902;
 data_array[1]=0x222120D6;
@@ -478,7 +476,6 @@ data_array[10]=0x24272618;
 data_array[11]=0x18181825;
 data_array[12]=0x00000018;
 dsi_set_cmdq(data_array,13, 1);
-MDELAY(5);
 
 data_array[0]=0x00023902;
 data_array[1]=0x00000BCC;
@@ -696,12 +693,16 @@ static void lcm_init(void)
 	SET_RESET_PIN(1);
 	MDELAY(1);
 	SET_RESET_PIN(0);
-	MDELAY(10);
+	MDELAY(5);
 	SET_RESET_PIN(1);
-	MDELAY(80); //modified by wangjun at 20170928
+	MDELAY(5); //modified by wangjun at 20170928
+        if(esd_check_alarm)
+        {
+                MDELAY(115);
+        }
 	//printf(" gemingming hx8394f init  \n");
 	//push_table(lcm_initialization_setting1, sizeof(lcm_initialization_setting1) / sizeof(struct LCM_setting_table), 1); 
-init_lcm_registers();
+        init_lcm_registers();
 		  
 }
 
@@ -709,7 +710,7 @@ static void lcm_suspend(void)
 {
 
 
-   printk("hx8394f liukangping lcm_suspend\n");
+        printk("hx8394f suspend\n");
 	// when phone sleep , config output low, disable backlight drv chip  
 	push_table(lcm_deep_sleep_mode_in_setting, sizeof(lcm_deep_sleep_mode_in_setting) / sizeof(struct LCM_setting_table), 1);
 	
@@ -720,25 +721,24 @@ static void lcm_suspend(void)
 	mt_set_gpio_out(GPIO_LCD_BIAS_ENP_PIN, GPIO_OUT_ZERO);
 // zhaozhensen@wind-mobi.com 20160322 end
 #endif
-pinctrl_select_state(lcmbiasctrl, lcmbias_disable);  //liukangping
+        pinctrl_select_state(lcmbiasctrl, lcmbias_disable);  //liukangping
 	MDELAY(10);
 
 }
 
 static void lcm_resume(void)
 {
-	printk("hx8394f liukangping lcm_resume\n");
-	lcm_init();
-
+        printk("hx8394f resume\n");
+        lcm_init();
 }
 
 static unsigned int lcm_compare_id(void)
 {
-	unsigned int id=0,id1=0;
-	//unsigned int id=0,id1=0,id2=0; //liukangping
-	unsigned char buffer[3];
-	unsigned int data_array[16];  
-//	pinctrl_select_state(lcmbiasctrl, lcmbias_enable);  //liukangping
+        unsigned int id=0,id1=0;
+        // unsigned int id=0,id1=0,id2=0; //liukangping
+        unsigned char buffer[3];
+        unsigned int data_array[16];  
+        // pinctrl_select_state(lcmbiasctrl, lcmbias_enable);  //liukangping
 #ifdef GPIO_LCD_BIAS_ENP_PIN
 	mt_set_gpio_mode(GPIO_LCD_BIAS_ENP_PIN, GPIO_MODE_00);
 	mt_set_gpio_dir(GPIO_LCD_BIAS_ENP_PIN, GPIO_DIR_OUT);

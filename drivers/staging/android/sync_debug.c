@@ -34,9 +34,12 @@
  * SYNC_DEBUG
  *
  * [MTK] {{{
- * #define SYNC_DEBUG
+ *#define SYNC_DEBUG
  * [MTK] }}}
  */
+
+/*Defined by MTK for Fence timeout debug, and will not dump at normal time.*/
+#define SYNC_DEBUG
 
 static LIST_HEAD(sync_timeline_list_head);
 static DEFINE_SPINLOCK(sync_timeline_list_lock);
@@ -173,7 +176,7 @@ static void sync_print_fence(struct seq_file *s, struct sync_fence *fence)
 	unsigned long flags;
 	int i;
 
-	seq_printf(s, "[%p] %s: %s\n", fence, fence->name,
+	seq_printf(s, "[%pK] %s: %s\n", fence, fence->name,
 		   sync_status_str(atomic_read(&fence->status)));
 
 	for (i = 0; i < fence->num_fences; ++i) {

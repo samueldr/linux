@@ -1,3 +1,17 @@
+/*
+ * Copyright (c) 2015-2017 MICROTRUST Incorporated
+ * All Rights Reserved.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ */
+
 #include <linux/kernel.h>
 #include <linux/slab.h>
 #include <linux/semaphore.h>
@@ -22,29 +36,24 @@
 #include "backward_driver.h"
 #include "utdriver_macro.h"
 #include "../teei_fp/fp_func.h"
+
+#define IMSG_TAG "[tz_driver]"
 #include <imsg_log.h>
 
 unsigned long tui_display_message_buff = 0;
 unsigned long tui_notice_message_buff = 0;
 
-typedef enum {
-    DISP_PWM0 = 0x1,
-    DISP_PWM1 = 0x2,
-    DISP_PWM_ALL = (DISP_PWM0 | DISP_PWM1)
-} disp_pwm_id_t;
-
 unsigned long create_tui_buff(int buff_size, unsigned int fdrv_type)
 {
 	long retVal = 0;
-	unsigned long irq_flag = 0;
 	unsigned long temp_addr = 0;
 	struct message_head msg_head;
 	struct create_fdrv_struct msg_body;
 	struct ack_fast_call_struct msg_ack;
 
-	if (message_buff == NULL) {
+	if ((unsigned char *)message_buff == NULL) {
 		IMSG_ERROR("[%s][%d]: There is NO command buffer!.\n", __func__, __LINE__);
-		return NULL;
+		return (unsigned long)NULL;
 	}
 
 #ifdef UT_DMA_ZONE
@@ -53,9 +62,9 @@ unsigned long create_tui_buff(int buff_size, unsigned int fdrv_type)
 	temp_addr = (unsigned long) __get_free_pages(GFP_KERNEL, get_order(ROUND_UP(buff_size, SZ_4K)));
 #endif
 
-	if (temp_addr == NULL) {
+	if (temp_addr == 0) {
 		IMSG_ERROR("[%s][%d]: kmalloc fp drv buffer failed.\n", __FILE__, __LINE__);
-		return NULL;
+		return (unsigned long)NULL;
 	}
 
 	memset(&msg_head, 0, sizeof(struct message_head));
@@ -72,8 +81,8 @@ unsigned long create_tui_buff(int buff_size, unsigned int fdrv_type)
 	msg_body.fdrv_size = buff_size;
 
 	/* Notify the T_OS that there is ctl_buffer to be created. */
-	memcpy((void *)message_buff, (void *)&msg_head, sizeof(struct message_head));
-	memcpy((void *)message_buff + sizeof(struct message_head), (void *)&msg_body, sizeof(struct create_fdrv_struct));
+	memcpy((void *)message_buff, &msg_head, sizeof(struct message_head));
+	memcpy((void *)(message_buff + sizeof(struct message_head)), &msg_body, sizeof(struct create_fdrv_struct));
 	Flush_Dcache_By_Area((unsigned long)message_buff, (unsigned long)message_buff + MESSAGE_SIZE);
 
 	/* Call the smc_fast_call */
@@ -84,8 +93,8 @@ unsigned long create_tui_buff(int buff_size, unsigned int fdrv_type)
 	/* put_online_cpus(); */
 
 	Invalidate_Dcache_By_Area((unsigned long)message_buff, (unsigned long)message_buff + MESSAGE_SIZE);
-	memcpy((void *)&msg_head, (void *)message_buff, sizeof(struct message_head));
-	memcpy((void *)&msg_ack, (void *)message_buff + sizeof(struct message_head), sizeof(struct ack_fast_call_struct));
+	memcpy(&msg_head, (void *)message_buff, sizeof(struct message_head));
+	memcpy(&msg_ack, (void *)(message_buff + sizeof(struct message_head)), sizeof(struct ack_fast_call_struct));
 
 	/* Check the response from T_OS. */
 	if ((msg_head.message_type == FAST_CALL_TYPE) && (msg_head.child_type == FAST_ACK_CREAT_FDRV)) {
@@ -95,9 +104,8 @@ unsigned long create_tui_buff(int buff_size, unsigned int fdrv_type)
 			IMSG_ERROR("[%s][%d]: %s end.\n", __func__, __LINE__, __func__);
 			return temp_addr;
 		}
-	} else {
-		retVal = NULL;
-	}
+	} else
+		retVal = 0;
 
 	/* Release the resource and return. */
 	free_pages(temp_addr, get_order(ROUND_UP(buff_size, SZ_4K)));
@@ -116,7 +124,6 @@ int try_send_tui_command(void)
 	}
 
 	result = down_trylock(&fdrv_lock);
-
 	if (0 == result) {
 		up(&fdrv_lock);
 		return 2;
@@ -125,43 +132,45 @@ int try_send_tui_command(void)
 	return 0;
 }
 
+
 void set_tui_display_command(unsigned long type)
 {
 	struct fdrv_message_head fdrv_msg_head;
+
 	memset(&fdrv_msg_head, 0, sizeof(struct fdrv_message_head));
 
-	if (type == TUI_NOTICE_SYS_NO) {
+	if (type == TUI_NOTICE_SYS_NO)
 		fdrv_msg_head.driver_type = TUI_NOTICE_SYS_NO;
-	} else {
+	else
 		fdrv_msg_head.driver_type = TUI_DISPLAY_SYS_NO;
-	}
 
 	fdrv_msg_head.fdrv_param_length = sizeof(unsigned int);
-	memcpy((void *)fdrv_message_buff, (void *)&fdrv_msg_head, sizeof(struct fdrv_message_head));
+	memcpy((void *)fdrv_message_buff, &fdrv_msg_head, sizeof(struct fdrv_message_head));
 	Flush_Dcache_By_Area((unsigned long)fdrv_message_buff, (unsigned long)fdrv_message_buff + MESSAGE_SIZE);
 }
 
 int __send_tui_display_command(unsigned long type)
 {
-	uint64_t smc_type = 2;
+	unsigned long smc_type = 2;
 	uint32_t datalen = 0;
 
 	set_tui_display_command(type);
 
 	if (type == TUI_NOTICE_SYS_NO) {
-		memcpy((void *)&datalen, (void *) tui_notice_message_buff, sizeof(uint32_t));
-		Flush_Dcache_By_Area((unsigned long)tui_notice_message_buff, tui_notice_message_buff +  sizeof(uint32_t) + datalen);
+		memcpy(&datalen, (void *) tui_notice_message_buff, sizeof(uint32_t));
+		Flush_Dcache_By_Area((unsigned long)tui_notice_message_buff,
+			tui_notice_message_buff +  sizeof(uint32_t) + datalen);
 	} else {
-		memcpy((void *)&datalen, (void *) tui_display_message_buff, sizeof(uint32_t));
-		Flush_Dcache_By_Area((unsigned long)tui_display_message_buff, tui_display_message_buff + sizeof(uint32_t)+datalen);
+		memcpy(&datalen, (void *) tui_display_message_buff, sizeof(uint32_t));
+		Flush_Dcache_By_Area((unsigned long)tui_display_message_buff,
+			tui_display_message_buff + sizeof(uint32_t)+datalen);
 	}
 
 	fp_call_flag = GLSCH_HIGH;
-	n_invoke_t_drv((uint64_t *)&smc_type, 0, 0);
+	n_invoke_t_drv((uint64_t *)(&smc_type), 0, 0);
 
-	while (smc_type == 0x54) {
-		nt_sched_t(&smc_type);
-	}
+	while (smc_type == 0x54)
+		nt_sched_t((uint64_t *)(&smc_type));
 
 	return 0;
 }
@@ -169,39 +178,37 @@ int __send_tui_display_command(unsigned long type)
 void set_tui_notice_command(unsigned long memory_size)
 {
 	struct message_head msg_head;
+
 	memset(&msg_head, 0, sizeof(struct message_head));
 
 	msg_head.invalid_flag = VALID_TYPE;
 	msg_head.message_type = STANDARD_CALL_TYPE;
 	msg_head.child_type = TUI_NOTICE_SYS_NO;
 
-	memcpy((void *)message_buff, (void *)&msg_head, sizeof(struct message_head));
+	memcpy((void *)message_buff, &msg_head, sizeof(struct message_head));
 	Flush_Dcache_By_Area((unsigned long)message_buff, (unsigned long)message_buff + MESSAGE_SIZE);
 }
 
 int __send_tui_notice_command(unsigned long share_memory_size)
 {
-	uint64_t smc_type = 2;
+	unsigned long smc_type = 2;
 	uint32_t datalen = 0;
 
 	set_tui_notice_command(share_memory_size);
-	memcpy((void *)&datalen, (void *) tui_notice_message_buff, sizeof(uint32_t));
-	Flush_Dcache_By_Area((unsigned long)tui_notice_message_buff, tui_notice_message_buff +  sizeof(uint32_t) + datalen);
+	memcpy(&datalen, (void *) tui_notice_message_buff, sizeof(uint32_t));
+	Flush_Dcache_By_Area((unsigned long)tui_notice_message_buff,
+		tui_notice_message_buff +  sizeof(uint32_t) + datalen);
 
 	forward_call_flag = GLSCH_LOW;
-	n_invoke_t_nq(&smc_type, 0, 0);
-
-	while (smc_type == 0x54) {
-		nt_sched_t(&smc_type);
-	}
-
+	n_invoke_t_nq((uint64_t *)(&smc_type), 0, 0);
+	while (smc_type == 0x54)
+		nt_sched_t((uint64_t *)(&smc_type));
 	return 0;
 }
 
 int send_tui_display_command(unsigned long type)
 {
 	struct fdrv_call_struct fdrv_ent;
-	int cpu_id = 0;
 	int retVal = 0;
 
 	down(&fdrv_lock);
@@ -209,9 +216,8 @@ int send_tui_display_command(unsigned long type)
 
 	down(&smc_lock);
 
-	if (teei_config_flag == 1) {
+	if (teei_config_flag == 1)
 		complete(&global_down_lock);
-	}
 
 	fdrv_ent.fdrv_call_type = TUI_DISPLAY_SYS_NO;
 	fdrv_ent.fdrv_call_buff_size = type;
@@ -233,11 +239,12 @@ int send_tui_display_command(unsigned long type)
 	/* with a rmb() */
 	rmb();
 
-	if (type == TUI_NOTICE_SYS_NO) {
-		Invalidate_Dcache_By_Area((unsigned long)tui_notice_message_buff, tui_notice_message_buff + TUI_NOTICE_BUFFER);
-	} else {
-		Invalidate_Dcache_By_Area((unsigned long)tui_display_message_buff, tui_display_message_buff + TUI_DISPLAY_BUFFER);
-	}
+	if (type == TUI_NOTICE_SYS_NO)
+		Invalidate_Dcache_By_Area((unsigned long)tui_notice_message_buff,
+			tui_notice_message_buff + TUI_NOTICE_BUFFER);
+	else
+		Invalidate_Dcache_By_Area((unsigned long)tui_display_message_buff,
+			tui_display_message_buff + TUI_DISPLAY_BUFFER);
 
 	ut_pm_mutex_unlock(&pm_mutex);
 	up(&fdrv_lock);
@@ -245,10 +252,10 @@ int send_tui_display_command(unsigned long type)
 	return fdrv_ent.retVal;
 }
 
+
 int send_tui_notice_command(unsigned long share_memory_size)
 {
 	struct fdrv_call_struct fdrv_ent;
-	int cpu_id = 0;
 	int retVal = 0;
 
 	down(&api_lock);
@@ -256,9 +263,8 @@ int send_tui_notice_command(unsigned long share_memory_size)
 
 	down(&smc_lock);
 
-	if (teei_config_flag == 1) {
+	if (teei_config_flag == 1)
 		complete(&global_down_lock);
-	}
 
 	fdrv_ent.fdrv_call_type = TUI_NOTICE_SYS_NO;
 	fdrv_ent.fdrv_call_buff_size = share_memory_size;
@@ -302,32 +308,19 @@ int send_power_down_cmd(void)
 	return retVal;
 }
 
-extern int power_down_flag;
-extern int enter_tui_flag ;
-
-extern void disp_aal_notify_backlight_changed(int bl_1024);
-
-#define I2C_REE_CALL  0x1E
-#define I2C_TEE_CALL  0x1F
-
-int wait_for_power_down(void)
+int wait_for_power_down(void *data)
 {
-	int i = 0;
-	int ret = 0;
 	struct sched_param param = { .sched_priority = RTPM_PRIO_TPD };
+
 	sched_setscheduler(current, SCHED_RR, &param);
 
-    do {
-	set_current_state(TASK_INTERRUPTIBLE);
-	if ((power_down_flag == 1) && (enter_tui_flag)) {
-		add_work_entry(I2C_REE_CALL, NULL);
-		disp_aal_notify_backlight_changed(0);
-		add_work_entry(I2C_TEE_CALL, NULL);
-
-		send_power_down_cmd();
-		IMSG_DEBUG("[%s][%d]catch a power_down_flag!!!\n", __func__, __LINE__);
+	do {
+		set_current_state(TASK_INTERRUPTIBLE);
+		if ((power_down_flag == 1) && (enter_tui_flag)) {
+			mtkfb_set_backlight_level(0);
+			send_power_down_cmd();
+			IMSG_DEBUG("[%s][%d]catch a power_down_flag!!!\n", __func__, __LINE__);
 		}
-
 		power_down_flag = 0;
 		msleep_interruptible(30);
 		set_current_state(TASK_RUNNING);
@@ -343,6 +336,5 @@ int tui_notify_reboot(struct notifier_block *this, unsigned long code, void *x)
 		send_power_down_cmd();
 		IMSG_DEBUG("[%s][%d]catch a ree_reboot_signal!!!\n", __func__, __LINE__);
 	}
-
 	return NOTIFY_OK;
 }

@@ -36,7 +36,6 @@
 #include <linux/compat.h>
 #include <linux/pm_runtime.h>
 
-#define CREATE_TRACE_POINTS
 #include <trace/events/mmc.h>
 
 #include <linux/mmc/ioctl.h>
@@ -50,17 +49,11 @@
 #endif
 
 #include <asm/uaccess.h>
-/*add vmstat info with block tag log*/
-#include <linux/vmstat.h>
-#include <linux/vmalloc.h>
-#include <linux/memblock.h>
 
-#ifdef CONFIG_MTK_EXTMEM
+#ifdef CONFIG_MTK_USE_RESERVED_EXT_MEM
 #include <linux/exm_driver.h>
 #endif
 #include "queue.h"
-#include <linux/time.h>
-#include <linux/debugfs.h>
 #include <linux/cpumask.h>
 #include <linux/kernel_stat.h>
 #include <linux/tick.h>
@@ -1299,6 +1292,9 @@ static inline int mmc_blk_part_switch(struct mmc_card *card,
 	struct mmc_blk_data *main_md = mmc_get_drvdata(card);
 
 #ifdef CONFIG_MTK_EMMC_CQ_SUPPORT
+	/* add for reset emmc when error happen */
+	current_mmc_part_type = md->part_type;
+
 	if (card->host->cmdq_support_changed == 1)
 		card->host->cmdq_support_changed = 0;
 	else
@@ -2858,7 +2854,7 @@ int mmc_blk_end_queued_req(struct mmc_host *host,
 	struct mmc_card *card = host->card;
 	struct mmc_blk_request *brq;
 	struct mmc_host *mmc;
-	int ret = 1, type;
+	int ret = 1, type, areq_cnt;
 	struct mmc_queue_req *mq_rq;
 	struct request *req;
 	unsigned long flags;
@@ -2952,8 +2948,15 @@ int mmc_blk_end_queued_req(struct mmc_host *host,
 	/*
 	 * one request is removed from queue,
 	 * we wakeup mmcqd to insert new request to queue
+	 * wakeup only when queue full or queue empty
 	 */
-	wake_up_process(mq->thread);
+	areq_cnt = atomic_read(&host->areq_cnt);
+	if (areq_cnt >= host->card->ext_csd.cmdq_depth -
+			EMMC_MIN_RT_CLASS_TAG_COUNT - 1)
+		wake_up_process(mq->thread);
+	else if (areq_cnt == 0)
+		wake_up_interruptible(&host->cmp_que);
+
 	return 1;
 
 cmd_abort:
@@ -2976,8 +2979,14 @@ start_new_req:
 	/*
 	 * one request is removed from queue,
 	 * we wakeup mmcqd to insert new request to queue
+	 * wakeup only when queue full or queue empty
 	 */
-	wake_up_process(mq->thread);
+	areq_cnt = atomic_read(&host->areq_cnt);
+	if (areq_cnt >= host->card->ext_csd.cmdq_depth -
+			EMMC_MIN_RT_CLASS_TAG_COUNT - 1)
+		wake_up_process(mq->thread);
+	else if (areq_cnt == 0)
+		wake_up_interruptible(&host->cmp_que);
 
 	return 0;
 }
@@ -3597,9 +3606,7 @@ static const struct mmc_fixup blk_fixups[] = {
 	MMC_FIXUP("FJ25AB", CID_MANFID_SAMSUNG, 0x100, add_quirk_mmc,
 		  MMC_QUIRK_DISABLE_CACHE),
 #endif
-	MMC_FIXUP("SEM16G", CID_MANFID_SANDISK_EMMC, CID_OEMID_ANY, add_quirk_mmc,
-		  MMC_QUIRK_DISABLE_SNO),
-	MMC_FIXUP("SEM08G", CID_MANFID_SANDISK_EMMC, CID_OEMID_ANY, add_quirk_mmc,
+	MMC_FIXUP(CID_NAME_ANY, CID_MANFID_SANDISK_EMMC, CID_OEMID_ANY, add_quirk_mmc,
 		  MMC_QUIRK_DISABLE_SNO),
 
 	END_FIXUP
@@ -3699,7 +3706,25 @@ static void mmc_blk_shutdown(struct mmc_card *card)
 #ifdef CONFIG_PM
 static int mmc_blk_suspend(struct mmc_card *card)
 {
-	return _mmc_blk_suspend(card);
+	struct mmc_blk_data *md = mmc_get_drvdata(card);
+	int ret;
+
+	ret = _mmc_blk_suspend(card);
+	if (ret)
+		goto out;
+
+	/*
+	 * Make sure partition is the main one when
+	 * suspend.
+	 */
+	if (md) {
+		ret = mmc_blk_part_switch(card, md);
+		if (ret)
+			pr_info("%s: error %d during suspend\n",
+				md->disk->disk_name, ret);
+	}
+out:
+	return ret;
 }
 
 static int mmc_blk_resume(struct mmc_card *card)

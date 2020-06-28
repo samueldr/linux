@@ -190,10 +190,10 @@ static int disp_is_intr_enable(DISP_REG_ENUM module)
 	case DISP_REG_DSI0:
 	case DISP_REG_DPI0:
 	case DISP_REG_AAL:
+	case DISP_REG_CCORR:
 		return 1;
 
 	case DISP_REG_COLOR:
-	case DISP_REG_CCORR:
 	case DISP_REG_GAMMA:
 	case DISP_REG_DITHER:
 	case DISP_REG_PWM:
@@ -481,10 +481,27 @@ static void __exit disp_exit(void)
 
 }
 
+static int __init disp_late(void)
+{
+	int ret = 0;
+
+	DISPMSG("disp driver(1) disp_late begin\n");
+	/* for rt5081 */
+	ret = display_bias_regulator_init();
+	if (ret < 0)
+		pr_err("get dsv_pos fail, ret = %d\n", ret);
+
+	display_bias_enable();
+
+	DISPMSG("disp driver(1) disp_late end\n");
+	return 0;
+}
+
 #ifndef MTK_FB_DO_NOTHING
 arch_initcall(disp_init);
 module_init(disp_probe_1);
 module_exit(disp_exit);
+late_initcall(disp_late);
 #endif
 MODULE_AUTHOR("Tzu-Meng, Chung <Tzu-Meng.Chung@mediatek.com>");
 MODULE_DESCRIPTION("Display subsystem Driver");

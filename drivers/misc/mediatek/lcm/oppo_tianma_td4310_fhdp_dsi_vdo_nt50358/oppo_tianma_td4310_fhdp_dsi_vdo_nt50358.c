@@ -217,6 +217,7 @@ static const unsigned char LCD_MODULE_ID = 0x01;
 #define LCM_DSI_CMD_MODE									0
 #define FRAME_WIDTH										(1080)
 #define FRAME_HEIGHT									(2160)
+#define LCM_DENSITY										(480)
 
 #define LCM_PHYSICAL_WIDTH									(74520)
 #define LCM_PHYSICAL_HEIGHT									(132480)
@@ -364,6 +365,7 @@ static void lcm_get_params(LCM_PARAMS *params)
 	params->physical_height = LCM_PHYSICAL_HEIGHT/1000;
 	params->physical_width_um = LCM_PHYSICAL_WIDTH;
 	params->physical_height_um = LCM_PHYSICAL_HEIGHT;
+	params->density = LCM_DENSITY;
 
 
 #if (LCM_DSI_CMD_MODE)

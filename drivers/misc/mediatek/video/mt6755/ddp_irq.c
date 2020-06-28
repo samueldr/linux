@@ -27,6 +27,7 @@
 #include "ddp_reg.h"
 #include "ddp_irq.h"
 #include "ddp_aal.h"
+#include "ddp_gamma.h"
 #include "ddp_drv.h"
 #include "disp_helper.h"
 
@@ -218,7 +219,6 @@ irqreturn_t disp_irq_handler(int irq, void *dev_id)
 		/* rd_rdy don't clear and wait for ESD & Read LCM will clear the bit. */
 		if (disp_irq_esd_cust_get() == 0)
 			reg_temp_val = reg_val&0xfffe;
-		reg_temp_val = reg_temp_val&0xffdf;
 		DISP_CPU_REG_SET(dsi_reg_va + 0xC, ~reg_temp_val);
 	} else if (irq == dispsys_irq[DISP_REG_OVL0] ||
 		   irq == dispsys_irq[DISP_REG_OVL1] ||
@@ -423,6 +423,10 @@ irqreturn_t disp_irq_handler(int irq, void *dev_id)
 		module = DISP_MODULE_AAL;
 		reg_val = DISP_REG_GET(DISP_AAL_INTSTA);
 		disp_aal_on_end_of_frame();
+	} else if (irq == dispsys_irq[DISP_REG_CCORR]) {
+		module = DISP_MODULE_CCORR;
+		reg_val = DISP_REG_GET(DISP_REG_CCORR_INTSTA);
+		disp_ccorr_on_end_of_frame();
 	} else if (irq == dispsys_irq[DISP_REG_CONFIG]) {	/* MMSYS error intr */
 		reg_val = DISP_REG_GET(DISP_REG_CONFIG_MMSYS_INTSTA) & 0x7;
 		if (reg_val & (1 << 0))
@@ -453,7 +457,7 @@ irqreturn_t disp_irq_handler(int irq, void *dev_id)
 			break;
 		}
 	}
-	if (disp_irq_log_module_en != 0 && irq_init != 0)
+	if (disp_irq_log_module_en != 0)
 		wake_up_interruptible(&disp_irq_log_wq);
 
 	MMProfileLogEx(ddp_mmp_get_events()->DDP_IRQ, MMProfileFlagEnd, irq, reg_val);
@@ -492,6 +496,7 @@ int disp_init_irq(void)
 	if (irq_init)
 		return 0;
 
+	irq_init = 1;
 	DISPMSG("disp_init_irq\n");
 
 	/* create irq log thread */
@@ -499,7 +504,7 @@ int disp_init_irq(void)
 	disp_irq_log_task = kthread_create(disp_irq_log_kthread_func, NULL, "ddp_irq_log_kthread");
 	if (IS_ERR(disp_irq_log_task))
 		DISPERR(" can not create disp_irq_log_task kthread\n");
-	irq_init = 1;
+
 	/* wake_up_process(disp_irq_log_task); */
 	return 0;
 }

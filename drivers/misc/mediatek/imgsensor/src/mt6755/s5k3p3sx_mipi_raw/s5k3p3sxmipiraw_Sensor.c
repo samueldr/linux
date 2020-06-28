@@ -1,3 +1,16 @@
+/*
+ * Copyright (C) 2015 MediaTek Inc.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ */
+
 /*****************************************************************************
  *
  * Filename:
@@ -36,7 +49,9 @@
 #include "s5k3p3sxmipiraw_Sensor.h"
 
 #define PFX "S5K3P3SX_camera_sensor"
-#define LOG_INF(format, args...)	pr_debug(PFX "[%s] " format, __FUNCTION__, ##args)
+//dingyisheng@wind-mobi.com 20171103 begin
+#define LOG_INF(format, args...)	pr_err(PFX "[%s] " format, __FUNCTION__, ##args)
+//dingyisheng@wind-mobi.com 20171103 begin
 
 static DEFINE_SPINLOCK(imgsensor_drv_lock);
 
@@ -45,7 +60,7 @@ static imgsensor_info_struct imgsensor_info = {
 	.sensor_id = S5K3P3SX_SENSOR_ID,
 
 	.checksum_value =0xffb1ec31, //0x7b925d1d modify by qiangang 20170901
-
+//wangkangmin@wind-mobi.com modify for video pdaf 20180829 begin
 	.pre = {
         .pclk = 560000000,              //record different mode's pclk
 		.linelength = 7060,				//record different mode's linelength
@@ -58,7 +73,9 @@ static imgsensor_info_struct imgsensor_info = {
 		.mipi_data_lp2hs_settle_dc = 85,
 		/*	 following for GetDefaultFramerateByScenario()	*/
 		.max_framerate = 300,
+
 	},
+//wangkangmin@wind-mobi.com modify for video pdaf 20180829 end
 	.cap = {
 		.pclk =560000000,
 		.linelength = 5148,
@@ -114,20 +131,20 @@ static imgsensor_info_struct imgsensor_info = {
 		.mipi_data_lp2hs_settle_dc = 85,
 		.max_framerate = 1200,
 	},
+//wangkangmin@wind-mobi.com modify for video pdaf 20180829 begin
 	.slim_video = {
-			.pclk = 560000000,				//record different mode's pclk
-			.linelength = 7060, 			//record different mode's linelength
-				  .framelength = 2640,		   //record different mode's framelength
-			.startx = 0,					//record different mode's startx of grabwindow
-			.starty = 0,					//record different mode's starty of grabwindow
-			.grabwindow_width = 2304,		//record different mode's width of grabwindow
-			.grabwindow_height = 1728,		//record different mode's height of grabwindow
-			/*	 following for MIPIDataLowPwr2HighSpeedSettleDelayCount by different scenario	*/
-			.mipi_data_lp2hs_settle_dc = 85,
-			/*	 following for GetDefaultFramerateByScenario()	*/
-			.max_framerate = 300,
+		.pclk =560000000,
+		.linelength = 5148,
+		.framelength = 3626,
+		.startx =0,
+		.starty = 0,
+		.grabwindow_width = 4608,
+		.grabwindow_height = 3456,
+		.mipi_data_lp2hs_settle_dc = 85,
+		.max_framerate = 300,
 
 	},
+//wangkangmin@wind-mobi.com modify for video pdaf 20180829 end
 	//dingyisheng@wind-mobi.com begin
 	.custom1 = {
         .pclk = 560000000,              //record different mode's pclk
@@ -197,7 +214,7 @@ static SENSOR_WINSIZE_INFO_STRUCT imgsensor_winsize_info[6] =
  { 4608, 3456,	  0,	0, 4608, 3456, 4104,  3062, 0000, 0000, 4608,  3456,	  0,	0, 4608, 3456}, // capture
  { 4608, 3456,	  0,	0, 4608, 3456, 4104,  3062, 0000, 0000, 4608,  3456,	  0,	0, 4608, 3456}, // video
  { 4608, 3480,	  0,	0, 4608, 3480, 1152,   870, 0000, 0000, 1152,  870,       0,    0, 1152, 870}, //hight speed video
- { 4608, 3456,	  0,	0, 4608, 3456, 2304,  1728, 0000, 0000, 2304,  1728,	  0,	0, 2304, 1728},// slim video
+ { 4608, 3456,	  0,	0, 4608, 3456, 4104,  3062, 0000, 0000, 4608,  3456,	  0,	0, 4608, 3456},// slim video
  { 4608, 3456,	  0,	0, 4608, 3456, 2304,  1728, 0000, 0000, 2304,  1728,	  0,	0, 2304, 1728} // custom1
 //dingyisheng@wind-mobi.com end
 };
@@ -661,7 +678,7 @@ write_cmos_sensor(0x3D7A,0x93C6);
 
 }	/*	sensor_init  */
 
-
+//wangkangmin@wind-mobi.com modify for video pdaf 20180829 begin
 static void preview_setting(void)
 {
 	//Preview 2104*1560 30fps 24M MCLK 4lane 608Mbps/lane
@@ -706,8 +723,9 @@ write_cmos_sensor_8(0x0100,0x01);
 
 
 
-}	/*	preview_setting  */
 
+}	/*	preview_setting  */
+//wangkangmin@wind-mobi.com modify for video pdaf 20180829 end
 static void capture_setting(kal_uint16 currefps)
 {
 	LOG_INF("E! currefps:%d\n",currefps);
@@ -834,6 +852,7 @@ static void normal_video_setting(kal_uint16 currefps)
 {
 	LOG_INF("E! currefps:%d\n",currefps);
     // full size 30fps
+if(currefps==300){
 write_cmos_sensor_8(0x0100,0x00);
 write_cmos_sensor(0x6028,0x4000);
 write_cmos_sensor(0x3D7C,0x1110);
@@ -870,6 +889,83 @@ write_cmos_sensor(0x0B0E,0x0000);
 write_cmos_sensor(0x0216,0x0101);
 write_cmos_sensor(0x6214,0x7970);
 write_cmos_sensor_8(0x0100,0x01);
+}
+else if(currefps==240){
+write_cmos_sensor_8(0x0100,0x00);
+write_cmos_sensor(0x6028,0x4000);
+write_cmos_sensor(0x3D7C,0x1110);
+write_cmos_sensor(0x3D88,0x0064);
+write_cmos_sensor(0x3D8A,0x0068);
+write_cmos_sensor(0x0344,0x0008);
+write_cmos_sensor(0x0346,0x0014);
+write_cmos_sensor(0x0348,0x1217);
+write_cmos_sensor(0x034A,0x0D93);
+write_cmos_sensor(0x034C,0x1200);
+write_cmos_sensor(0x034E,0x0D80);
+write_cmos_sensor(0x0408,0x0008);
+write_cmos_sensor(0x0900,0x0011);
+write_cmos_sensor(0x0380,0x0001);
+write_cmos_sensor(0x0382,0x0001);
+write_cmos_sensor(0x0384,0x0001);
+write_cmos_sensor(0x0386,0x0001);
+write_cmos_sensor(0x0400,0x0000);
+write_cmos_sensor(0x0404,0x0010);
+write_cmos_sensor(0x0114,0x0300);
+write_cmos_sensor(0x0110,0x0002);
+write_cmos_sensor(0x0136,0x1800);
+write_cmos_sensor(0x0304,0x0006);
+write_cmos_sensor(0x0306,0x008C);
+write_cmos_sensor(0x0302,0x0001);
+write_cmos_sensor(0x0300,0x0004);
+write_cmos_sensor(0x030C,0x0004);
+write_cmos_sensor(0x030E,0x005D);
+write_cmos_sensor(0x030A,0x0001);
+write_cmos_sensor(0x0308,0x0008);
+write_cmos_sensor(0x0342,0x1910);
+write_cmos_sensor(0x0340,0x0E2A);
+write_cmos_sensor(0x0B0E,0x0000);
+write_cmos_sensor(0x0216,0x0101);
+write_cmos_sensor(0x6214,0x7970);
+write_cmos_sensor_8(0x0100,0x01);
+}
+else{ //15fps
+write_cmos_sensor_8(0x0100,0x00);
+write_cmos_sensor(0x6028,0x4000);
+write_cmos_sensor(0x3D7C,0x1110);
+write_cmos_sensor(0x3D88,0x0064);
+write_cmos_sensor(0x3D8A,0x0068);
+write_cmos_sensor(0x0344,0x0008);
+write_cmos_sensor(0x0346,0x0014);
+write_cmos_sensor(0x0348,0x1217);
+write_cmos_sensor(0x034A,0x0D93);
+write_cmos_sensor(0x034C,0x1200);
+write_cmos_sensor(0x034E,0x0D80);
+write_cmos_sensor(0x0408,0x0008);
+write_cmos_sensor(0x0900,0x0011);
+write_cmos_sensor(0x0380,0x0001);
+write_cmos_sensor(0x0382,0x0001);
+write_cmos_sensor(0x0384,0x0001);
+write_cmos_sensor(0x0386,0x0001);
+write_cmos_sensor(0x0400,0x0000);
+write_cmos_sensor(0x0404,0x0010);
+write_cmos_sensor(0x0114,0x0300);
+write_cmos_sensor(0x0110,0x0002);
+write_cmos_sensor(0x0136,0x1800);
+write_cmos_sensor(0x0304,0x0006);
+write_cmos_sensor(0x0306,0x008C);
+write_cmos_sensor(0x0302,0x0001);
+write_cmos_sensor(0x0300,0x0004);
+write_cmos_sensor(0x030C,0x0004);
+write_cmos_sensor(0x030E,0x0037);
+write_cmos_sensor(0x030A,0x0001);
+write_cmos_sensor(0x0308,0x0008);
+write_cmos_sensor(0x0342,0x2800);
+write_cmos_sensor(0x0340,0x0E2A);
+write_cmos_sensor(0x0B0E,0x0000);
+write_cmos_sensor(0x0216,0x0101);
+write_cmos_sensor(0x6214,0x7970);
+write_cmos_sensor_8(0x0100,0x01);
+}
 }
 static void hs_video_setting(void)
 {
@@ -1110,7 +1206,7 @@ static kal_uint32 preview(MSDK_SENSOR_EXPOSURE_WINDOW_STRUCT *image_window,
 	imgsensor.min_frame_length = imgsensor_info.pre.framelength;
 	imgsensor.autoflicker_en = KAL_FALSE;
 	spin_unlock(&imgsensor_drv_lock);
-    
+
 	preview_setting();
 	set_mirror_flip(imgsensor.mirror);
 
@@ -1738,15 +1834,15 @@ static kal_uint32 feature_control(MSDK_SENSOR_FEATURE_ENUM feature_id,
 		case SENSOR_FEATURE_GET_PDAF_INFO:
 			LOG_INF("SENSOR_FEATURE_GET_PDAF_INFO scenarioId:%d\n", (UINT32)*feature_data);
 			PDAFinfo= (SET_PD_BLOCK_INFO_T *)(uintptr_t)(*(feature_data+1));
-
+//wangkangmin@wind-mobi.com modify for video pdaf 20180829 begin
 			switch (*feature_data) {
 				case MSDK_SCENARIO_ID_CAMERA_CAPTURE_JPEG:
+				case MSDK_SCENARIO_ID_VIDEO_PREVIEW:
+				case MSDK_SCENARIO_ID_CAMERA_PREVIEW:
+				case MSDK_SCENARIO_ID_SLIM_VIDEO:
 					memcpy((void *)PDAFinfo,(void *)&imgsensor_pd_info,sizeof(SET_PD_BLOCK_INFO_T));
 					break;
-				case MSDK_SCENARIO_ID_VIDEO_PREVIEW:
 				case MSDK_SCENARIO_ID_HIGH_SPEED_VIDEO:
-				case MSDK_SCENARIO_ID_SLIM_VIDEO:
-				case MSDK_SCENARIO_ID_CAMERA_PREVIEW:
 				default:
 					break;
 			}
@@ -1759,23 +1855,23 @@ static kal_uint32 feature_control(MSDK_SENSOR_FEATURE_ENUM feature_id,
 					*(MUINT32 *)(uintptr_t)(*(feature_data+1)) = 1;
 					break;
 				case MSDK_SCENARIO_ID_VIDEO_PREVIEW:
-					*(MUINT32 *)(uintptr_t)(*(feature_data+1)) = 0; // video & capture use same setting
+					*(MUINT32 *)(uintptr_t)(*(feature_data+1)) = 1; // video & capture use same setting
 					break;
 				case MSDK_SCENARIO_ID_HIGH_SPEED_VIDEO:
 					*(MUINT32 *)(uintptr_t)(*(feature_data+1)) = 0;
 					break;
 				case MSDK_SCENARIO_ID_SLIM_VIDEO:
-					*(MUINT32 *)(uintptr_t)(*(feature_data+1)) = 0;
+					*(MUINT32 *)(uintptr_t)(*(feature_data+1)) = 1;
 					break;
 				case MSDK_SCENARIO_ID_CAMERA_PREVIEW:
-					*(MUINT32 *)(uintptr_t)(*(feature_data+1)) = 0;
+					*(MUINT32 *)(uintptr_t)(*(feature_data+1)) = 1;
 					break;
 				default:
 					*(MUINT32 *)(uintptr_t)(*(feature_data+1)) = 0;
 					break;
 			}
 			break;
-
+//wangkangmin@wind-mobi.com modify for video pdaf 20180829 end
 
 		case SENSOR_FEATURE_SET_IHDR_SHUTTER_GAIN:
             LOG_INF("SENSOR_SET_SENSOR_IHDR LE=%d, SE=%d, Gain=%d\n",(UINT16)*feature_data,(UINT16)*(feature_data+1),(UINT16)*(feature_data+2));

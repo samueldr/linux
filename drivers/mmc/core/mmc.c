@@ -113,12 +113,34 @@ static ssize_t data_read1(struct file *file, char *buf, size_t len, loff_t *pos)
 {
 	
 	char *ptr = buf;
+	char *emmc_health_level;
     printk("emmc_health_value=%d",emmc_health_value);
 	
+	if(emmc_health_value==0)
+	{
+		emmc_health_level="0x00";
+	}
+	else if(emmc_health_value==1)
+	{
+		emmc_health_level="0x01";
+	}
+	else if(emmc_health_value==2)
+	{
+		emmc_health_level="0x02";
+	}
+	else if(emmc_health_value==3)
+	{
+		emmc_health_level="0x03";
+	}
+	else
+	{
+		emmc_health_level="0x04";
+	}
+	 printk("emmc_health_level=%s",emmc_health_level);
 	if (*pos)
 		return 0;
 	
-    ptr += sprintf(ptr, "%d\n", emmc_health_value);
+    ptr += sprintf(ptr, "%s\n", emmc_health_level);
 	//ptr += sprintf(ptr,"flash_flag = %d\n", flash_flag);
     *pos += ptr - buf;
 
@@ -619,7 +641,6 @@ static int mmc_decode_ext_csd(struct mmc_card *card, u8 *ext_csd)
     
 
 	/* Version is coded in the CSD_STRUCTURE byte in the EXT_CSD register */
-
 	card->ext_csd.raw_ext_csd_structure = ext_csd[EXT_CSD_STRUCTURE];
 		//liukangping add emmc health 20170208 begin
 	emmc_health_value= ext_csd[EXT_CSD_STRUCTURE+73];
@@ -825,7 +846,8 @@ static int mmc_decode_ext_csd(struct mmc_card *card, u8 *ext_csd)
 		/* check whether the eMMC card supports BKOPS */
 		if (ext_csd[EXT_CSD_BKOPS_SUPPORT] & 0x1) {
 			card->ext_csd.bkops = 1;
-			card->ext_csd.bkops_en = ext_csd[EXT_CSD_BKOPS_EN];
+			card->ext_csd.bkops_en =
+				(ext_csd[EXT_CSD_BKOPS_EN] & 0x1);
 			card->ext_csd.raw_bkops_status =
 				ext_csd[EXT_CSD_BKOPS_STATUS];
 			if (!card->ext_csd.bkops_en)
@@ -923,6 +945,15 @@ static int mmc_decode_ext_csd(struct mmc_card *card, u8 *ext_csd)
 		card->ext_csd.cmdq_depth = 16;
 	}
 #endif
+
+	/* eMMC v5 or later */
+	if (card->ext_csd.rev >= 7) {
+		card->ext_csd.pre_eol_info = ext_csd[EXT_CSD_PRE_EOL_INFO];
+		card->ext_csd.device_life_time_est_typ_a =
+			ext_csd[EXT_CSD_DEVICE_LIFE_TIME_EST_TYP_A];
+		card->ext_csd.device_life_time_est_typ_b =
+			ext_csd[EXT_CSD_DEVICE_LIFE_TIME_EST_TYP_B];
+	}
 out:
 	return err;
 }
@@ -969,6 +1000,14 @@ static int mmc_compare_ext_csds(struct mmc_card *card, unsigned bus_width)
 {
 	u8 *bw_ext_csd;
 	int err;
+
+#if defined(CONFIG_MTK_EMMC_CQ_SUPPORT)
+	/* add for reset emmc reset when error happen;
+	 * return directly because comparison fails seldom when reinit emmc
+	 */
+	if (emmc_resetting_when_cmdq)
+		return 0;
+#endif
 
 	if (bus_width == MMC_BUS_WIDTH_1)
 		return 0;
@@ -1101,6 +1140,14 @@ MMC_DEV_ATTR(manfid, "0x%06x\n", card->cid.manfid);
 MMC_DEV_ATTR(name, "%s\n", card->cid.prod_name);
 MMC_DEV_ATTR(oemid, "0x%04x\n", card->cid.oemid);
 MMC_DEV_ATTR(prv, "0x%x\n", card->cid.prv);
+// guxuewei@wind-mobi.com 20180330 begin
+//MMC_DEV_ATTR(rev, "0x%x\n", card->ext_csd.rev);
+//MMC_DEV_ATTR(pre_eol_info, "%02x\n", card->ext_csd.pre_eol_info);
+// guxuewei@wind-mobi.com 20180330 end
+MMC_DEV_ATTR(life_time, "0x%02x 0x%02x\n",
+	card->ext_csd.device_life_time_est_typ_a,
+	card->ext_csd.device_life_time_est_typ_b);
+	
 MMC_DEV_ATTR(serial, "0x%08x\n", card->cid.serial);
 MMC_DEV_ATTR(enhanced_area_offset, "%llu\n",
 		card->ext_csd.enhanced_area_offset);
@@ -1141,6 +1188,11 @@ static struct attribute *mmc_std_attrs[] = {
 	&dev_attr_name.attr,
 	&dev_attr_oemid.attr,
 	&dev_attr_prv.attr,
+// guxuewei@wind-mobi.com 20180330 begin	
+//	&dev_attr_rev.attr,
+//	&dev_attr_pre_eol_info.attr,
+// guxuewei@wind-mobi.com 20180330 end	
+	&dev_attr_life_time.attr,
 	&dev_attr_serial.attr,
 	&dev_attr_enhanced_area_offset.attr,
 	&dev_attr_enhanced_area_size.attr,
@@ -1818,11 +1870,7 @@ static int mmc_init_card(struct mmc_host *host, u32 ocr,
 
 	if (!oldcard) {
 		/* Read extended CSD. */
-		
-			
 		err = mmc_read_ext_csd(card);
-	
-	
 		if (err)
 			goto free_card;
 
@@ -2046,12 +2094,10 @@ err:
 	return err;
 }
 
-#ifdef CONFIG_MMC_FFU
 int mmc_reinit_oldcard(struct mmc_host *host)
 {
 	return mmc_init_card(host, host->card->ocr, host->card);
 }
-#endif
 
 /*
  * Turn the cache ON/OFF.
@@ -2344,7 +2390,7 @@ static int _mmc_resume(struct mmc_host *host)
 	if (mmc_card_is_sleep(host->card) && mmc_can_sleep(host->card)) {
 		err = mmc_awake(host);
 		if (err)
-			return err;
+			goto out;
 		mmc_card_clr_sleep(host->card);
 	} else
 		err = mmc_init_card(host, host->card->ocr, host->card);

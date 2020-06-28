@@ -144,7 +144,7 @@ static int remove_migration_pte(struct page *new, struct vm_area_struct *vma,
 		goto unlock;
 
 	get_page(new);
-	pte = pte_mkold(mk_pte(new, vma->vm_page_prot));
+	pte = pte_mkold(mk_pte(new, READ_ONCE(vma->vm_page_prot)));
 	if (pte_swp_soft_dirty(*ptep))
 		pte = pte_mksoft_dirty(pte);
 
@@ -1200,7 +1200,6 @@ int migrate_replace_page(struct page *page, struct page *newpage)
 	if (PageLRU(page) &&
 	    __isolate_lru_page(page, ISOLATE_UNEVICTABLE) == 0) {
 		struct lruvec *lruvec = mem_cgroup_page_lruvec(page, zone);
-
 		del_page_from_lru_list(page, lruvec, page_lru(page));
 		spin_unlock_irqrestore(&zone->lru_lock, flags);
 	} else {

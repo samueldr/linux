@@ -209,7 +209,7 @@ static struct device_attribute power_supply_attrs[] = {
 	/* 20100723 James Lo */
 	POWER_SUPPLY_ATTR(batt_vol),
 	POWER_SUPPLY_ATTR(batt_temp),
-	POWER_SUPPLY_ATTR(charge_counter),              //renyongwei@wind-mobi.com 20170923 add
+	POWER_SUPPLY_ATTR(charge_count),              //renyongwei@wind-mobi.com 20170923 add
 	POWER_SUPPLY_ATTR(bat_current),              //liulinsheng@wind-mobi.com 20171002 add
 	POWER_SUPPLY_ATTR(usb_ntc),	              //liulinsheng@wind-mobi.com  20170309
 	//liulinsheng@wind-mobi.com  for ap temp check

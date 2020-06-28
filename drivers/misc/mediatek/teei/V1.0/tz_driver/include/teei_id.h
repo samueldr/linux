@@ -1,3 +1,17 @@
+/*
+ * Copyright (c) 2015-2017 MICROTRUST Incorporated
+ * All Rights Reserved.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ */
+
 
 #ifndef __TEEI_ID_H_
 #define __TEEI_ID_H_
@@ -19,26 +33,26 @@
  * @brief Encoding data type
  */
 enum teei_enc_data_type {
-    TEEI_ENC_INVALID_TYPE = 0,
-    TEEI_ENC_UINT32,
-    TEEI_ENC_ARRAY,
-    TEEI_MEM_REF,
-    TEEI_SECURE_MEM_REF
+	TEEI_ENC_INVALID_TYPE = 0,
+	TEEI_ENC_UINT32,
+	TEEI_ENC_ARRAY,
+	TEEI_MEM_REF,
+	TEEI_SECURE_MEM_REF
 };
 /**
  * @brief Command ID's for global service
  */
 enum _global_cmd_id {
-    TEEI_GLOBAL_CMD_ID_INVALID = 0x0,
-    TEEI_GLOBAL_CMD_ID_BOOT_ACK,
-    /* add by lodovico */
-    TEEI_GLOBAL_CMD_ID_INIT_CONTEXT,
-    /* add end */
-    TEEI_GLOBAL_CMD_ID_OPEN_SESSION,
-    TEEI_GLOBAL_CMD_ID_CLOSE_SESSION,
-    TEEI_GLOBAL_CMD_ID_RESUME_ASYNC_TASK,
-    TEEI_GLOBAL_CMD_ID_UNKNOWN         = 0x7FFFFFFE,
-    TEEI_GLOBAL_CMD_ID_MAX             = 0x7FFFFFFF
+	TEEI_GLOBAL_CMD_ID_INVALID = 0x0,
+	TEEI_GLOBAL_CMD_ID_BOOT_ACK,
+	/* add by lodovico */
+	TEEI_GLOBAL_CMD_ID_INIT_CONTEXT,
+	/* add end */
+	TEEI_GLOBAL_CMD_ID_OPEN_SESSION,
+	TEEI_GLOBAL_CMD_ID_CLOSE_SESSION,
+	TEEI_GLOBAL_CMD_ID_RESUME_ASYNC_TASK,
+	TEEI_GLOBAL_CMD_ID_UNKNOWN         = 0x7FFFFFFE,
+	TEEI_GLOBAL_CMD_ID_MAX             = 0x7FFFFFFF
 };
 
 /* add by lodovico */
@@ -58,15 +72,15 @@ int service_smc_call(u32 teei_cmd_type, u32 dev_file_id, u32 svc_id,
 #endif
 
 enum teei_cmd_type {
-    TEEI_CMD_TYPE_INVALID = 0x0,
-    TEEI_CMD_TYPE_SOCKET_INIT,
-    TEEI_CMD_TYPE_INITILIZE_CONTEXT,
-    TEEI_CMD_TYPE_FINALIZE_CONTEXT,
-    TEEI_CMD_TYPE_OPEN_SESSION,
-    TEEI_CMD_TYPE_CLOSE_SESSION,
-    TEEI_CMD_TYPE_INVOKE_COMMAND,
-    TEEI_CMD_TYPE_UNKNOWN         = 0x7FFFFFFE,
-    TEEI_CMD_TYPE_MAX             = 0x7FFFFFFF
+	TEEI_CMD_TYPE_INVALID = 0x0,
+	TEEI_CMD_TYPE_SOCKET_INIT,
+	TEEI_CMD_TYPE_INITIALIZE_CONTEXT,
+	TEEI_CMD_TYPE_FINALIZE_CONTEXT,
+	TEEI_CMD_TYPE_OPEN_SESSION,
+	TEEI_CMD_TYPE_CLOSE_SESSION,
+	TEEI_CMD_TYPE_INVOKE_COMMAND,
+	TEEI_CMD_TYPE_UNKNOWN         = 0x7FFFFFFE,
+	TEEI_CMD_TYPE_MAX             = 0x7FFFFFFF
 };
 
 #define ROUND_UP(N, S) ((((N) + (S) - 1) / (S)) * (S))
@@ -82,7 +96,11 @@ enum teei_cmd_type {
  * ***************************************************************/
 static inline void Flush_Dcache_By_Area(unsigned long start, unsigned long end)
 {
-#if 0
+#if 1
+	if (boot_soter_flag == START_STATUS) {
+#ifdef CONFIG_ARM64
+		__flush_dcache_area((void *)start, (end - start));
+#else
 	__asm__ __volatile__ ("dsb" : : : "memory"); /* dsb */
 
 	__asm__ __volatile__ (
@@ -101,10 +119,9 @@ static inline void Flush_Dcache_By_Area(unsigned long start, unsigned long end)
 
 	__asm__ __volatile__ ("dsb" : : : "memory"); /* dsb */
 #endif
-	/* __flush_dcache_area((void *)start, (end - start)); */
-	if (boot_soter_flag == START_STATUS) {
-		__flush_dcache_area((void *)start, (end - start));
+
 	}
+#endif
 }
 /******************************************************************
  * @brief:
@@ -117,8 +134,11 @@ static inline void Flush_Dcache_By_Area(unsigned long start, unsigned long end)
 
 static inline void __Invalidate_Dcache_By_Area(unsigned long start, unsigned long end)
 {
+#if 1
+#ifdef CONFIG_ARM64
 
 	uint64_t temp[2];
+
 	temp[0] = start;
 	temp[1] = end;
 	__asm__ volatile(
@@ -140,6 +160,31 @@ static inline void __Invalidate_Dcache_By_Area(unsigned long start, unsigned lon
 		[temp] "r" (temp)
 		: "x0", "x1", "x2", "x3", "memory");
 
+
+
+
+
+#else
+	__asm__ __volatile__ ("dsb" : : : "memory"); /* dsb */
+	__asm__ __volatile__ (
+		"1:  mcr p15, 0, %[i], c7, c6, 1\n" /* Invalidate Data Cache Line (using MVA) Register */
+		"    add %[i], %[i], %[clsz]\n"
+		"    cmp %[i], %[end]\n"
+		"    blo 1b\n"
+		:
+		[i]    "=&r" (start)
+		:        "0"   ((unsigned long)start & (~(Cache_line_size - 1))),
+		[end]  "r"   (end),
+		[clsz] "i"   (Cache_line_size)
+		: "memory");
+
+	asm volatile ("mcr p15, 0, %0, c7, c5, 0" : : "r" (0) : "memory"); /* invalidate btc */
+	__asm__ __volatile__ ("dsb" : : : "memory"); /* dsb */
+
+
+
+#endif
+#endif
 }
 
 static inline void Invalidate_Dcache_By_Area(unsigned long start, unsigned long end)
@@ -182,9 +227,9 @@ static inline void Invalidate_Dcache_By_Area(unsigned long start, unsigned long 
 	    : "memory");
 #endif
 
-	if (boot_soter_flag == START_STATUS) {
+	if (boot_soter_flag == START_STATUS)
 		__Invalidate_Dcache_By_Area(start, end);
-	}
+
 }
 
 /* add end */

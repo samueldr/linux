@@ -1,3 +1,15 @@
+/*
+* Copyright (C) 2016 MediaTek Inc.
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License version 2 as
+* published by the Free Software Foundation.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+* See http://www.gnu.org/licenses/gpl-2.0.html for more details.
+*/
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/device.h>
@@ -75,6 +87,7 @@ enum spi_fifo {
 };
 
 #define INVALID_DMA_ADDRESS 0xffffffff
+
 struct mt_spi_t {
 	struct platform_device *pdev;
 	void __iomem *regs;
@@ -152,7 +165,7 @@ void mt_spi_disable_master_clk(struct spi_device *ms)
 #define SPI_DBG(fmt, args...) pr_debug("spi.c:%5d: <%s>" fmt, __LINE__, __func__, ##args)
 
 #ifdef SPI_VERBOSE
-#define SPI_INFO(dev, fmt, args...) dev_alert(dev, "spi.c:%5d: <%s>" fmt, __LINE__, __func__, ##args)
+#define SPI_INFO(dev, fmt, args...) dev_info(dev, "spi.c:%5d: <%s>" fmt, __LINE__, __func__, ##args)
 static void spi_dump_reg(struct mt_spi_t *ms)
 {
 	SPI_DBG("||*****************************************||\n");
@@ -1444,7 +1457,7 @@ static void mt_spi_cleanup(struct spi_device *spidev)
 
 }
 
-static int __init mt_spi_probe(struct platform_device *pdev)
+static int mt_spi_probe(struct platform_device *pdev)
 {
 	int ret = 0;
 	int irq;

@@ -1124,9 +1124,11 @@ static int mtkfb_ioctl(struct fb_info *info, unsigned int cmd, unsigned long arg
 			} else {
 				DISPERR("information for displayid: %d is not available now\n",
 					displayid);
+				return -EFAULT;
 			}
 
-			if (copy_to_user((void __user *)arg, &(dispif_info[displayid]), sizeof(mtk_dispif_info_t))) {
+			if (copy_to_user((void __user *)arg, &(dispif_info[displayid]),
+					sizeof(struct mtk_dispif_info))) {
 				MTKFB_LOG("[FB]: copy_to_user failed! line:%d\n", __LINE__);
 				r = -EFAULT;
 			}
@@ -1270,6 +1272,11 @@ static int mtkfb_ioctl(struct fb_info *info, unsigned int cmd, unsigned long arg
 					r = -EFAULT;
 				} else {
 					capConfig.outputBuffer = vmalloc(fb_size);
+					if (!capConfig.outputBuffer) {
+						MTKFB_LOG("[FB]:vmalloc capConfig outputBuffer failed!line:%d\n",
+						__LINE__);
+						return -EFAULT;
+					}
 					primary_display_capture_framebuffer_ovl((unsigned long)
 									capConfig.outputBuffer,
 									format);
@@ -1327,6 +1334,7 @@ static int mtkfb_ioctl(struct fb_info *info, unsigned int cmd, unsigned long arg
 				if (layerInfo->layer_id >= TOTAL_OVL_LAYER_NUM) {
 					DISPAEE("MTKFB_SET_OVERLAY_LAYER ,layer_id invalid=%d\n",
 						layerInfo->layer_id);
+					return -EFAULT;
 				} else {
 					input = &session_input.config[session_input.config_layer_num++];
 					_convert_fb_layer_to_disp_input(layerInfo, input);
@@ -1418,6 +1426,9 @@ static int mtkfb_ioctl(struct fb_info *info, unsigned int cmd, unsigned long arg
 				return -EFAULT;
 
 			info->var.yoffset = var.yoffset;
+			/* check var.yoffset passed by user space */
+			if (info->var.yres + info->var.yoffset > info->var.yres_virtual)
+				info->var.yoffset = info->var.yres_virtual - info->var.yres;
 			init_framebuffer(info);
 
 			return mtkfb_pan_display_impl(&var, info);
@@ -1426,7 +1437,7 @@ static int mtkfb_ioctl(struct fb_info *info, unsigned int cmd, unsigned long arg
 
 	case MTKFB_GET_DEFAULT_UPDATESPEED:
 		{
-			unsigned int speed;
+			unsigned int speed = 0;
 
 			MTKFB_LOG("[MTKFB] get default update speed\n");
 			/* DISP_Get_Default_UpdateSpeed(&speed); */
@@ -1437,7 +1448,7 @@ static int mtkfb_ioctl(struct fb_info *info, unsigned int cmd, unsigned long arg
 
 	case MTKFB_GET_CURR_UPDATESPEED:
 		{
-			unsigned int speed;
+			unsigned int speed = 0;
 
 			MTKFB_LOG("[MTKFB] get current update speed\n");
 			/* DISP_Get_Current_UpdateSpeed(&speed); */
@@ -1448,7 +1459,7 @@ static int mtkfb_ioctl(struct fb_info *info, unsigned int cmd, unsigned long arg
 
 	case MTKFB_CHANGE_UPDATESPEED:
 		{
-			unsigned int speed;
+			unsigned int speed = 0;
 
 			MTKFB_LOG("[MTKFB] change update speed\n");
 
@@ -1681,14 +1692,20 @@ static int mtkfb_compat_ioctl(struct fb_info *info, unsigned int cmd, unsigned l
 	case COMPAT_MTKFB_CAPTURE_FRAMEBUFFER:
 		{
 			compat_ulong_t __user *data32;
-			unsigned long *pbuf;
+			unsigned long *pbuf = NULL;
 			compat_ulong_t l;
 
-			data32 = compat_ptr(arg);
 			pbuf = compat_alloc_user_space(sizeof(unsigned long));
-			ret = get_user(l, data32);
-			ret |= put_user(l, pbuf);
-			primary_display_capture_framebuffer_ovl(*pbuf, UFMT_BGRA8888);
+
+			if (!pbuf) {
+				DISPERR("[FB]: vmalloc capture src_pbuf failed! line:%d\n", __LINE__);
+				ret  = -EFAULT;
+			} else {
+				data32 = compat_ptr(arg);
+				ret = get_user(l, data32);
+				ret |= put_user(l, pbuf);
+				ret = mtkfb_ioctl(info, MTKFB_CAPTURE_FRAMEBUFFER, (unsigned long)pbuf);
+				}
 			break;
 		}
 	case COMPAT_MTKFB_TRIG_OVERLAY_OUT:
@@ -2004,7 +2021,10 @@ static int init_framebuffer(struct fb_info *info)
 	/*memset_io(buffer, 0, info->screen_size);*/
 
 	size = info->var.xres_virtual * info->var.yres * info->var.bits_per_pixel/8;
-	DISP_memset_io(buffer, 0, size);
+	if ((info->var.yres + info->var.yoffset <= info->var.yres_virtual) &&
+			info->var.yoffset >= 0)
+			DISP_memset_io(buffer, 0, size);
+
 	return 0;
 }
 
@@ -2184,63 +2204,53 @@ unsigned int is_lcm_inited = 0;
 unsigned int vramsize = 0;
 phys_addr_t fb_base = 0;
 static int is_videofb_parse_done;
-static int fb_early_init_dt_get_chosen(unsigned long node, const char *uname, int depth,
-				       void *p_ret_node)
-{
-	if (depth != 1 || (strcmp(uname, "chosen") != 0 && strcmp(uname, "chosen@0") != 0))
-		return 0;
-
-	*(unsigned long *)p_ret_node = node;
-	return 1;
-}
-
-int __parse_tag_videolfb_extra(unsigned long node)
+static int __parse_tag_videolfb_extra(struct device_node *node)
 {
 	uint32_t *prop;
 	int size = 0;
 	u32 fb_base_h, fb_base_l;
 
-	prop = (uint32_t *)of_get_flat_dt_prop(node, "atag,videolfb-fb_base_h", NULL);
+	prop = (uint32_t *)of_get_property(node, "atag,videolfb-fb_base_h", NULL);
 	if (!prop)
 		return -1;
 	fb_base_h = of_read_number(prop, 1);
 
-	prop = (uint32_t *)of_get_flat_dt_prop(node, "atag,videolfb-fb_base_l", NULL);
+	prop = (uint32_t *)of_get_property(node, "atag,videolfb-fb_base_l", NULL);
 	if (!prop)
 		return -1;
 	fb_base_l = of_read_number(prop, 1);
 
 	fb_base = ((u64) fb_base_h << 32) | (u64) fb_base_l;
 
-	prop = (uint32_t *)of_get_flat_dt_prop(node, "atag,videolfb-islcmfound", NULL);
+	prop = (uint32_t *)of_get_property(node, "atag,videolfb-islcmfound", NULL);
 	if (!prop)
 		return -1;
 	islcmconnected = of_read_number(prop, 1);
 
-	prop = (uint32_t *)of_get_flat_dt_prop(node, "atag,videolfb-islcm_inited", NULL);
+	prop = (uint32_t *)of_get_property(node, "atag,videolfb-islcm_inited", NULL);
 	if (!prop)
 		is_lcm_inited = 1;
 	else
 		is_lcm_inited = of_read_number(prop, 1);
 
-	prop = (uint32_t *)of_get_flat_dt_prop(node, "atag,videolfb-fps", NULL);
+	prop = (uint32_t *)of_get_property(node, "atag,videolfb-fps", NULL);
 	if (!prop)
 		return -1;
 	lcd_fps = of_read_number(prop, 1);
 	if (0 == lcd_fps)
 		lcd_fps = 6000;
 
-	prop = (uint32_t *)of_get_flat_dt_prop(node, "atag,videolfb-vramSize", NULL);
+	prop = (uint32_t *)of_get_property(node, "atag,videolfb-vramSize", NULL);
 	if (!prop)
 		return -1;
 	vramsize = of_read_number(prop, 1);
 
-	prop = (uint32_t *)of_get_flat_dt_prop(node, "atag,videolfb-fb_base_l", NULL);
+	prop = (uint32_t *)of_get_property(node, "atag,videolfb-fb_base_l", NULL);
 	if (!prop)
 		return -1;
 	fb_base_l = of_read_number(prop, 1);
 
-	prop = (uint32_t *)of_get_flat_dt_prop(node, "atag,videolfb-lcmname", &size);
+	prop = (uint32_t *)of_get_property(node, "atag,videolfb-lcmname", &size);
 	if (!prop)
 		return -1;
 	if (size >= sizeof(mtkfb_lcm_name)) {
@@ -2250,18 +2260,18 @@ int __parse_tag_videolfb_extra(unsigned long node)
 	memset((void *)mtkfb_lcm_name, 0, sizeof(mtkfb_lcm_name));
 	strncpy((char *)mtkfb_lcm_name, (char *)prop, sizeof(mtkfb_lcm_name));
 	mtkfb_lcm_name[size] = '\0';
-	pr_debug("__parse_tag_videolfb_extra done\n");
+	DISPMSG("__parse_tag_videolfb_extra done\n");
 	return 0;
 }
 
-int __parse_tag_videolfb(unsigned long node)
+static int __init __parse_tag_videolfb(struct device_node *node)
 {
 	struct tag_videolfb *videolfb_tag = NULL;
 
-	videolfb_tag = (struct tag_videolfb *)of_get_flat_dt_prop(node, "atag,videolfb", NULL);
+	videolfb_tag = (struct tag_videolfb *)of_get_property(node, "atag,videolfb", NULL);
 	if (videolfb_tag) {
 		memset((void *)mtkfb_lcm_name, 0, sizeof(mtkfb_lcm_name));
-		strcpy((char *)mtkfb_lcm_name, videolfb_tag->lcmname);
+		strncpy((char *)mtkfb_lcm_name, videolfb_tag->lcmname, sizeof(mtkfb_lcm_name));
 		mtkfb_lcm_name[strlen(videolfb_tag->lcmname)] = '\0';
 
 		lcd_fps = videolfb_tag->fps;
@@ -2282,19 +2292,22 @@ int __parse_tag_videolfb(unsigned long node)
 static int _parse_tag_videolfb(void)
 {
 	int ret;
-	unsigned long node = 0;
+	struct device_node *chosen_node;
 
 	DISPMSG("[DT][videolfb]isvideofb_parse_done = %d\n", is_videofb_parse_done);
 
 	if (is_videofb_parse_done)
 		return 0;
 
-	ret = of_scan_flat_dt(fb_early_init_dt_get_chosen, &node);
-	if (node) {
-		ret = __parse_tag_videolfb(node);
+	chosen_node = of_find_node_by_path("/chosen");
+	if (!chosen_node)
+		chosen_node = of_find_node_by_path("/chosen@0");
+
+	if (chosen_node) {
+		ret = __parse_tag_videolfb(chosen_node);
 		if (!ret)
 			goto found;
-		ret = __parse_tag_videolfb_extra(node);
+		ret = __parse_tag_videolfb_extra(chosen_node);
 		if (!ret)
 			goto found;
 	} else {

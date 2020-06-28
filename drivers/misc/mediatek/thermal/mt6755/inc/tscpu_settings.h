@@ -67,6 +67,7 @@ they means one reading is a avg of X samples */
 
 /* 1: thermal driver update temp to MET directly, use hrtimer; 0: turn off */
 #define THERMAL_DRV_UPDATE_TEMP_DIRECT_TO_MET  (1)
+#define THERMAL_INIT_VALUE (0xDA1)
 /*=============================================================
  * Chip related
  *=============================================================*/
@@ -217,6 +218,7 @@ struct mtk_cpu_power_info {
 extern int tscpu_debug_log;
 extern const struct of_device_id mt_thermal_of_match[2];
 extern int tscpu_bank_ts[THERMAL_BANK_NUM][ENUM_MAX];
+extern int tscpu_bank_ts_r[THERMAL_BANK_NUM][ENUM_MAX]; /* raw data */
 extern bank_t tscpu_g_bank[THERMAL_BANK_NUM];
 extern int tscpu_polling_trip_temp1;
 extern int tscpu_polling_trip_temp2;
@@ -341,6 +343,7 @@ extern void aee_rr_rec_thermal_temp5(u8 val);
 extern void aee_rr_rec_thermal_status(u8 val);
 extern void aee_rr_rec_thermal_ATM_status(u8 val);
 extern void aee_rr_rec_thermal_ktime(u64 val);
+extern void aee_rr_rec_thermal_wq_status(s8 val);
 
 extern u8 aee_rr_curr_thermal_temp1(void);
 extern u8 aee_rr_curr_thermal_temp2(void);
@@ -350,6 +353,7 @@ extern u8 aee_rr_curr_thermal_temp5(void);
 extern u8 aee_rr_curr_thermal_status(void);
 extern u8 aee_rr_curr_thermal_ATM_status(void);
 extern u64 aee_rr_curr_thermal_ktime(void);
+extern s8 aee_rr_curr_thermal_wq_status(void);
 #endif
 
 /*=============================================================

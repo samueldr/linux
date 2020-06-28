@@ -15,7 +15,9 @@
  */
 
 #include "tpd.h"
-#include "include/config0/gt9xx_config_v7003.h"
+//modify by qiangang 20171024 begin
+#include "include/config0/gt9xx_config.h" 
+//modify by qiangang 20171024 end
 #include "include/tpd_gt9xx_common.h"
 #include "mt_boot_common.h"
 
@@ -223,6 +225,40 @@ static struct i2c_driver tpd_i2c_driver = {
 static unsigned int tpd_rst_gpio;
 static unsigned int tpd_int_gpio;
 #endif
+
+
+
+//add by qiangang@wind-mobi.com 20170831 begin
+extern struct i2c_client *g_pstAF_I2Cclient;   //lihaiyan@wind-mobi.com 20160209 add
+
+static void AF_Into_Power_Down_Mode(void)                   // wangbing@wind-mobi.com 20170331 modify
+{
+	static char AF_flag = 0;
+	int ret = 0;
+	unsigned short AF_addr_temp = 0;
+	char AF_Cmd[2]={(char)(0x80),(char)(0x00)};//GF9762af power down mode
+
+	
+	
+	if((AF_flag == 0) && (g_pstAF_I2Cclient != NULL)) {
+		AF_addr_temp = g_pstAF_I2Cclient->addr;
+		g_pstAF_I2Cclient->addr = 0x18 >> 1;
+
+		ret = i2c_master_send(g_pstAF_I2Cclient, AF_Cmd, 2); 
+    	if (ret < 0) {
+        	printk("dingyisheng %s,GT9762AF into power down mode fail\n", __func__);
+			AF_flag = 0;
+		} else {
+			printk("dingyisheng %s,GT9762AF into power down mode success\n", __func__);
+			AF_flag = 0;
+		}
+		g_pstAF_I2Cclient->addr = AF_addr_temp;
+	}
+}
+//add by qiangang@wind-mobi.com 20170831 end
+
+
+
 static int of_get_gt9xx_platform_data(struct device *dev)
 {
 #if defined(CONFIG_OF) && !defined(CONFIG_GTP_USE_PINCTRL)
@@ -2006,12 +2042,13 @@ printk("qiangang enter gt917 tpd_i2c_probe 333 \n");
 #endif
 //qiangang@wind-mobi.com at 20170727 begin
 #ifdef CONFIG_WIND_DEVICE_INFO
-	sprintf(wind_device_info.ctp_module_info.ic_name,"GT917D");
-{
-		wind_device_info.ctp_module_info.fwvr = version_info;
-		wind_device_info.ctp_module_info.vendor = ver_gtp;  
-}
-#endif	
+    sprintf(wind_device_info.ctp_module_info.ic_name,"GT917D");
+    {
+        wind_device_info.ctp_module_info.fwvr = version_info;
+        wind_device_info.ctp_module_info.fwvr = (wind_device_info.ctp_module_info.fwvr << 8) + config[2];
+        wind_device_info.ctp_module_info.vendor = ver_gtp;
+    }
+#endif
 //qiangang@wind-mobi.com at 20170727 end
 
 	thread = kthread_run(touch_event_handler, 0, TPD_DEVICE);
@@ -2058,13 +2095,16 @@ printk("qiangang enter gt917 tpd_i2c_probe 333 \n");
 #ifdef CONFIG_GTP_CHARGER_DETECT
 	gtp_charger_switch(1);
 #endif
-
+//modify by qiangang@wind-mobi.com 20171225 begin
 #ifdef CONFIG_GTP_AUTO_UPDATE
-	ret = gup_init_update_proc(client);
-	if (ret < 0)
-		GTP_ERROR("Create update thread error.");
+	if(FACTORY_BOOT != get_boot_mode())
+	{
+		ret = gup_init_update_proc(client);
+		if (ret < 0)
+			GTP_ERROR("Create update thread error.");
+	}
 #endif
-
+//modify by qiangang@wind-mobi.com 20171225 end
 #ifdef CONFIG_GTP_PROXIMITY
 	/* obj_ps.self = cm3623_obj; */
 	obj_ps.polling = 0;				 /* 0--interrupt mode;1--polling mode; */
@@ -2341,6 +2381,8 @@ static void tpd_down(s32 x, s32 y, s32 size, s32 id)
 		input_report_abs(tpd->dev, ABS_MT_PRESSURE, 100);
 		input_report_abs(tpd->dev, ABS_MT_TOUCH_MAJOR, 100);
 	} else {
+	//modify by qiangang@wind-mobi.com 20171113 begin
+		#if 0 
 		if((id & 0x80)) {//pen
 			id = 10;
 			if(!size){
@@ -2351,7 +2393,10 @@ static void tpd_down(s32 x, s32 y, s32 size, s32 id)
 				input_report_abs(tpd->dev, ABS_MT_TOUCH_MAJOR, size);
 			}
 			input_report_abs(tpd->dev, ABS_MT_TOOL_TYPE, 1);
-		} else {//finger
+		} else 
+		#endif
+		{//finger
+	//modify by qiangang@wind-mobi.com 20171113 end
 			id = id & 0x0F;
 			input_report_abs(tpd->dev, ABS_MT_TOOL_TYPE, 0 );
 			input_report_abs(tpd->dev, ABS_MT_PRESSURE, size);
@@ -3170,6 +3215,9 @@ static void tpd_suspend(struct device *h)
 	s32 ret = -1;
 
 	GTP_INFO("System suspend.");
+	
+	AF_Into_Power_Down_Mode();//add by qiangang
+	
 #ifdef CONFIG_GTP_PROXIMITY
 	if (tpd_proximity_flag == 1)
 		return;
@@ -3232,7 +3280,6 @@ static void tpd_suspend(struct device *h)
 static void tpd_resume(struct device *h)
 {
 	s32 ret = -1;
-
 	GTP_INFO("System resume.");
 #ifdef CONFIG_GTP_PROXIMITY
 	if (tpd_proximity_flag == 1)

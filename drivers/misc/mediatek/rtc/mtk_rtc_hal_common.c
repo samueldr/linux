@@ -29,11 +29,18 @@
 #include <linux/platform_device.h>
 #include <linux/delay.h>
 #include <linux/types.h>
+#include <linux/sched.h>
 
 #include <mach/mt_rtc_hw.h>
 #include <mach/mtk_rtc_hal.h>
 #include <mtk_rtc_hal_common.h>
 #include <mt_pmic_wrap.h>
+/*#include <mt-plat/aee.h>*/
+
+#ifdef CONFIG_MTK_GPUREGULATOR_INTF
+/* Used for RT5735A SDA low workaround */
+#include "../power/mt6797/mtk_gpuregulator_intf.h"
+#endif
 
 #define hal_rtc_xinfo(fmt, args...)		\
 		pr_notice(fmt, ##args)
@@ -60,9 +67,19 @@ void rtc_write(u16 addr, u16 data)
 
 void rtc_busy_wait(void)
 {
+	unsigned long long t1, t2, t3;
+
 	do {
-		while (rtc_read(RTC_BBPU) & RTC_BBPU_CBUSY)
-			;
+		t1 = sched_clock();
+		t2 = t1;
+		while (rtc_read(RTC_BBPU) & RTC_BBPU_CBUSY) {
+			t3 = sched_clock();
+			if ((t3 - t2) > 500000000) {
+				t2 = t3;
+				hal_rtc_xerror("rtc_busy_wait too long: %lld(%lld:%lld), %x, %d\n",
+					t3-t1, t1, t3, rtc_read(RTC_BBPU), rtc_read(RTC_TC_SEC));
+			}
+		}
 	} while (0);
 }
 
@@ -122,6 +139,12 @@ void rtc_bbpu_pwrdown(bool auto_boot)
 {
 	u16 bbpu;
 
+#ifdef CONFIG_MTK_GPUREGULATOR_INTF
+	/* Used for RT5735A SDA low workaround */
+	if (rt_is_hw_exist())
+		rt_i2c7_switch_gpio_shutdown();
+#endif
+
 	if (auto_boot)
 		bbpu = RTC_BBPU_KEY | RTC_BBPU_AUTO | RTC_BBPU_PWREN;
 	else
@@ -138,9 +161,6 @@ void hal_rtc_set_spare_register(rtc_spare_enum cmd, u16 val)
 		tmp_val =
 		    rtc_read(rtc_spare_reg[cmd][RTC_REG]) & ~(rtc_spare_reg[cmd][RTC_MASK] <<
 							      rtc_spare_reg[cmd][RTC_SHIFT]);
-		hal_rtc_xinfo("rtc_spare_reg[%d] = {%d, %d, %d}\n", cmd,
-			      rtc_spare_reg[cmd][RTC_REG], rtc_spare_reg[cmd][RTC_MASK],
-			      rtc_spare_reg[cmd][RTC_SHIFT]);
 		rtc_write(rtc_spare_reg[cmd][RTC_REG],
 			  tmp_val | ((val & rtc_spare_reg[cmd][RTC_MASK]) <<
 				     rtc_spare_reg[cmd][RTC_SHIFT]));
@@ -165,6 +185,11 @@ u16 hal_rtc_get_spare_register(rtc_spare_enum cmd)
 
 static void rtc_get_tick(struct rtc_time *tm)
 {
+#ifdef RTC_INT_CNT
+	tm->tm_cnt = rtc_read(RTC_INT_CNT);
+#else
+	tm->tm_cnt = 0;
+#endif
 	tm->tm_sec = rtc_read(RTC_TC_SEC);
 	tm->tm_min = rtc_read(RTC_TC_MIN);
 	tm->tm_hour = rtc_read(RTC_TC_HOU);
@@ -181,7 +206,13 @@ void hal_rtc_get_tick_time(struct rtc_time *tm)
 	rtc_write(RTC_BBPU, bbpu);
 	rtc_write_trigger();
 	rtc_get_tick(tm);
+#ifdef RTC_INT_CNT
+	bbpu = rtc_read(RTC_BBPU) | RTC_BBPU_KEY | RTC_BBPU_RELOAD;
+	rtc_write(RTC_BBPU, bbpu);
+	if (rtc_read(RTC_INT_CNT) < tm->tm_cnt) {	/* SEC has carried */
+#else
 	if (rtc_read(RTC_TC_SEC) < tm->tm_sec) {	/* SEC has carried */
+#endif
 		rtc_get_tick(tm);
 	}
 }
@@ -283,6 +314,25 @@ void hal_rtc_read_rg(void)
 }
 
 #ifndef USER_BUILD_KERNEL
+static void rtc_lpd_reset(void)
+{
+	u16 con;
+
+	con = rtc_read(RTC_CON) | RTC_CON_LPEN;
+	con &= ~RTC_CON_LPRST;
+	rtc_write(RTC_CON, con);
+	rtc_write_trigger();
+
+	con |= RTC_CON_LPRST;
+	rtc_write(RTC_CON, con);
+	rtc_write_trigger();
+
+	con &= ~RTC_CON_LPRST;
+	rtc_write(RTC_CON, con);
+	rtc_write_trigger();
+
+}
+
 void rtc_lp_exception(void)
 {
 	u16 bbpu, irqsta, irqen, osc32;
@@ -297,9 +347,9 @@ void rtc_lp_exception(void)
 	prot = rtc_read(RTC_PROT);
 	con = rtc_read(RTC_CON);
 	sec1 = rtc_read(RTC_TC_SEC);
-	mdelay(2000);
+	/*mdelay(2000);*/
 	sec2 = rtc_read(RTC_TC_SEC);
-
+	rtc_lpd_reset();
 	hal_rtc_xfatal("!!! 32K WAS STOPPED !!!\n"
 		       "RTC_BBPU      = 0x%x\n"
 		       "RTC_IRQ_STA   = 0x%x\n"
@@ -312,6 +362,8 @@ void rtc_lp_exception(void)
 		       "RTC_TC_SEC    = %02d\n"
 		       "RTC_TC_SEC    = %02d\n",
 		       bbpu, irqsta, irqen, osc32, pwrkey1, pwrkey2, prot, con, sec1, sec2);
+	/*aee_kernel_warning("mtk_rtc_hal", "Need to check 32k @%s():%d\n", __func__, __LINE__);*/
+
 }
 #endif
 

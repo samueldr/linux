@@ -59,7 +59,7 @@ struct musb_ep;
 #ifdef CONFIG_MTK_KERNEL_POWER_OFF_CHARGING
 #include <mt-plat/mt_boot_common.h>
 #endif
-extern u32 fake_CDP;
+extern int fake_CDP;
 extern unsigned int musb_speed;
 
 extern struct musb *_mu3d_musb;
@@ -836,4 +836,7 @@ static inline int mtk_is_host_mode(void)
 extern int typec_switch_usb_disconnect(void *data);
 extern int typec_switch_usb_connect(void *data);
 #endif
+extern int mu3d_force_on;
+extern void mt_usb_connect(void);
+extern void mt_usb_connect_test(int start);
 #endif	/* __MUSB_CORE_H__ */

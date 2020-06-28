@@ -13,19 +13,10 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * General Public License for more details.
  *
- * Version:1.6
- * Revision Record:
- *      V1.0:  first release. by Andrew, 2012/08/27.
- *      V1.2:  modify gt9110p pid map, by Andrew, 2012/10/15
- *      V1.4:
- *          1. modify gup_enter_update_mode,
- *          2. rewrite i2c read/write func
- *          3. check update file checksum
- *                  by Andrew, 2012/12/12
- *      v1.6:
- *          1. delete GTP_FW_DOWNLOAD related things.
- *          2. add GTP_DEF_FW_UPDATE switch to update fw by gtp_default_fw in *.h directly
- *                  by Meta, 2013/04/18
+ * Version:1.2
+ *        V1.0:2012/05/01,create file.
+ *        V1.2:2012/10/17,reset_guitar etc.
+ *
  */
 
 #include "tpd.h"
@@ -83,8 +74,10 @@ static u32 gpDMABuf_pa;
 #endif
 static irqreturn_t tpd_eint_interrupt_handler(void);
 static int touch_event_handler(void *unused);
-static int tpd_i2c_probe(struct i2c_client *client, const struct i2c_device_id *id);
-static int tpd_i2c_detect(struct i2c_client *client, struct i2c_board_info *info);
+static int tpd_i2c_probe(struct i2c_client *client,
+			 const struct i2c_device_id *id);
+static int tpd_i2c_detect(struct i2c_client *client,
+			  struct i2c_board_info *info);
 static int tpd_i2c_remove(struct i2c_client *client);
 static void tpd_on(void);
 static void tpd_off(void);
@@ -107,7 +100,6 @@ static struct delayed_work gtp_esd_check_work;
 static struct workqueue_struct *gtp_esd_check_workqueue;
 static void gtp_esd_check_func(struct work_struct *);
 #endif
-
 
 #ifdef TPD_PROXIMITY
 #define TPD_PROXIMITY_VALID_REG                   0x814E
@@ -194,7 +186,7 @@ Output:
 *******************************************************/
 static u8 gtp_set_refresh_rate(u8 rate)
 {
-	u8 buf[3] = { GTP_REG_REFRESH_RATE >> 8, GTP_REG_REFRESH_RATE & 0xff, rate };
+	u8 buf[3] = {GTP_REG_REFRESH_RATE >> 8, GTP_REG_REFRESH_RATE & 0xff, rate};
 
 	if (rate > 0xf) {
 		GTP_ERROR("Refresh rate is over range (%d)", rate);
@@ -227,7 +219,8 @@ static u8 gtp_get_refresh_rate(void)
 }
 
 /* ============================================================= */
-static ssize_t show_refresh_rate(struct device *dev, struct device_attribute *attr, char *buf)
+static ssize_t show_refresh_rate(struct device *dev,
+				 struct device_attribute *attr, char *buf)
 {
 	int ret = gtp_get_refresh_rate();
 
@@ -238,7 +231,8 @@ static ssize_t show_refresh_rate(struct device *dev, struct device_attribute *at
 }
 
 static ssize_t store_refresh_rate(struct device *dev,
-				  struct device_attribute *attr, const char *buf, size_t size)
+				  struct device_attribute *attr,
+				  const char *buf, size_t size)
 {
 	unsigned long rate = 0;
 
@@ -248,7 +242,8 @@ static ssize_t store_refresh_rate(struct device *dev,
 	return size;
 }
 
-static DEVICE_ATTR(tpd_refresh_rate, 0664, show_refresh_rate, store_refresh_rate);
+static DEVICE_ATTR(tpd_refresh_rate, 0664, show_refresh_rate,
+		   store_refresh_rate);
 
 static struct device_attribute *gt9xx_attrs[] = {
 
@@ -257,7 +252,8 @@ static struct device_attribute *gt9xx_attrs[] = {
 
 /* ============================================================= */
 
-static int tpd_i2c_detect(struct i2c_client *client, struct i2c_board_info *info)
+static int tpd_i2c_detect(struct i2c_client *client,
+			  struct i2c_board_info *info)
 {
 	strcpy(info->type, "mtk-tpd");
 	return 0;
@@ -284,14 +280,18 @@ static s32 tpd_enable_ps(s32 enable)
 		GTP_INFO("TPD proximity function to be off.");
 	}
 
-	ret = i2c_write_bytes(i2c_client_point, TPD_PROXIMITY_ENABLE_REG, &state, 1);
+	ret =
+	    i2c_write_bytes(i2c_client_point, TPD_PROXIMITY_ENABLE_REG, &state,
+			    1);
 
 	if (ret < 0) {
-		GTP_ERROR("TPD %s proximity cmd failed.", state ? "enable" : "disable");
+		GTP_ERROR("TPD %s proximity cmd failed.",
+			  state ? "enable" : "disable");
 		return ret;
 	}
 
-	GTP_INFO("TPD proximity function %s success.", state ? "enable" : "disable");
+	GTP_INFO("TPD proximity function %s success.",
+		 state ? "enable" : "disable");
 	return 0;
 }
 
@@ -337,7 +337,9 @@ s32 tpd_ps_operate(void *self, u32 command, void *buff_in, s32 size_in,
 		break;
 
 	default:
-		GTP_ERROR("proxmy sensor operate function no this parameter %d!", command);
+		GTP_ERROR
+		    ("proxmy sensor operate function no this parameter %d!",
+		     command);
 		err = -1;
 		break;
 	}
@@ -346,7 +348,8 @@ s32 tpd_ps_operate(void *self, u32 command, void *buff_in, s32 size_in,
 }
 #endif
 
-static ssize_t gt91xx_config_read_proc(struct file *file, char *buffer, size_t count, loff_t *ppos)
+static ssize_t gt91xx_config_read_proc(struct file *file, char *buffer,
+				       size_t count, loff_t *ppos)
 {
 	char *ptr = NULL;
 	char *page = NULL;
@@ -374,7 +377,8 @@ static ssize_t gt91xx_config_read_proc(struct file *file, char *buffer, size_t c
 	ptr += sprintf(ptr, "\n");
 
 	ptr += sprintf(ptr, "==== GT9XX config real value====\n");
-	i2c_read_bytes(i2c_client_point, GTP_REG_CONFIG_DATA, temp_data, GTP_CONFIG_MAX_LENGTH);
+	i2c_read_bytes(i2c_client_point, GTP_REG_CONFIG_DATA, temp_data,
+		       GTP_CONFIG_MAX_LENGTH);
 
 	for (i = 0; i < GTP_CONFIG_MAX_LENGTH; i++) {
 		ptr += sprintf(ptr, "0x%02X ", temp_data[i]);
@@ -390,7 +394,9 @@ static ssize_t gt91xx_config_read_proc(struct file *file, char *buffer, size_t c
 	ptr +=
 	    sprintf(ptr, "Chip PID: %c%c%c  VID: 0x%02X%02X\n", temp_data[0],
 		    temp_data[1], temp_data[2], temp_data[5], temp_data[4]);
-	ptr += sprintf(ptr, "Driver VID: 0x%02X%02X\n", gtp_default_FW[12], gtp_default_FW[13]);
+	ptr +=
+	    sprintf(ptr, "Driver VID: 0x%02X%02X\n", gtp_default_FW[12],
+		    gtp_default_FW[13]);
 	i2c_read_bytes(i2c_client_point, 0x41E4, temp_data, 1);
 	ptr += sprintf(ptr, "Boot status 0x%X\n", temp_data[0]);
 
@@ -405,8 +411,8 @@ static ssize_t gt91xx_config_read_proc(struct file *file, char *buffer, size_t c
 	return size;
 }
 
-static ssize_t gt91xx_config_write_proc(struct file *file, const char *buffer, size_t count,
-					loff_t *ppos)
+static ssize_t gt91xx_config_write_proc(struct file *file, const char *buffer,
+					size_t count, loff_t *ppos)
 {
 	s32 ret = 0;
 	char temp[25] = { 0 };	/* for store special format cmd */
@@ -417,7 +423,8 @@ static ssize_t gt91xx_config_write_proc(struct file *file, const char *buffer, s
 	GTP_DEBUG("write count %ld", (unsigned long int)count);
 
 	if (count > GTP_CONFIG_MAX_LENGTH) {
-		GTP_ERROR("size not match [%d:%ld]", GTP_CONFIG_MAX_LENGTH, (unsigned long int)count);
+		GTP_ERROR("size not match [%d:%ld]", GTP_CONFIG_MAX_LENGTH,
+			  (unsigned long int)count);
 		return -EFAULT;
 	}
 
@@ -432,13 +439,15 @@ static ssize_t gt91xx_config_write_proc(struct file *file, const char *buffer, s
     /***********POLLING/EINT MODE switch****************/
 	if (strcmp(mode_str, "polling") == 0) {
 		if (mode >= 10 && mode <= 200) {
-			GTP_INFO("Switch to polling mode, polling time is %d", mode);
+			GTP_INFO("Switch to polling mode, polling time is %d",
+				 mode);
 			tpd_eint_mode = 0;
 			tpd_polling_time = mode;
 			tpd_flag = 1;
 			wake_up_interruptible(&waiter);
 		} else {
-			GTP_INFO("Wrong polling time, please set between 10~200ms");
+			GTP_INFO
+			    ("Wrong polling time, please set between 10~200ms");
 		}
 		return count;
 	}
@@ -474,7 +483,8 @@ static ssize_t gt91xx_config_write_proc(struct file *file, const char *buffer, s
     /**********************************************/
 	ret = gtp_send_cfg(i2c_client_point);
 	abs_x_max = (config[RESOLUTION_LOC + 1] << 8) + config[RESOLUTION_LOC];
-	abs_y_max = (config[RESOLUTION_LOC + 3] << 8) + config[RESOLUTION_LOC + 2];
+	abs_y_max =
+	    (config[RESOLUTION_LOC + 3] << 8) + config[RESOLUTION_LOC + 2];
 	int_type = (config[TRIGGER_LOC]) & 0x03;
 
 	if (ret < 0)
@@ -521,7 +531,8 @@ s32 i2c_dma_read(struct i2c_client *client, u16 addr, u8 *rxbuf, s32 len)
 		memcpy(rxbuf, gpDMABuf_va, len);
 		return 0;
 	}
-	GTP_ERROR("Dma I2C Read Error: 0x%04X, %d byte(s), err-code: %d", addr, len, ret);
+	GTP_ERROR("Dma I2C Read Error: 0x%04X, %d byte(s), err-code: %d", addr,
+		  len, ret);
 	return ret;
 }
 
@@ -554,11 +565,13 @@ s32 i2c_dma_write(struct i2c_client *client, u16 addr, u8 *txbuf, s32 len)
 			continue;
 		return 0;
 	}
-	GTP_ERROR("Dma I2C Write Error: 0x%04X, %d byte(s), err-code: %d", addr, len, ret);
+	GTP_ERROR("Dma I2C Write Error: 0x%04X, %d byte(s), err-code: %d", addr,
+		  len, ret);
 	return ret;
 }
 
-s32 i2c_read_bytes_dma(struct i2c_client *client, u16 addr, u8 *rxbuf, s32 len)
+s32 i2c_read_bytes_dma(struct i2c_client *client, u16 addr, u8 *rxbuf,
+		       s32 len)
 {
 	s32 left = len;
 	s32 read_len = 0;
@@ -584,7 +597,8 @@ s32 i2c_read_bytes_dma(struct i2c_client *client, u16 addr, u8 *rxbuf, s32 len)
 	return 0;
 }
 
-s32 i2c_write_bytes_dma(struct i2c_client *client, u16 addr, u8 *txbuf, s32 len)
+s32 i2c_write_bytes_dma(struct i2c_client *client, u16 addr, u8 *txbuf,
+			s32 len)
 {
 
 	s32 ret = 0;
@@ -611,7 +625,7 @@ s32 i2c_write_bytes_dma(struct i2c_client *client, u16 addr, u8 *txbuf, s32 len)
 	}
 	return 0;
 }
-#endif				/* GTP_SUPPORT_I2C_DMA */
+#endif /* GTP_SUPPORT_I2C_DMA */
 
 int i2c_read_bytes(struct i2c_client *client, u16 addr, u8 *rxbuf, int len)
 {
@@ -646,7 +660,8 @@ int i2c_read_bytes(struct i2c_client *client, u16 addr, u8 *rxbuf, int len)
 	if (rxbuf == NULL)
 		return -1;
 
-	GTP_DEBUG("i2c_read_bytes to device %02X address %04X len %d", client->addr, addr, len);
+	GTP_DEBUG("i2c_read_bytes to device %02X address %04X len %d",
+		  client->addr, addr, len);
 
 	while (left > 0) {
 		buffer[0] = ((addr + offset) >> 8) & 0xFF;
@@ -664,7 +679,8 @@ int i2c_read_bytes(struct i2c_client *client, u16 addr, u8 *rxbuf, int len)
 		}
 
 		if (i2c_transfer(client->adapter, &msg[0], 2) != 2) {
-			GTP_ERROR("I2C read 0x%X length=%d failed", addr + offset, len);
+			GTP_ERROR("I2C read 0x%X length=%d failed",
+				  addr + offset, len);
 			return -1;
 		}
 	}
@@ -718,14 +734,16 @@ int i2c_write_bytes(struct i2c_client *client, u16 addr, u8 *txbuf, int len)
 	if (txbuf == NULL)
 		return -1;
 
-	GTP_DEBUG("i2c_write_bytes to device %02X address %04X len %d", client->addr, addr, len);
+	GTP_DEBUG("i2c_write_bytes to device %02X address %04X len %d",
+		  client->addr, addr, len);
 
 	while (left > 0) {
 		buffer[0] = ((addr + offset) >> 8) & 0xFF;
 		buffer[1] = (addr + offset) & 0xFF;
 
 		if (left > MAX_I2C_TRANSFER_SIZE) {
-			memcpy(&buffer[GTP_ADDR_LENGTH], &txbuf[offset], MAX_I2C_TRANSFER_SIZE);
+			memcpy(&buffer[GTP_ADDR_LENGTH], &txbuf[offset],
+			       MAX_I2C_TRANSFER_SIZE);
 			msg.len = MAX_TRANSACTION_LENGTH;
 			left -= MAX_I2C_TRANSFER_SIZE;
 			offset += MAX_I2C_TRANSFER_SIZE;
@@ -738,7 +756,8 @@ int i2c_write_bytes(struct i2c_client *client, u16 addr, u8 *txbuf, int len)
 		/* GTP_DEBUG("byte left %d offset %d", left, offset); */
 
 		if (i2c_transfer(client->adapter, &msg, 1) != 1) {
-			GTP_ERROR("I2C write 0x%X%X length=%d failed", buffer[0], buffer[1], len);
+			GTP_ERROR("I2C write 0x%X%X length=%d failed",
+				  buffer[0], buffer[1], len);
 			return -1;
 		}
 	}
@@ -768,7 +787,8 @@ s32 gtp_i2c_write(struct i2c_client *client, u8 *buf, s32 len)
 	return ret;
 }
 
-s32 gtp_i2c_read_dbl_check(struct i2c_client *client, u16 addr, u8 *rxbuf, int len)
+s32 gtp_i2c_read_dbl_check(struct i2c_client *client, u16 addr, u8 *rxbuf,
+			   int len)
 {
 	u8 buf[16] = { 0 };
 	u8 confirm_buf[16] = { 0 };
@@ -817,15 +837,20 @@ s32 gtp_send_cfg(struct i2c_client *client)
 			GTP_DEBUG("Write charger config");
 			ret =
 			    gtp_i2c_write(client, config_charger,
-					  GTP_CONFIG_MAX_LENGTH + GTP_ADDR_LENGTH);
+					  GTP_CONFIG_MAX_LENGTH +
+					  GTP_ADDR_LENGTH);
 		} else {
 			GTP_DEBUG("Write normal config");
 			ret =
-			    gtp_i2c_write(client, config, GTP_CONFIG_MAX_LENGTH + GTP_ADDR_LENGTH);
+			    gtp_i2c_write(client, config,
+					  GTP_CONFIG_MAX_LENGTH +
+					  GTP_ADDR_LENGTH);
 		}
 
 #else
-		ret = gtp_i2c_write(client, config, GTP_CONFIG_MAX_LENGTH + GTP_ADDR_LENGTH);
+		ret =
+		    gtp_i2c_write(client, config,
+				  GTP_CONFIG_MAX_LENGTH + GTP_ADDR_LENGTH);
 #endif
 
 		if (ret > 0)
@@ -875,7 +900,8 @@ s32 gtp_read_version(struct i2c_client *client, u16 *version)
 		tpd_info.pid |= ((buf[i + 2] - 0x30) << ((2 - i) * 4));
 	}
 
-	GTP_INFO("IC VERSION:%c%c%c_%02x%02x", buf[2], buf[3], buf[4], buf[7], buf[6]);
+	GTP_INFO("IC VERSION:%c%c%c_%02x%02x", buf[2], buf[3], buf[4], buf[7],
+		 buf[6]);
 
 	return ret;
 }
@@ -902,16 +928,16 @@ static s32 gtp_init_panel(struct i2c_client *client)
 	u8 cfg_info_group1[] = CTP_CFG_GROUP1;
 	u8 cfg_info_group2[] = CTP_CFG_GROUP2;
 	u8 cfg_info_group3[] = CTP_CFG_GROUP3;
-	u8 *send_cfg_buf[3] = { cfg_info_group1, cfg_info_group2, cfg_info_group3 };
+	u8 *send_cfg_buf[3] = {cfg_info_group1, cfg_info_group2, cfg_info_group3};
 #ifdef GTP_CHARGER_DETECT
 	u8 cfg_info_group1_charger[] = CTP_CFG_GROUP1_CHARGER;
 	u8 cfg_info_group2_charger[] = CTP_CFG_GROUP2_CHARGER;
 	u8 cfg_info_group3_charger[] = CTP_CFG_GROUP3_CHARGER;
-	u8 *send_cfg_buf_charger[3] = { cfg_info_group1_charger, cfg_info_group2_charger,
+	u8 *send_cfg_buf_charger[3] = {cfg_info_group1_charger, cfg_info_group2_charger,
 		cfg_info_group3_charger
 	};
 #endif
-	u8 cfg_info_len[3] = { sizeof(cfg_info_group1) / sizeof(cfg_info_group1[0]),
+	u8 cfg_info_len[3] = {sizeof(cfg_info_group1) / sizeof(cfg_info_group1[0]),
 		sizeof(cfg_info_group2) / sizeof(cfg_info_group2[0]),
 		sizeof(cfg_info_group3) / sizeof(cfg_info_group3[0])
 	};
@@ -932,7 +958,8 @@ static s32 gtp_init_panel(struct i2c_client *client)
 		ret = gtp_i2c_read(client, rd_cfg_buf, 3);
 
 		if (ret < 0) {
-			GTP_ERROR("Read SENSOR ID failed,default use group1 config!");
+			GTP_ERROR
+			    ("Read SENSOR ID failed,default use group1 config!");
 			rd_cfg_buf[GTP_ADDR_LENGTH] = 0;
 			goto out;
 		}
@@ -942,7 +969,8 @@ static s32 gtp_init_panel(struct i2c_client *client)
 
 	GTP_INFO("SENSOR ID:%d", rd_cfg_buf[GTP_ADDR_LENGTH]);
 	memset(&config[GTP_ADDR_LENGTH], 0, GTP_CONFIG_MAX_LENGTH);
-	memcpy(&config[GTP_ADDR_LENGTH], send_cfg_buf[rd_cfg_buf[GTP_ADDR_LENGTH]], cfg_len);
+	memcpy(&config[GTP_ADDR_LENGTH],
+	       send_cfg_buf[rd_cfg_buf[GTP_ADDR_LENGTH]], cfg_len);
 #ifdef GTP_CHARGER_DETECT
 	memset(&config_charger[GTP_ADDR_LENGTH], 0, GTP_CONFIG_MAX_LENGTH);
 	memcpy(&config_charger[GTP_ADDR_LENGTH],
@@ -959,7 +987,7 @@ static s32 gtp_init_panel(struct i2c_client *client)
 		config[TRIGGER_LOC] &= 0xfe;
 	else if (GTP_INT_TRIGGER == 1)
 		config[TRIGGER_LOC] |= 0x01;
-#endif				/* endif GTP_CUSTOM_CFG */
+#endif /* endif GTP_CUSTOM_CFG */
 
 	check_sum = 0;
 
@@ -975,7 +1003,7 @@ static s32 gtp_init_panel(struct i2c_client *client)
 
 	config_charger[cfg_len] = (~check_sum) + 1;
 #endif
-#else				/* else DRIVER NEED NOT SEND CONFIG */
+#else /* else DRIVER NEED NOT SEND CONFIG */
 
 	if (cfg_len == 0)
 		cfg_len = GTP_CONFIG_MAX_LENGTH;
@@ -983,20 +1011,23 @@ static s32 gtp_init_panel(struct i2c_client *client)
 	ret = gtp_i2c_read(client, config, cfg_len + GTP_ADDR_LENGTH);
 
 	if (ret < 0) {
-		GTP_ERROR("GTP read resolution & max_touch_num failed, use default value!");
+		GTP_ERROR
+		    ("GTP read resolution & max_touch_num failed, use default value!");
 		abs_x_max = tpd_dts_data.tpd_resolution[0];
 		abs_y_max = tpd_dts_data.tpd_resolution[1];
 		int_type = GTP_INT_TRIGGER;
 		goto out;
 	}
-#endif				/* endif GTP_DRIVER_SEND_CFG */
+#endif /* endif GTP_DRIVER_SEND_CFG */
 
 	abs_x_max = (config[RESOLUTION_LOC + 1] << 8) + config[RESOLUTION_LOC];
-	abs_y_max = (config[RESOLUTION_LOC + 3] << 8) + config[RESOLUTION_LOC + 2];
+	abs_y_max =
+	    (config[RESOLUTION_LOC + 3] << 8) + config[RESOLUTION_LOC + 2];
 	int_type = (config[TRIGGER_LOC]) & 0x03;
 
 	if ((!abs_x_max) || (!abs_y_max)) {
-		GTP_ERROR("GTP resolution & max_touch_num invalid, use default value!");
+		GTP_ERROR
+		    ("GTP resolution & max_touch_num invalid, use default value!");
 		abs_x_max = tpd_dts_data.tpd_resolution[0];
 		abs_y_max = tpd_dts_data.tpd_resolution[1];
 	}
@@ -1005,11 +1036,16 @@ static s32 gtp_init_panel(struct i2c_client *client)
 		u8 have_key = 0;
 
 		if (is_950) {
-			driver_num = config[GTP_REG_MATRIX_DRVNUM - GTP_REG_CONFIG_DATA + 2];
-			sensor_num = config[GTP_REG_MATRIX_SENNUM - GTP_REG_CONFIG_DATA + 2];
+			driver_num =
+			    config[GTP_REG_MATRIX_DRVNUM - GTP_REG_CONFIG_DATA +
+				   2];
+			sensor_num =
+			    config[GTP_REG_MATRIX_SENNUM - GTP_REG_CONFIG_DATA +
+				   2];
 		} else {
 			driver_num =
-			    (config[CFG_LOC_DRVA_NUM] & 0x1F) + (config[CFG_LOC_DRVB_NUM] & 0x1F);
+			    (config[CFG_LOC_DRVA_NUM] & 0x1F) +
+			    (config[CFG_LOC_DRVB_NUM] & 0x1F);
 			sensor_num =
 			    (config[CFG_LOC_SENS_NUM] & 0x0F) +
 			    ((config[CFG_LOC_SENS_NUM] >> 4) & 0x0F);
@@ -1021,7 +1057,8 @@ static s32 gtp_init_panel(struct i2c_client *client)
 
 		GTP_DEBUG
 		    ("Driver * Sensor: %d * %d(Key: %d), X_MAX = %d, Y_MAX = %d, TRIGGER = 0x%02x",
-		     driver_num, sensor_num, have_key, abs_x_max, abs_y_max, int_type);
+		     driver_num, sensor_num, have_key, abs_x_max, abs_y_max,
+		     int_type);
 	} else
 #endif
 	{
@@ -1032,7 +1069,8 @@ static s32 gtp_init_panel(struct i2c_client *client)
 			goto out;
 		}
 
-		GTP_DEBUG("X_MAX = %d,Y_MAX = %d,TRIGGER = 0x%02x", abs_x_max, abs_y_max, int_type);
+		GTP_DEBUG("X_MAX = %d,Y_MAX = %d,TRIGGER = 0x%02x", abs_x_max,
+			  abs_y_max, int_type);
 	}
 	msleep(20);
 out:
@@ -1050,7 +1088,6 @@ static s8 gtp_i2c_test(struct i2c_client *client)
 
 	while (retry++ < 5) {
 		ret = i2c_read_bytes(client, GTP_REG_HW_INFO, (u8 *)&hw_info, sizeof(hw_info));
-
 		if ((!ret) && (hw_info == 0x00900600))
 			return ret;
 
@@ -1182,7 +1219,8 @@ void gtp_get_chip_type(struct i2c_client *client)
 	ret = gtp_i2c_read_dbl_check(client, GTP_REG_CHIP_TYPE, opr_buf, 10);
 
 	if (FAIL == ret) {
-		GTP_ERROR("Failed to get chip-type, set chip type default: GOODIX_GT9");
+		GTP_ERROR
+		    ("Failed to get chip-type, set chip type default: GOODIX_GT9");
 		gtp_chip_type = CHIP_TYPE_GT9;
 		return;
 	}
@@ -1191,7 +1229,9 @@ void gtp_get_chip_type(struct i2c_client *client)
 		gtp_chip_type = CHIP_TYPE_GT9;
 	else
 		gtp_chip_type = CHIP_TYPE_GT9F;
-	GTP_INFO("Chip Type: %s", (gtp_chip_type == CHIP_TYPE_GT9) ? "GOODIX_GT9" : "GOODIX_GT9F");
+	GTP_INFO("Chip Type: %s",
+		 (gtp_chip_type ==
+		  CHIP_TYPE_GT9) ? "GOODIX_GT9" : "GOODIX_GT9F");
 }
 
 static u8 gtp_bak_ref_proc(struct i2c_client *client, u8 mode)
@@ -1207,13 +1247,13 @@ static u8 gtp_bak_ref_proc(struct i2c_client *client, u8 mode)
 	s32 ref_chksum = 0;
 	u16 tmp = 0;
 
-	GTP_DEBUG("[gtp_bak_ref_proc]Driver:%d,Sensor:%d.", driver_num, sensor_num);
+	GTP_DEBUG("[gtp_bak_ref_proc]Driver:%d,Sensor:%d.", driver_num,
+		  sensor_num);
 
 	/* check file-system mounted */
 	GTP_DEBUG("[gtp_bak_ref_proc]Waiting for FS %d", gtp_ref_retries);
 	if (gup_check_fs_mounted("/data") == FAIL) {
-		if ((gtp_ref_retries % 10) == 0)
-			GTP_DEBUG("[gtp_bak_ref_proc]/data not mounted");
+		GTP_DEBUG("[gtp_bak_ref_proc]/data not mounted");
 		if (gtp_ref_retries++ < GTP_CHK_FS_MNT_MAX)
 			return FAIL;
 	} else {
@@ -1232,7 +1272,8 @@ static u8 gtp_bak_ref_proc(struct i2c_client *client, u8 mode)
 
 	refp = kzalloc(ref_len, GFP_KERNEL);
 	if (refp == NULL) {
-		GTP_ERROR("[gtp_bak_ref_proc]Alloc memory for ref failed.use default ref");
+		GTP_ERROR
+		    ("[gtp_bak_ref_proc]Alloc memory for ref failed.use default ref");
 		return FAIL;
 	}
 	memset(refp, 0, ref_len);
@@ -1245,15 +1286,17 @@ static u8 gtp_bak_ref_proc(struct i2c_client *client, u8 mode)
 			ret = FAIL;
 		}
 
-		GTP_ERROR("[gtp_bak_ref_proc]Bak file or path is not exist,send default ref.");
+		GTP_ERROR
+		    ("[gtp_bak_ref_proc]Bak file or path is not exist,send default ref.");
 		ret = SUCCESS;
 		goto exit_ref_proc;
 	}
 
 	/* get ref file data */
 	flp = filp_open(GTP_BAK_REF_PATH, O_RDWR | O_CREAT, 0660);
-	if (flp ==  NULL || IS_ERR(flp)) {
-		GTP_ERROR("[gtp_bak_ref_proc]Ref File not found!Creat ref file.");
+	if (IS_ERR(flp)) {
+		GTP_ERROR
+		    ("[gtp_bak_ref_proc]Ref File not found!Creat ref file.");
 		/* flp->f_op->llseek(flp, 0, SEEK_SET); */
 		/* flp->f_op->write(flp, (char *)refp, ref_len, &flp->f_pos); */
 		gtp_ref_retries++;
@@ -1268,10 +1311,6 @@ static u8 gtp_bak_ref_proc(struct i2c_client *client, u8 mode)
 		}
 	}
 
-	if (flp && !IS_ERR(flp)) {
-		filp_close(flp, NULL);
-		flp = NULL;
-	}
 	if (GTP_BAK_REF_STORE == mode) {
 		ret = i2c_read_bytes(client, 0x99D0, refp, ref_len);
 		if (-1 == ret) {
@@ -1279,11 +1318,8 @@ static u8 gtp_bak_ref_proc(struct i2c_client *client, u8 mode)
 			ret = FAIL;
 			goto exit_ref_proc;
 		}
-		flp = filp_open(GTP_BAK_REF_PATH, O_RDWR | O_CREAT, 0660);
-		if (flp && !IS_ERR(flp)) {
-			flp->f_op->llseek(flp, 0, SEEK_SET);
-			flp->f_op->write(flp, (char *)refp, ref_len, &flp->f_pos);
-		}
+		flp->f_op->llseek(flp, 0, SEEK_SET);
+		flp->f_op->write(flp, (char *)refp, ref_len, &flp->f_pos);
 	} else {
 		/* checksum ref file */
 		for (j = 0; j < ref_grps; ++j) {
@@ -1294,7 +1330,8 @@ static u8 gtp_bak_ref_proc(struct i2c_client *client, u8 mode)
 				     refp[i + 1 + j * ref_seg_len]);
 			}
 
-			GTP_DEBUG("[gtp_bak_ref_proc]Calc ref chksum:0x%04X", ref_chksum & 0xFF);
+			GTP_DEBUG("[gtp_bak_ref_proc]Calc ref chksum:0x%04X",
+				  ref_chksum & 0xFF);
 			tmp =
 			    ref_chksum +
 			    (refp[ref_seg_len + j * ref_seg_len - 2] << 8) +
@@ -1305,7 +1342,8 @@ static u8 gtp_bak_ref_proc(struct i2c_client *client, u8 mode)
 				memset(&refp[j * ref_seg_len], 0, ref_seg_len);
 				refp[ref_seg_len - 1 + j * ref_seg_len] = 0x01;
 			} else {
-				GTP_DEBUG("[gtp_bak_ref_proc]Ref file chksum success.");
+				GTP_DEBUG
+				    ("[gtp_bak_ref_proc]Ref file chksum success.");
 			}
 
 		}
@@ -1322,10 +1360,8 @@ static u8 gtp_bak_ref_proc(struct i2c_client *client, u8 mode)
 
 exit_ref_proc:
 	kfree(refp);
-	if (flp && !IS_ERR(flp)) {
+	if (!IS_ERR(flp))
 		filp_close(flp, NULL);
-		flp = NULL;
-	}
 	return ret;
 }
 
@@ -1386,8 +1422,7 @@ static u8 gtp_check_clk_legality(void)
 		GTP_INFO("Clk ram legality check success");
 		return SUCCESS;
 	}
-	if ((gtp_clk_retries % 10) == 0)
-		GTP_ERROR("main clock freq in clock buf is wrong");
+	GTP_ERROR("main clock freq in clock buf is wrong");
 	return FAIL;
 }
 
@@ -1406,17 +1441,19 @@ static u8 gtp_main_clk_proc(struct i2c_client *client)
 
 	GTP_DEBUG("[gtp_main_clk_proc]Waiting for FS %d", gtp_ref_retries);
 	if (gup_check_fs_mounted("/data") == FAIL) {
-		if ((gtp_clk_retries % 10) == 0)
-			GTP_DEBUG("[gtp_main_clk_proc]/data not mounted");
+		GTP_DEBUG("[gtp_main_clk_proc]/data not mounted");
 		if (gtp_clk_retries++ < GTP_CHK_FS_MNT_MAX)
 			return FAIL;
-		GTP_ERROR("[gtp_main_clk_proc]Wait for file system timeout,need cal clk");
+		GTP_ERROR
+		    ("[gtp_main_clk_proc]Wait for file system timeout,need cal clk");
 	} else {
 		GTP_DEBUG("[gtp_main_clk_proc]/data mounted !!!!");
 		flp = filp_open(GTP_MAIN_CLK_PATH, O_RDWR | O_CREAT, 0660);
-		if (!IS_ERR(flp) && (flp != NULL)) {
+		if (!IS_ERR(flp)) {
 			flp->f_op->llseek(flp, 0, SEEK_SET);
-			ret = flp->f_op->read(flp, (char *)gtp_clk_buf, 6, &flp->f_pos);
+			ret =
+			    flp->f_op->read(flp, (char *)gtp_clk_buf, 6,
+					    &flp->f_pos);
 			if (ret > 0) {
 				ret = gtp_check_clk_legality();
 				if (SUCCESS == ret) {
@@ -1424,12 +1461,10 @@ static u8 gtp_main_clk_proc(struct i2c_client *client)
 					    ("[gtp_main_clk_proc]Open & read & check clk file success.");
 					goto send_main_clk;
 				}
-			} else {
-				filp_close(flp, NULL);
-				flp = NULL;
 			}
 		}
-		GTP_ERROR("[gtp_main_clk_proc]Check clk file failed,need cal clk");
+		GTP_ERROR
+		    ("[gtp_main_clk_proc]Check clk file failed,need cal clk");
 	}
 
 	/* cal clk */
@@ -1456,17 +1491,14 @@ static u8 gtp_main_clk_proc(struct i2c_client *client)
 	}
 	gtp_clk_buf[5] = 0 - clk_chksum;
 
-	flp = filp_open(GTP_MAIN_CLK_PATH, O_RDWR | O_CREAT, 0660);
-	if (!IS_ERR(flp) && (flp != NULL)) {
+	if (IS_ERR(flp)) {
+		flp = filp_open(GTP_MAIN_CLK_PATH, O_RDWR | O_CREAT, 0660);
+	} else {
 		flp->f_op->llseek(flp, 0, SEEK_SET);
 		flp->f_op->write(flp, (char *)gtp_clk_buf, 6, &flp->f_pos);
 	}
 
 send_main_clk:
-	if (flp && !IS_ERR(flp)) {
-		filp_close(flp, NULL);
-		flp = NULL;
-	}
 
 	ret = i2c_write_bytes(client, 0x8020, gtp_clk_buf, 6);
 	if (-1 == ret) {
@@ -1474,14 +1506,15 @@ send_main_clk:
 		ret = FAIL;
 		goto exit_clk_proc;
 	}
+	if (flp && !IS_ERR(flp))
+		filp_close(flp, NULL);
 
 	ret = SUCCESS;
-	return ret;
+	return SUCCESS;
 exit_clk_proc:
 
 	if (flp && !IS_ERR(flp)) {	/* RMT add */
 		filp_close(flp, NULL);
-		flp = NULL;
 	}
 	return ret;
 }
@@ -1499,7 +1532,9 @@ static int tpd_clear_config(void *unused)
 	GTP_INFO("Clear Config Begin......");
 	msleep(10000);		/* wait main thread to be completed */
 
-	ret = i2c_read_bytes(i2c_client_point, GTP_REG_CONFIG_DATA, &temp_data, 1);
+	ret =
+	    i2c_read_bytes(i2c_client_point, GTP_REG_CONFIG_DATA, &temp_data,
+			   1);
 	if (ret < 0) {
 		GTP_ERROR("GTP read config failed!");
 		return -1;
@@ -1509,7 +1544,8 @@ static int tpd_clear_config(void *unused)
 		 temp_data, config[GTP_ADDR_LENGTH]);
 	if ((temp_data < (u8) 0x5A) && (temp_data > config[GTP_ADDR_LENGTH])) {
 		memset(&config_1st[GTP_ADDR_LENGTH], 0, GTP_CONFIG_MAX_LENGTH);
-		memcpy(&config_1st[GTP_ADDR_LENGTH], &config[GTP_ADDR_LENGTH], cfg_len);
+		memcpy(&config_1st[GTP_ADDR_LENGTH], &config[GTP_ADDR_LENGTH],
+		       cfg_len);
 		config_1st[GTP_ADDR_LENGTH] = 0;
 		check_sum = 0;
 
@@ -1536,7 +1572,8 @@ static const struct file_operations gt_upgrade_proc_fops = {
 	.read = gt91xx_config_read_proc
 };
 
-static s32 tpd_i2c_probe(struct i2c_client *client, const struct i2c_device_id *id)
+static s32 tpd_i2c_probe(struct i2c_client *client,
+			 const struct i2c_device_id *id)
 {
 	s32 err = 0;
 	s32 ret = 0;
@@ -1561,7 +1598,9 @@ static s32 tpd_i2c_probe(struct i2c_client *client, const struct i2c_device_id *
 	thread = kthread_run(tpd_clear_config, 0, "mtk-tpd-clear-config");
 	if (IS_ERR(thread)) {
 		err = PTR_ERR(thread);
-		GTP_INFO(TPD_DEVICE " failed to create kernel thread for clearing config: %d", err);
+		GTP_INFO(TPD_DEVICE
+			 " failed to create kernel thread for clearing config: %d",
+			 err);
 	}
 	thread = NULL;
 #endif
@@ -1597,9 +1636,11 @@ static s32 tpd_i2c_probe(struct i2c_client *client, const struct i2c_device_id *
 	}
 
 	gt91xx_config_proc =
-	    proc_create(GT91XX_CONFIG_PROC_FILE, 0660, NULL, &gt_upgrade_proc_fops);
+	    proc_create(GT91XX_CONFIG_PROC_FILE, 0660, NULL,
+			&gt_upgrade_proc_fops);
 	if (gt91xx_config_proc == NULL)
-		GTP_ERROR("create_proc_entry %s failed\n", GT91XX_CONFIG_PROC_FILE);
+		GTP_ERROR("create_proc_entry %s failed\n",
+			  GT91XX_CONFIG_PROC_FILE);
 
 #if GTP_CREATE_WR_NODE
 	init_wr_node(client);
@@ -1619,7 +1660,8 @@ static s32 tpd_i2c_probe(struct i2c_client *client, const struct i2c_device_id *
 		ret = request_irq(touch_irq,
 				  (irq_handler_t) tpd_eint_interrupt_handler,
 				  !int_type ? IRQF_TRIGGER_RISING :
-				  IRQF_TRIGGER_FALLING, "TOUCH_PANEL-eint", NULL);
+				  IRQF_TRIGGER_FALLING, "TOUCH_PANEL-eint",
+				  NULL);
 		if (ret > 0) {
 			ret = -1;
 			GTP_ERROR("tpd request_irq IRQ LINE NOT AVAILABLE!.");
@@ -1643,7 +1685,8 @@ static s32 tpd_i2c_probe(struct i2c_client *client, const struct i2c_device_id *
 #if GTP_ESD_PROTECT
 	INIT_DELAYED_WORK(&gtp_esd_check_work, gtp_esd_check_func);
 	gtp_esd_check_workqueue = create_workqueue("gtp_esd_check");
-	queue_delayed_work(gtp_esd_check_workqueue, &gtp_esd_check_work, TPD_ESD_CHECK_CIRCLE);
+	queue_delayed_work(gtp_esd_check_workqueue, &gtp_esd_check_work,
+			   TPD_ESD_CHECK_CIRCLE);
 #endif
 
 #ifdef GTP_CHARGER_DETECT
@@ -1701,7 +1744,8 @@ static void gtp_charger_check_func(struct work_struct *work)
 
 	if (!tpd_halt) {
 		queue_delayed_work(gtp_charger_check_workqueue,
-				   &gtp_charger_check_work, TPD_CHARGER_CHECK_CIRCLE);
+				   &gtp_charger_check_work,
+				   TPD_CHARGER_CHECK_CIRCLE);
 	}
 }
 #endif
@@ -1750,14 +1794,16 @@ static void force_reset_guitar(void)
 			/* check code ram */
 			ret = gup_fw_download_proc(NULL, GTP_FL_ESD_RECOVERY);
 			if (FAIL == ret) {
-				GTP_ERROR("[force_reset_guitar]Check & repair fw failed.");
+				GTP_ERROR
+				    ("[force_reset_guitar]Check & repair fw failed.");
 				continue;
 			}
 			tpd_halt = 1;
 			/* startup fw */
 			ret = gtp_fw_startup(i2c_client_point);
 			if (FAIL == ret) {
-				GTP_ERROR("[force_reset_guitar]Startup fw failed.");
+				GTP_ERROR
+				    ("[force_reset_guitar]Startup fw failed.");
 				continue;
 			}
 			tpd_halt = 0;
@@ -1842,7 +1888,8 @@ static void tpd_down(s32 x, s32 y, s32 size, s32 id)
 
 	/*MMProfileLogEx(MMP_TouchPanelEvent, MMProfileFlagPulse, 1, x + y); */
 	if (tpd_dts_data.use_tpd_button) {
-		if (FACTORY_BOOT == get_boot_mode() || RECOVERY_BOOT == get_boot_mode())
+		if (FACTORY_BOOT == get_boot_mode()
+		    || RECOVERY_BOOT == get_boot_mode())
 			tpd_button(x, y, 1);
 	}
 }
@@ -1854,13 +1901,15 @@ static void tpd_up(s32 x, s32 y, s32 id)
 	/* input_report_abs(tpd->dev, ABS_MT_TOUCH_MAJOR, 0); */
 	input_mt_sync(tpd->dev);
 	TPD_DEBUG_SET_TIME;
-	TPD_EM_PRINT(tpd_history_x, tpd_history_y, tpd_history_x, tpd_history_y, id, 0);
+	TPD_EM_PRINT(tpd_history_x, tpd_history_y, tpd_history_x, tpd_history_y,
+		     id, 0);
 	tpd_history_x = 0;
 	tpd_history_y = 0;
 
 	/*MMProfileLogEx(MMP_TouchPanelEvent, MMProfileFlagPulse, 0, x + y); */
 	if (tpd_dts_data.use_tpd_button) {
-		if (FACTORY_BOOT == get_boot_mode() || RECOVERY_BOOT == get_boot_mode())
+		if (FACTORY_BOOT == get_boot_mode()
+		    || RECOVERY_BOOT == get_boot_mode())
 			tpd_button(x, y, 0);
 	}
 }
@@ -1872,16 +1921,18 @@ static void tpd_calibrate_driver(int *x, int *y)
 
 	GTP_DEBUG("Call tpd_calibrate of this driver ..\n");
 
-	tx = ((tpd_def_calmat[0] * (*x)) + (tpd_def_calmat[1] * (*y)) + (tpd_def_calmat[2])) >> 12;
-	*y = ((tpd_def_calmat[3] * (*x)) + (tpd_def_calmat[4] * (*y)) + (tpd_def_calmat[5])) >> 12;
+	tx = ((tpd_def_calmat[0] * (*x)) + (tpd_def_calmat[1] * (*y)) +
+	      (tpd_def_calmat[2])) >> 12;
+	*y = ((tpd_def_calmat[3] * (*x)) + (tpd_def_calmat[4] * (*y)) +
+	      (tpd_def_calmat[5])) >> 12;
 	*x = tx;
 }
 
 static int touch_event_handler(void *unused)
 {
-	struct sched_param param = {.sched_priority = 4 };
-	u8 end_cmd[3] = { GTP_READ_COOR_ADDR >> 8, GTP_READ_COOR_ADDR & 0xFF, 0 };
-	u8 point_data[2 + 1 + 8 * GTP_MAX_TOUCH + 1] = { GTP_READ_COOR_ADDR >> 8,
+	struct sched_param param = {.sched_priority = RTPM_PRIO_TPD};
+	u8 end_cmd[3] = {GTP_READ_COOR_ADDR >> 8, GTP_READ_COOR_ADDR & 0xFF, 0};
+	u8 point_data[2 + 1 + 8 * GTP_MAX_TOUCH + 1] = {GTP_READ_COOR_ADDR >> 8,
 		GTP_READ_COOR_ADDR & 0xFF
 	};
 	u8 touch_num = 0;
@@ -1897,7 +1948,7 @@ static int touch_event_handler(void *unused)
 	s32 i = 0;
 	s32 ret = -1;
 #if GTP_COMPATIBLE_MODE
-	u8 rqst_data[3] = { (u8) (GTP_REG_RQST >> 8), (u8) (GTP_REG_RQST & 0xFF), 0 };
+	u8 rqst_data[3] = {(u8)(GTP_REG_RQST >> 8), (u8) (GTP_REG_RQST & 0xFF), 0};
 #endif
 #ifdef TPD_PROXIMITY
 	s32 err = 0;
@@ -1941,18 +1992,21 @@ static int touch_event_handler(void *unused)
 		if ((finger == 0x00) && (CHIP_TYPE_GT9F == gtp_chip_type)) {
 			ret = gtp_i2c_read(i2c_client_point, rqst_data, 3);
 			if (ret < 0) {
-				GTP_ERROR("I2C transfer error. errno:%d\n ", ret);
+				GTP_ERROR("I2C transfer error. errno:%d\n ",
+					  ret);
 				goto exit_work_func;
 			}
 			switch (rqst_data[2] & 0x0F) {
 			case GTP_RQST_BAK_REF:
-				if ((gtp_ref_retries % 10) == 0)
-					GTP_INFO("Request Ref.");
-				ret = gtp_bak_ref_proc(i2c_client_point, GTP_BAK_REF_SEND);
+				GTP_INFO("Request Ref.");
+				ret =
+				    gtp_bak_ref_proc(i2c_client_point,
+						     GTP_BAK_REF_SEND);
 				if (SUCCESS == ret) {
 					GTP_INFO("Send ref success.");
 					rqst_data[2] = GTP_RQST_RESPONDED;
-					gtp_i2c_write(i2c_client_point, rqst_data, 3);
+					gtp_i2c_write(i2c_client_point,
+						      rqst_data, 3);
 				}
 				goto exit_work_func;
 			case GTP_RQST_CONFIG:
@@ -1963,18 +2017,19 @@ static int touch_event_handler(void *unused)
 				} else {
 					GTP_INFO("Send config success.");
 					rqst_data[2] = GTP_RQST_RESPONDED;
-					gtp_i2c_write(i2c_client_point, rqst_data, 3);
+					gtp_i2c_write(i2c_client_point,
+						      rqst_data, 3);
 				}
 				goto exit_work_func;
 			case GTP_RQST_MAIN_CLOCK:
-				if ((gtp_clk_retries % 10) == 0)
-					GTP_INFO("Request main clock.");
+				GTP_INFO("Request main clock.");
 				rqst_processing = 1;
 				ret = gtp_main_clk_proc(i2c_client_point);
 				if (SUCCESS == ret) {
 					GTP_INFO("Send main clk success.");
 					rqst_data[2] = GTP_RQST_RESPONDED;
-					gtp_i2c_write(i2c_client_point, rqst_data, 3);
+					gtp_i2c_write(i2c_client_point,
+						      rqst_data, 3);
 					rqst_processing = 0;
 				}
 				goto exit_work_func;
@@ -1990,7 +2045,7 @@ static int touch_event_handler(void *unused)
 
 		if ((finger & 0x80) == 0) {
 			/* mt_eint_unmask(CUST_EINT_TOUCH_PANEL_NUM); */
-			/*enable_irq(touch_irq);*/
+			/*enable_irq(touch_irq); */
 			mutex_unlock(&i2c_access);
 			GTP_ERROR("buffer not ready");
 			continue;
@@ -2011,16 +2066,21 @@ static int touch_event_handler(void *unused)
 
 			/* get raw data */
 			GTP_DEBUG(" ps change");
-			GTP_DEBUG("PROXIMITY STATUS:0x%02X", tpd_proximity_detect);
+			GTP_DEBUG("PROXIMITY STATUS:0x%02X",
+				  tpd_proximity_detect);
 			/* map and store data to hwm_sensor_data */
 			sensor_data.values[0] = tpd_get_ps_value();
 			sensor_data.value_divide = 1;
 			sensor_data.status = SENSOR_STATUS_ACCURACY_MEDIUM;
 			/* report to the up-layer */
-			ret = hwmsen_get_interrupt_data(ID_PROXIMITY, &sensor_data);
+			ret =
+			    hwmsen_get_interrupt_data(ID_PROXIMITY,
+						      &sensor_data);
 
 			if (ret)
-				GTP_ERROR("Call hwmsen_get_interrupt_data fail = %d", err);
+				GTP_ERROR
+				    ("Call hwmsen_get_interrupt_data fail = %d",
+				     err);
 		}
 #endif
 
@@ -2032,11 +2092,12 @@ static int touch_event_handler(void *unused)
 		}
 
 		if (touch_num > 1) {
-			u8 buf[8 * GTP_MAX_TOUCH] = { (GTP_READ_COOR_ADDR + 10) >> 8,
+			u8 buf[8 * GTP_MAX_TOUCH] = {(GTP_READ_COOR_ADDR + 10) >> 8,
 				(GTP_READ_COOR_ADDR + 10) & 0xff
 			};
 
-			ret = gtp_i2c_read(i2c_client_point, buf, 2 + 8 * (touch_num - 1));
+			ret = gtp_i2c_read(i2c_client_point, buf,
+					 2 + 8 * (touch_num - 1));
 			memcpy(&point_data[12], &buf[2], 8 * (touch_num - 1));
 		}
 #if GTP_HAVE_TOUCH_KEY
@@ -2046,9 +2107,14 @@ static int touch_event_handler(void *unused)
 			for (i = 0; i < TPD_KEY_COUNT; i++) {
 				/* input_report_key(tpd->dev, touch_key_array[i], key_value & (0x01 << i)); */
 				if (key_value & (0x01 << i)) {	/* key=1 menu ;key=2 home; key =4 back; */
-					input_x = touch_key_point_maping_array[i].point_x;
-					input_y = touch_key_point_maping_array[i].point_y;
-					GTP_DEBUG("button =%d %d", input_x, input_y);
+					input_x =
+					    touch_key_point_maping_array[i].
+					    point_x;
+					input_y =
+					    touch_key_point_maping_array[i].
+					    point_y;
+					GTP_DEBUG("button =%d %d", input_x,
+						  input_y);
 
 					tpd_down(input_x, input_y, 0, 0);
 				}
@@ -2075,7 +2141,8 @@ static int touch_event_handler(void *unused)
 				input_w = coor_data[5] | coor_data[6] << 8;
 
 				GTP_DEBUG
-				    ("Original touch point : [X:%04d, Y:%04d]", input_x, input_y);
+				    ("Original touch point : [X:%04d, Y:%04d]",
+				     input_x, input_y);
 
 				input_x = TPD_WARP_X(abs_x_max, input_x);
 				input_y = TPD_WARP_Y(abs_y_max, input_y);
@@ -2114,7 +2181,7 @@ exit_work_func:
 				GTP_INFO("I2C write end_cmd  error!");
 		}
 		/* mt_eint_unmask(CUST_EINT_TOUCH_PANEL_NUM); */
-		/* enable_irq(touch_irq);*/
+		/* enable_irq(touch_irq); */
 		mutex_unlock(&i2c_access);
 
 	} while (!kthread_should_stop());
@@ -2125,9 +2192,9 @@ exit_work_func:
 static int tpd_local_init(void)
 {
 #ifdef TPD_POWER_SOURCE_CUSTOM
-		tpd->reg = regulator_get(tpd->tpd_dev, "vtouch");
-		if (IS_ERR(tpd->reg))
-			GTP_ERROR("regulator_get() failed!\n");
+	tpd->reg = regulator_get(tpd->tpd_dev, "vtouch");
+	if (IS_ERR(tpd->reg))
+		GTP_ERROR("regulator_get() failed!\n");
 #endif
 
 #if GTP_SUPPORT_I2C_DMA
@@ -2148,11 +2215,13 @@ static int tpd_local_init(void)
 		i2c_del_driver(&tpd_i2c_driver);
 		return -1;
 	}
-	input_set_abs_params(tpd->dev, ABS_MT_TRACKING_ID, 0, (GTP_MAX_TOUCH - 1), 0, 0);
+	input_set_abs_params(tpd->dev, ABS_MT_TRACKING_ID, 0,
+			     (GTP_MAX_TOUCH - 1), 0, 0);
 	if (tpd_dts_data.use_tpd_button) {
 		/*initialize tpd button data */
 		tpd_button_setting(tpd_dts_data.tpd_key_num,
-				   tpd_dts_data.tpd_key_local, tpd_dts_data.tpd_key_dim_local);
+				   tpd_dts_data.tpd_key_local,
+				   tpd_dts_data.tpd_key_dim_local);
 	}
 #if (defined(TPD_WARP_START) && defined(TPD_WARP_END))
 	TPD_DO_WARP = 1;
@@ -2295,18 +2364,23 @@ static s8 gtp_wakeup_sleep(struct i2c_client *client)
 			if (ret >= 0) {
 				/* Hold ss51 & dsp */
 				opr_buf[0] = 0x0C;
-				ret = i2c_write_bytes(client, 0x4180, opr_buf, 1);
+				ret =
+				    i2c_write_bytes(client, 0x4180, opr_buf, 1);
 				if (ret < 0) {
-					GTP_DEBUG("Hold ss51 & dsp I2C error,retry:%d", retry);
+					GTP_DEBUG
+					    ("Hold ss51 & dsp I2C error,retry:%d",
+					     retry);
 					continue;
 				}
 
 				/* Confirm hold */
 				opr_buf[0] = 0x00;
-				ret = i2c_read_bytes(client, 0x4180, opr_buf, 1);
+				ret =
+				    i2c_read_bytes(client, 0x4180, opr_buf, 1);
 				if (ret < 0) {
 					GTP_DEBUG
-					    ("confirm ss51 & dsp hold, I2C error,retry:%d", retry);
+					    ("confirm ss51 & dsp hold, I2C error,retry:%d",
+					     retry);
 					continue;
 				}
 				if (0x0C != opr_buf[0]) {
@@ -2319,7 +2393,8 @@ static s8 gtp_wakeup_sleep(struct i2c_client *client)
 
 				ret = gtp_fw_startup(client);
 				if (FAIL == ret) {
-					GTP_ERROR("[gtp_wakeup_sleep]Startup fw failed.");
+					GTP_ERROR
+					    ("[gtp_wakeup_sleep]Startup fw failed.");
 					continue;
 				}
 				GTP_INFO("flashless wakeup sleep success");
@@ -2410,7 +2485,8 @@ static void tpd_resume(struct device *h)
 #endif
 
 #if GTP_ESD_PROTECT
-	queue_delayed_work(gtp_esd_check_workqueue, &gtp_esd_check_work, TPD_ESD_CHECK_CIRCLE);
+	queue_delayed_work(gtp_esd_check_workqueue, &gtp_esd_check_work,
+			   TPD_ESD_CHECK_CIRCLE);
 #endif
 
 #ifdef GTP_CHARGER_DETECT
@@ -2488,5 +2564,6 @@ static void __exit tpd_driver_exit(void)
 	/* input_unregister_device(tpd->dev); */
 	tpd_driver_remove(&tpd_device_driver);
 }
+
 module_init(tpd_driver_init);
 module_exit(tpd_driver_exit);

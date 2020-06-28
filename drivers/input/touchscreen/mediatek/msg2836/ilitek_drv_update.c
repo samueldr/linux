@@ -52,14 +52,22 @@ static SwIdData_t _gSwIdData[] = {
 
 #ifdef CONFIG_ENABLE_CHIP_TYPE_MSG28XX
 #include "msg28xx_xxxx_update_bin_v0x1b_0x0d.h" // wangbing@wind-mobi.com 20171016
-#include "msg28xx_yyyy_update_bin_v0x1c_0x02.h"
-#include "msg28xx_zzzz_update_bin_v0x10_0x04.h" // wangbing@wind-mobi.com 20171018
+#include "msg28xx_yyyy_update_bin_v0x1c_0x03.h"
+#include "msg28xx_zzzz_update_bin_v0x10_0x07.h" // wangbing@wind-mobi.com 20171018
 
+#include "msg28xx_xxxx_update_bin_v0x1b_0x52.h" // qiangang@wind-mobi.com 20171206
+#include "msg28xx_yyyy_update_bin_v0x1c_0x54.h" // qiangang@wind-mobi.com 20171206
 static SwIdData_t _gSwIdData[] = {
     {MSG28XX_SW_ID_XXXX, msg28xx_xxxx_update_bin},
     {MSG28XX_SW_ID_YYYY, msg28xx_yyyy_update_bin},
     {MSG28XX_SW_ID_ZZZZ, msg28xx_zzzz_update_bin},	// wangbing@wind-mobi.com 20171013
 };
+// add by qiangang@wind-mobi.com 20171206 begin to add another group of firmware
+static SwIdData_t _gSwIdData_7703[] = {
+    {MSG28XX_SW_ID_XXXX_7703, msg28xx_xxxx_update_bin_7703},
+    {MSG28XX_SW_ID_YYYY_7703,  msg28xx_yyyy_update_bin_7703},
+};
+// add by qiangang@wind-mobi.com 20171206 end to add another group of firmware
 #endif //CONFIG_ENABLE_CHIP_TYPE_MSG28XX
 
 #ifdef CONFIG_ENABLE_CHIP_TYPE_ILI21XX
@@ -327,7 +335,7 @@ int DrvIliTekEntryIceMode(void)
     DBG(&g_I2cClient->dev, "*** %s() ***\n", __func__);
     
     if (OutWrite(0x181062, 0x0, 0) < 0) // Entry ICE Mode
-        return -2;
+    {    return -2;}
 	
 	return 0;
 }
@@ -3704,6 +3712,7 @@ static void _DrvMsg28xxCheckFirmwareUpdateBySwId(void)
     u32 nCrcMainA, nCrcMainB;
     u32 i, j;
     u32 nSwIdListNum = 0;
+    u32 nSwIdListNum_7703 = 0; 	//add by qiangang
     u16 nUpdateBinMajor = 0, nUpdateBinMinor = 0;
     u16 nMajor = 0, nMinor = 0;
     u8 nIsSwIdValid = 0;
@@ -3717,7 +3726,10 @@ static void _DrvMsg28xxCheckFirmwareUpdateBySwId(void)
 
     nSwIdListNum  = sizeof(_gSwIdData) / sizeof(SwIdData_t);
     DBG(&g_I2cClient->dev, "*** sizeof(_gSwIdData)=%d, sizeof(SwIdData_t)=%d, nSwIdListNum=%d ***\n", (int)sizeof(_gSwIdData), (int)sizeof(SwIdData_t), (int)nSwIdListNum);
-
+//add by qiangang begin
+    nSwIdListNum_7703  = sizeof(_gSwIdData_7703) / sizeof(SwIdData_t);
+    DBG(&g_I2cClient->dev, "*** sizeof(_gSwIdData_7703)=%d, sizeof(SwIdData_t)=%d, nSwIdListNum_7703=%d ***\n", (int)sizeof(_gSwIdData_7703), (int)sizeof(SwIdData_t), (int)nSwIdListNum_7703);
+//add by qiangang end
     nCrcMainA = _DrvMsg28xxGetFirmwareCrcByHardware(EMEM_MAIN);
     nCrcMainB = _DrvMsg28xxRetrieveFirmwareCrcFromEFlash(EMEM_MAIN);
 
@@ -3745,7 +3757,151 @@ static void _DrvMsg28xxCheckFirmwareUpdateBySwId(void)
 
     _gUpdateFirmwareBySwIdWorkQueue = create_singlethread_workqueue("update_firmware_by_sw_id");
     INIT_WORK(&_gUpdateFirmwareBySwIdWork, _DrvUpdateFirmwareBySwIdDoWork);
+//add by qiangang@wind-mobi.com 20171206 begin
+printk("qiangang wind_device_info.lcm_module_info.ic_name = %s",wind_device_info.lcm_module_info.ic_name);
+if(0 == strcmp( (char *)(wind_device_info.lcm_module_info.ic_name) , "st7703_hd720_dsi_vdo_ykl" ) )
+{
+    if (nCrcMainA == nCrcMainB) 
+    {
+        eMainSwId = _DrvMsg28xxGetSwId(EMEM_MAIN);
+    		
+        DBG(&g_I2cClient->dev, "eMainSwId=0x%x\n", eMainSwId);
 
+        eSwId = eMainSwId;
+
+        nIsSwIdValid = 0;
+        
+        for (j = 0; j < nSwIdListNum_7703; j ++)
+        {
+            DBG(&g_I2cClient->dev, "_gSwIdData[%d].nSwId = 0x%x\n", j, _gSwIdData_7703[j].nSwId); // TODO : add for debug
+
+            if (eSwId == _gSwIdData_7703[j].nSwId)
+            {
+#ifdef CONFIG_UPDATE_FIRMWARE_BY_TWO_DIMENSIONAL_ARRAY // By two dimensional array
+                nUpdateBinMajor = ((*(_gSwIdData_7703[j].pUpdateBin+127))[1013])<<8 | ((*(_gSwIdData_7703[j].pUpdateBin+127))[1012]); 
+                nUpdateBinMinor = ((*(_gSwIdData_7703[j].pUpdateBin+127))[1015])<<8 | ((*(_gSwIdData_7703[j].pUpdateBin+127))[1014]);
+#else // By one dimensional array
+                nUpdateBinMajor = (*(_gSwIdData_7703[j].pUpdateBin+0x1FFF5))<<8 | (*(_gSwIdData_7703[j].pUpdateBin+0x1FFF4));
+                nUpdateBinMinor = (*(_gSwIdData_7703[j].pUpdateBin+0x1FFF7))<<8 | (*(_gSwIdData_7703[j].pUpdateBin+0x1FFF6));
+#endif //CONFIG_UPDATE_FIRMWARE_BY_TWO_DIMENSIONAL_ARRAY
+                nIsSwIdValid = 1;
+                nFinalIndex = j;
+                
+                break;
+            }
+        }
+
+        if (0 == nIsSwIdValid)
+        {
+            DBG(&g_I2cClient->dev, "eSwId = 0x%x is an undefined SW ID.\n", eSwId);
+
+            eSwId = MSG28XX_SW_ID_UNDEFINED;
+            nUpdateBinMajor = 0;
+            nUpdateBinMinor = 0;    		        						
+        }
+
+        DrvGetCustomerFirmwareVersionByDbBus(EMEM_MAIN, &nMajor, &nMinor, &pVersion);
+
+        DBG(&g_I2cClient->dev, "eSwId=0x%x, nMajor=%d, nMinor=%d, nUpdateBinMajor=%d, nUpdateBinMinor=%d\n", eSwId, nMajor, nMinor, nUpdateBinMajor, nUpdateBinMinor);
+
+        if (nUpdateBinMinor > nMinor)
+        {
+            if (1 == nIsSwIdValid)
+            {
+                DBG(&g_I2cClient->dev, "nFinalIndex = %d\n", nFinalIndex); // TODO : add for debug
+
+                for (i = 0; i < MSG28XX_FIRMWARE_WHOLE_SIZE; i ++)
+                {
+#ifdef CONFIG_UPDATE_FIRMWARE_BY_TWO_DIMENSIONAL_ARRAY // By two dimensional array
+                    _DrvStoreFirmwareData(*(_gSwIdData_7703[nFinalIndex].pUpdateBin+i), 1024);
+#else // By one dimensional array
+                    _DrvStoreFirmwareData((_gSwIdData_7703[nFinalIndex].pUpdateBin+i*1024), 1024);
+#endif //CONFIG_UPDATE_FIRMWARE_BY_TWO_DIMENSIONAL_ARRAY
+                }
+            }
+            else
+            {
+                DBG(&g_I2cClient->dev, "eSwId = 0x%x is an undefined SW ID.\n", eSwId);
+
+                eSwId = MSG28XX_SW_ID_UNDEFINED;
+            }
+
+            if (eSwId < MSG28XX_SW_ID_UNDEFINED && eSwId != 0x0000 && eSwId != 0xFFFF)
+            {
+                g_FwDataCount = 0; // Reset g_FwDataCount to 0 after copying update firmware data to temp buffer
+
+                _gUpdateRetryCount = UPDATE_FIRMWARE_RETRY_COUNT;
+                _gIsUpdateInfoBlockFirst = 1; // Set 1 for indicating main block is complete 
+                g_IsUpdateFirmware = 0x11;
+                queue_work(_gUpdateFirmwareBySwIdWorkQueue, &_gUpdateFirmwareBySwIdWork);
+                return;
+            }
+            else
+            {
+                DBG(&g_I2cClient->dev, "The sw id is invalid.\n");
+                DBG(&g_I2cClient->dev, "Go to normal boot up process.\n");
+            }
+        }
+        else
+        {
+            DBG(&g_I2cClient->dev, "The update bin version is older than or equal to the current firmware version on e-flash.\n");
+            DBG(&g_I2cClient->dev, "Go to normal boot up process.\n");
+        }
+    }
+    else 
+    {
+        eSwId = _DrvMsg28xxGetSwId(EMEM_INFO);
+		
+        DBG(&g_I2cClient->dev, "eSwId=0x%x\n", eSwId);
+        
+        nIsSwIdValid = 0;
+        
+        for (j = 0; j < nSwIdListNum_7703; j ++)
+        {
+            DBG(&g_I2cClient->dev, "_gSwIdData[%d].nSwId = 0x%x\n", j, _gSwIdData_7703[j].nSwId); // TODO : add for debug
+
+            if (eSwId == _gSwIdData_7703[j].nSwId)
+            {
+                for (i = 0; i < MSG28XX_FIRMWARE_WHOLE_SIZE; i ++)
+                {
+#ifdef CONFIG_UPDATE_FIRMWARE_BY_TWO_DIMENSIONAL_ARRAY // By two dimensional array
+                    _DrvStoreFirmwareData(*(_gSwIdData_7703[j].pUpdateBin+i), 1024);
+#else // By one dimensional array
+                    _DrvStoreFirmwareData((_gSwIdData_7703[j].pUpdateBin+i*1024), 1024);
+#endif //CONFIG_UPDATE_FIRMWARE_BY_TWO_DIMENSIONAL_ARRAY
+                }
+                nIsSwIdValid = 1;
+                
+                break;
+            }
+        }
+
+        if (0 == nIsSwIdValid)
+        {
+            DBG(&g_I2cClient->dev, "eSwId = 0x%x is an undefined SW ID.\n", eSwId);
+
+            eSwId = MSG28XX_SW_ID_UNDEFINED;
+        }
+
+        if (eSwId < MSG28XX_SW_ID_UNDEFINED && eSwId != 0x0000 && eSwId != 0xFFFF)
+        {
+            g_FwDataCount = 0; // Reset g_FwDataCount to 0 after copying update firmware data to temp buffer
+
+            _gUpdateRetryCount = UPDATE_FIRMWARE_RETRY_COUNT;
+            _gIsUpdateInfoBlockFirst = 0; // Set 0 for indicating main block is broken 
+            g_IsUpdateFirmware = 0x11;
+            queue_work(_gUpdateFirmwareBySwIdWorkQueue, &_gUpdateFirmwareBySwIdWork);
+            return;
+        }
+        else
+        {
+            DBG(&g_I2cClient->dev, "The sw id is invalid.\n");
+            DBG(&g_I2cClient->dev, "Go to normal boot up process.\n");
+        }
+    }
+}
+else
+{
     if (nCrcMainA == nCrcMainB) 
     {
         eMainSwId = _DrvMsg28xxGetSwId(EMEM_MAIN);
@@ -3884,7 +4040,8 @@ static void _DrvMsg28xxCheckFirmwareUpdateBySwId(void)
             DBG(&g_I2cClient->dev, "Go to normal boot up process.\n");
         }
     }
-
+}
+//add by qiangang@wind-mobi.com 20171206 end
     DrvTouchDeviceHwReset();
 
     DrvEnableFingerTouchReport();
@@ -4906,9 +5063,9 @@ s32 DrvIliTekUpdateFirmware(u8 *pszFwData, bool bIsUpdateFirmwareBySwId) // for 
 UPDATE_RETRY:
     
     if (DrvIliTekEntryIceMode()) // Entry ICE Mode
-        return 2;
+    {    return 2;}
 	if (DrvIliTekIceModeInitial())
-		return 2;
+	{	return 2;}
     
     if (true == bIsUpdateFirmwareBySwId)
     {    

@@ -1,12 +1,15 @@
-/******************************************************************************
- * mt_gpio_debug.c - MTKLinux GPIO Device Driver
+/*
+ * Copyright (C) 2015 MediaTek Inc.
  *
- * Copyright 2008-2009 MediaTek Co.,Ltd.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
  *
- * DESCRIPTION:
- *     This file provid the other drivers GPIO debug functions
- *
- ******************************************************************************/
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ */
 
 #include <linux/slab.h>
 /*#ifndef CONFIG_OF
@@ -85,8 +88,10 @@ void mt_gpio_load_base(GPIO_REGS *regs)
 	GPIO_REGS *pReg = (GPIO_REGS *) (GPIO_BASE);
 	int idx;
 
-	if (!regs)
+	if (!regs) {
 		GPIOERR("%s: null pointer\n", __func__);
+		return;
+	}
 	memset(regs, 0x00, sizeof(*regs));
 	for (idx = 0; idx < sizeof(pReg->dir) / sizeof(pReg->dir[0]); idx++)
 		regs->dir[idx].val = __raw_readl(&pReg->dir[idx]);
@@ -594,7 +599,7 @@ ssize_t mt_gpio_store_pin(struct device *dev, struct device_attribute *attr,
 		GPIOMSG("echo -wies num x > pin  #x: 1,ies enable; 0 ies disable\n");
 		GPIOMSG("echo -wdir num x > pin  #x: 1, output; 0, input\n");
 		/*GPIOMSG("echo -wdinv num x > pin #x: 1, inversion enable; 0, disable\n"); */
-		GPIOMSG("echo -w=num x x x x x x > pin #set all property one time\n");
+		GPIOMSG("echo -w=num x x x x x x x > pin #set all property one time\n");
 		GPIOMSG("PIN: [MODE] [PSEL] [DIN] [DOUT] [PEN] [DIR] [IES]\n");
 	} else if (!strncmp(buf, "-r0", 3) && (1 == sscanf(buf + 3, "%d", &pin))) {
 		GPIO_CFG cfg = {.no = pin };

@@ -1292,10 +1292,10 @@ static ssize_t emi_mpu_store(struct device_driver *driver,
 const char *buf, size_t count)
 {
 	int i;
-	unsigned int start_addr;
-	unsigned int end_addr;
-	unsigned int region;
-	unsigned int access_permission;
+	unsigned int start_addr = 0;
+	unsigned int end_addr = 0;
+	unsigned int region = 0;
+	unsigned int access_permission = 0;
 	char *command;
 	char *ptr;
 	char *token[5];
@@ -1951,6 +1951,11 @@ static int __init emi_mpu_mod_init(void)
 	pr_err("[EMI MPU] EMI_MPUV = 0x%x\n", mt_emi_reg_read(EMI_MPUV));
 	pr_err("[EMI MPU] EMI_MPUX = 0x%x\n", mt_emi_reg_read(EMI_MPUX));
 
+	if (enable_4gb)
+		emi_physical_offset = 0;
+	else
+		emi_physical_offset = 0x40000000;
+
 	if (readl(IOMEM(EMI_MPUS))) {
 		pr_err("[EMI MPU] get MPU violation in driver init\n");
 		mt_devapc_emi_initial();
@@ -1960,13 +1965,6 @@ static int __init emi_mpu_mod_init(void)
 		/* Set Device APC initialization for EMI-MPU. */
 		mt_devapc_emi_initial();
 	}
-
-
-	if (enable_4gb)
-		emi_physical_offset = 0;
-	else
-		emi_physical_offset = 0x40000000;
-
 
 	/*
 	 * NoteXXX: Interrupts of violation (including SPC in SMI, or EMI MPU)

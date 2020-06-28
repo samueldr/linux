@@ -70,7 +70,9 @@
 //#define LOG_INF_LOD(format, args...)	pr_debug(ANDROID_LOG_INFO   , PFX, "[%s] " format, __FUNCTION__, ##args)
 //#define LOG_1 LOG_INF("S5K3L8,MIPI 4LANE\n")
 //#define SENSORDB LOG_INF
-#define LOG_INF(format, args...)	pr_debug(PFX "[%s] " format, __FUNCTION__, ##args)
+//dingyisheng@wind-mobi.com 20171103 begin
+#define LOG_INF(format, args...)	pr_err(PFX "[%s] " format, __FUNCTION__, ##args)
+//dingyisheng@wind-mobi.com 20171103 end
 /****************************   Modify end    *******************************************/
 
 extern kal_uint8 S5K3L8_gz_read_eeprom_module_id(void);

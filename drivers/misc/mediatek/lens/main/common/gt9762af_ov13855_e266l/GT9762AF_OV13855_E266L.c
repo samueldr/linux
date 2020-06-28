@@ -78,9 +78,9 @@ static int s4AF_WriteReg(u16 a_u2Data)
 	return 0;
 }
 
-static inline int getAFInfo(__user stAF_MotorInfo *pstMotorInfo)
+static inline int getAFInfo(__user struct stAF_MotorInfo *pstMotorInfo)
 {
-	stAF_MotorInfo stMotorInfo;
+	struct stAF_MotorInfo stMotorInfo;
 	stMotorInfo.u4MacroPosition = g_u4AF_MACRO;
 	stMotorInfo.u4InfPosition = g_u4AF_INF;
 	stMotorInfo.u4CurrentPosition = g_u4CurrPosition;
@@ -96,7 +96,7 @@ static inline int getAFInfo(__user stAF_MotorInfo *pstMotorInfo)
 	else
 		stMotorInfo.bIsMotorOpen = 0;
 
-	if (copy_to_user(pstMotorInfo, &stMotorInfo, sizeof(stAF_MotorInfo)))
+	if (copy_to_user(pstMotorInfo, &stMotorInfo, sizeof(struct stAF_MotorInfo)))
 		LOG_INF("copy to user failed when getting motor information\n");
 
 	return 0;
@@ -215,7 +215,7 @@ long GT9762AF_OV13855_E266L_Ioctl(struct file *a_pstFile, unsigned int a_u4Comma
 
 	switch (a_u4Command) {
 	case AFIOC_G_MOTORINFO:
-		i4RetValue = getAFInfo((__user stAF_MotorInfo *) (a_u4Param));
+		i4RetValue = getAFInfo((__user struct stAF_MotorInfo *) (a_u4Param));
 		break;
 
 	case AFIOC_T_MOVETO:
@@ -279,17 +279,14 @@ int GT9762AF_OV13855_E266L_Release(struct inode *a_pstInode, struct file *a_pstF
 
 extern  struct i2c_client *GT9762AF_I2Cclient_common_E266;   //lihaiyan@wind-mobi.com 20160209 add
 //yeshaobo@wind-mobi.com 20170331 begin
-void GT9762AF_OV13855_E266L_SetI2Cclient(struct i2c_client *pstAF_I2Cclient, spinlock_t *pAF_SpinLock, int *pAF_Opened)
+int GT9762AF_OV13855_E266L_SetI2Cclient(struct i2c_client *pstAF_I2Cclient, spinlock_t *pAF_SpinLock, int *pAF_Opened)
 //yeshaobo@wind-mobi.com 20170331 end
 {
-
-
-   
 	g_pstAF_I2Cclient = pstAF_I2Cclient;
 	g_pAF_SpinLock = pAF_SpinLock;
 	g_pAF_Opened = pAF_Opened;
 	
 	GT9762AF_I2Cclient_common_E266 = g_pstAF_I2Cclient;  //lihaiyan@wind-mobi.com 20160209 add
-	
+        return 1;	
 }
 

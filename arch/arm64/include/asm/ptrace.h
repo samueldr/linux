@@ -115,7 +115,16 @@ struct pt_regs {
 		};
 	};
 	u64 orig_x0;
-	u64 syscallno;
+#ifdef __AARCH64EB__
+	u32 unused2;
+	s32 syscallno;
+#else
+	s32 syscallno;
+	u32 unused2;
+#endif
+
+	u64 orig_addr_limit;
+	u64 unused;	// maintain 16 byte alignment
 };
 
 #define arch_has_single_step()	(1)
@@ -183,11 +192,7 @@ static inline int valid_user_regs(struct user_pt_regs *regs)
 
 #define instruction_pointer(regs)	((unsigned long)(regs)->pc)
 
-#ifdef CONFIG_SMP
 extern unsigned long profile_pc(struct pt_regs *regs);
-#else
-#define profile_pc(regs) instruction_pointer(regs)
-#endif
 
 #endif /* __ASSEMBLY__ */
 #endif

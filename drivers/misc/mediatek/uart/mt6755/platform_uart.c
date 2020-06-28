@@ -112,7 +112,7 @@ static struct mtk_uart_setting mtk_uart_default_settings[] = {
 	 .sysrq = FALSE, .hw_flow = TRUE, .vff = TRUE,
 	 },
 	{
-	 .tx_mode = UART_TX_VFIFO_DMA, .rx_mode = UART_RX_VFIFO_DMA, .dma_mode = UART_DMA_MODE_0,
+	 .tx_mode = UART_NON_DMA, .rx_mode = UART_NON_DMA, .dma_mode = UART_DMA_MODE_0,
 	 .tx_trig = UART_FCR_TXFIFO_1B_TRI, .rx_trig = UART_FCR_RXFIFO_12B_TRI,
 
 	 /* .uart_base = AP_UART1_BASE, .irq_num = UART1_IRQ_BIT_ID, .irq_sen = MT_LEVEL_SENSITIVE, */
@@ -165,7 +165,6 @@ static unsigned int modem_uart[UART_NR] = { 1, 0, 0, 1};
 #endif
 /*---------------------------------------------------------------------------*/
 /* uart control blocks */
-static struct mtk_uart mtk_uarts[UART_NR];
 /*---------------------------------------------------------------------------*/
 struct mtk_uart_setting *get_uart_default_settings(int idx)
 {
@@ -465,7 +464,7 @@ void dump_console_reg(struct mtk_uart *uart, char *s)
 			"lsr=%d,hs=%d,sc=%d,dl=%d,dm=%d,cnt1=%d,cnt2=%d,infra=%x,clk=%d\n",
 				lsr, hs, sc, dll, dlm, uart->cnt1, uart->cnt2, infra, clk);
 
-	strcpy(s, dump_uart);
+	strncpy(s, dump_uart, sizeof(dump_uart));
 
 	/*aee_kernel_warning_api(__FILE__, __LINE__, DB_OPT_DEFAULT | DB_OPT_FTRACE,
 			"Dump Uart Reg", "%s", dump_uart);*/
@@ -888,32 +887,30 @@ void mtk_uart_dma_vfifo_tx_tasklet(unsigned long arg)
 	unsigned long flags;
 
 	spin_lock_irqsave(&vfifo->iolock, flags);
-	if (atomic_inc_and_test(&vfifo->entry) > 1) {
-		MSG(ERR, "tx entry!!\n");
-		tasklet_schedule(&vfifo->dma->tasklet);
-	} else {
-		while (UART_READ32(VFF_LEFT_SIZE(base)) >= vfifo->trig) {
-			/* deal with x_char first */
-			if (unlikely(port->x_char)) {
-				MSG(INFO, "detect x_char!!\n");
-				uart->write_byte(uart, port->x_char);
-				port->icount.tx++;
-				port->x_char = 0;
-				break;
-			}
-			if (uart_circ_empty(xmit) || uart_tx_stopped(port)) {
-				uart->pending_tx_reqs = 0;
-				atomic_set(&dma->free, 1);
-				complete(&dma->done);
-				break;
-			}
-			mtk_uart_dma_vfifo_tx_tasklet_byte(arg);
+	atomic_inc(&vfifo->entry);
+
+	while (UART_READ32(VFF_LEFT_SIZE(base)) >= vfifo->trig) {
+		/* deal with x_char first */
+		if (unlikely(port->x_char)) {
+			MSG(INFO, "detect x_char!!\n");
+			uart->write_byte(uart, port->x_char);
+			port->icount.tx++;
+			port->x_char = 0;
+			break;
 		}
-		if (txcount != port->icount.tx) {
-			mtk_uart_vfifo_enable_tx_intr(uart);
-			mtk_uart_tx_vfifo_flush(uart, 0);
+		if (uart_circ_empty(xmit) || uart_tx_stopped(port)) {
+			uart->pending_tx_reqs = 0;
+			atomic_set(&dma->free, 1);
+			complete(&dma->done);
+			break;
 		}
+		mtk_uart_dma_vfifo_tx_tasklet_byte(arg);
 	}
+	if (txcount != port->icount.tx) {
+		mtk_uart_vfifo_enable_tx_intr(uart);
+		mtk_uart_tx_vfifo_flush(uart, 0);
+	}
+
 	atomic_dec(&vfifo->entry);
 	spin_unlock_irqrestore(&vfifo->iolock, flags);
 }
@@ -1165,13 +1162,11 @@ void mtk_uart_dma_vfifo_rx_tasklet(unsigned long arg)
 
 	MSG(DMA, "%d, %x, %x\n", uart->read_allow(uart), UART_READ32(VFF_VALID_SIZE(vfifo->base)), vfifo->trig);
 	spin_lock_irqsave(&vfifo->iolock, flags);
-	if (atomic_inc_and_test(&vfifo->entry) > 1) {
-		MSG(ERR, "rx entry!!\n");
-		tasklet_schedule(&vfifo->dma->tasklet);
-	} else {
-		if (uart->read_allow(uart))
-			mtk_uart_dma_vfifo_rx_tasklet_str(arg);
-	}
+	atomic_inc(&vfifo->entry);
+
+	if (uart->read_allow(uart))
+		mtk_uart_dma_vfifo_rx_tasklet_str(arg);
+
 	atomic_dec(&vfifo->entry);
 	spin_unlock_irqrestore(&vfifo->iolock, flags);
 }
@@ -1646,10 +1641,11 @@ void mtk_uart_power_up(struct mtk_uart *uart)
 	int clk_en_ret = 0;
 #endif				/* !defined(CONFIG_MTK_CLKMGR) */
 
-	setting = uart->setting;
-
 	if (!uart || uart->nport >= UART_NR)
 		return;
+
+	setting = uart->setting;
+
 
 	if (uart->poweron_count > 0) {
 		MSG(FUC, "%s(%d)\n", __func__, uart->poweron_count);
@@ -2286,37 +2282,44 @@ void mtk_uart_restore(void)
 	unsigned long base;
 	unsigned long flags;
 	struct mtk_uart *uart;
+	int i;
 
-	uart = console_port;
-	base = uart->base;
+	for (i = 0; i < UART_NR; i++) {
 
-	mtk_uart_power_up(uart);
-	spin_lock_irqsave(&mtk_console_lock, flags);
-	reg_sync_writel(0xbf, UART_LCR);
-	reg_sync_writel(uart->registers.efr, UART_EFR);
-	reg_sync_writel(uart->registers.lcr, UART_LCR);
-	reg_sync_writel(uart->registers.fcr, UART_FCR);
+		uart = &mtk_uarts[i];
+		base = uart->base;
 
-	/* baudrate */
-	reg_sync_writel(uart->registers.highspeed, UART_HIGHSPEED);
-	reg_sync_writel(uart->registers.fracdiv_l, UART_FRACDIV_L);
-	reg_sync_writel(uart->registers.fracdiv_m, UART_FRACDIV_M);
-	reg_sync_writel(uart->registers.lcr | UART_LCR_DLAB, UART_LCR);
-	reg_sync_writel(uart->registers.dll, UART_DLL);
-	reg_sync_writel(uart->registers.dlh, UART_DLH);
-	reg_sync_writel(uart->registers.lcr, UART_LCR);
-	reg_sync_writel(uart->registers.sample_count, UART_SAMPLE_COUNT);
-	reg_sync_writel(uart->registers.sample_point, UART_SAMPLE_POINT);
-	reg_sync_writel(uart->registers.guard, UART_GUARD);
+		mtk_uart_power_up(uart);
+		spin_lock_irqsave(&mtk_console_lock, flags);
+		reg_sync_writel(0xbf, UART_LCR);
+		reg_sync_writel(uart->registers.efr, UART_EFR);
+		reg_sync_writel(uart->registers.lcr, UART_LCR);
+		reg_sync_writel(uart->registers.fcr, UART_FCR);
 
-	/* flow control */
-	reg_sync_writel(uart->registers.escape_en, UART_ESCAPE_EN);
-	reg_sync_writel(uart->registers.mcr, UART_MCR);
-	reg_sync_writel(uart->registers.ier, UART_IER);
+		/* baudrate */
+		reg_sync_writel(uart->registers.highspeed, UART_HIGHSPEED);
+		reg_sync_writel(uart->registers.fracdiv_l, UART_FRACDIV_L);
+		reg_sync_writel(uart->registers.fracdiv_m, UART_FRACDIV_M);
+		reg_sync_writel(uart->registers.lcr | UART_LCR_DLAB, UART_LCR);
+		reg_sync_writel(uart->registers.dll, UART_DLL);
+		reg_sync_writel(uart->registers.dlh, UART_DLH);
+		reg_sync_writel(uart->registers.lcr, UART_LCR);
+		reg_sync_writel(uart->registers.sample_count, UART_SAMPLE_COUNT);
+		reg_sync_writel(uart->registers.sample_point, UART_SAMPLE_POINT);
+		reg_sync_writel(uart->registers.guard, UART_GUARD);
 
-	reg_sync_writel(uart->registers.rx_sel, UART_RX_SEL);
+		/* flow control */
+		reg_sync_writel(uart->registers.escape_en, UART_ESCAPE_EN);
+		reg_sync_writel(uart->registers.mcr, UART_MCR);
+		reg_sync_writel(uart->registers.ier, UART_IER);
 
-	spin_unlock_irqrestore(&mtk_console_lock, flags);
+		reg_sync_writel(uart->registers.rx_sel, UART_RX_SEL);
+
+		spin_unlock_irqrestore(&mtk_console_lock, flags);
+
+		if (uart != console_port)
+				mtk_uart_power_down(uart);
+	}
 #endif
 }
 

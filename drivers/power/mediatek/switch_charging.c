@@ -105,8 +105,12 @@ unsigned int get_cv_voltage(void)
 DEFINE_MUTEX(g_ichg_aicr_access_mutex);
 DEFINE_MUTEX(g_aicr_access_mutex);
 DEFINE_MUTEX(g_ichg_access_mutex);
+DEFINE_MUTEX(g_hv_charging_mutex);
 unsigned int g_aicr_upper_bound;
+static bool g_pd_enable_power_path = true;
 static bool g_enable_dynamic_cv = true;
+static bool g_enable_hv_charging = true;
+static atomic_t g_en_kpoc_shdn = ATOMIC_INIT(1);
 
  /* ///////////////////////////////////////////////////////////////////////////////////////// */
  /* // JEITA */
@@ -371,7 +375,7 @@ bool get_usb_current_unlimited(void)
 	if (BMT_status.charger_type == STANDARD_HOST || BMT_status.charger_type == CHARGING_HOST)
 		return usb_unlimited;
 
-		return false;
+	return false;
 }
 
 void set_usb_current_unlimited(bool enable)
@@ -466,8 +470,6 @@ unsigned int set_chr_input_current_limit(int current_limit)
 static void mtk_select_ichg_aicr(void);
 unsigned int set_bat_charging_current_limit(int current_limit)
 {
-	
-
 	CHR_CURRENT_ENUM chr_type_ichg = 0;
 	CHR_CURRENT_ENUM chr_type_aicr = 0;
 	//lvwenkang@wind-mobi.com 20161012 being
@@ -543,6 +545,71 @@ int mtk_chr_reset_aicr_upper_bound(void)
 {
 	g_aicr_upper_bound = 0;
 	return 0;
+}
+
+int mtk_chr_pd_enable_power_path(unsigned char enable)
+{
+	int ret = 0;
+
+	g_pd_enable_power_path = enable;
+	if (enable && g_bcct_input_flag && (g_bcct_input_value == 0)) {
+		battery_log(BAT_LOG_CRTI,
+			"%s: thermal set power path off, so keep it off\n",
+			__func__);
+		return -EINVAL;
+	}
+
+	ret = battery_charging_control(CHARGING_CMD_ENABLE_POWER_PATH,
+		&enable);
+
+	return ret;
+}
+
+int mtk_chr_enable_chr_type_det(unsigned char en)
+{
+	battery_log(BAT_LOG_CRTI, "%s: enable = %d\n", __func__, en);
+	battery_charging_control(CHARGING_CMD_ENABLE_CHR_TYPE_DET, &en);
+
+	return 0;
+}
+
+int mtk_chr_enable_discharge(bool enable)
+{
+	return battery_charging_control(CHARGING_CMD_ENABLE_DISCHARGE, &enable);
+}
+
+int mtk_chr_enable_hv_charging(bool en)
+{
+	battery_log(BAT_LOG_CRTI, "%s: en = %d\n", __func__, en);
+
+	mutex_lock(&g_hv_charging_mutex);
+	g_enable_hv_charging = en;
+	mutex_unlock(&g_hv_charging_mutex);
+
+	return 0;
+}
+
+bool mtk_chr_is_hv_charging_enable(void)
+{
+	return g_enable_hv_charging;
+}
+
+int mtk_chr_enable_kpoc_shutdown(bool en)
+{
+	if (en)
+		atomic_set(&g_en_kpoc_shdn, 1);
+	else
+		atomic_set(&g_en_kpoc_shdn, 0);
+	return 0;
+}
+
+bool mtk_chr_is_kpoc_shutdown_enable(void)
+{
+	int en = 0;
+
+	en = atomic_read(&g_en_kpoc_shdn);
+
+	return en > 0 ? true : false;
 }
 
 int set_chr_boost_current_limit(unsigned int current_limit)
@@ -768,10 +835,12 @@ void select_charging_current(void)
 		//yutao@wind-mobi.com add begin
 		#ifdef CONFIG_MTK_ASUS_CHARGER_SUPPORT
 		else if (BMT_status.charger_type == ASUS_2_0A_10W_CHARGER||BMT_status.charger_type == ASUS_2_0A_18W_CHARGER||BMT_status.charger_type == ASUS_2_0A_PB_CHARGER) {
-			if (batt_cust_data.ac_charger_input_current != 0)
-			g_temp_input_CC_value = batt_cust_data.ac_charger_input_current;	
-		    else
-			g_temp_input_CC_value = batt_cust_data.ac_charger_input_current;
+			if (batt_cust_data.ac_charger_input_current != 0) {
+				g_temp_input_CC_value = batt_cust_data.ac_charger_input_current;
+			}
+		    else {
+				g_temp_input_CC_value = batt_cust_data.ac_charger_input_current;
+			}
 			g_temp_CC_value = batt_cust_data.asus_2_0a_charger_current;
 			mtk_pep_set_charging_current(&g_temp_CC_value, &g_temp_input_CC_value);
 			mtk_pep20_set_charging_current(&g_temp_CC_value, &g_temp_input_CC_value);
@@ -1224,7 +1293,7 @@ PMU_STATUS BAT_BatteryFullAction(void)
 	battery_log(BAT_LOG_CRTI, "[BATTERY] Battery full !!\n\r");
 
 	BMT_status.bat_full = KAL_TRUE;
-	BMT_status.total_charging_time = 0;
+	//BMT_status.total_charging_time = 0;
 	BMT_status.PRE_charging_time = 0;
 	BMT_status.CC_charging_time = 0;
 	BMT_status.TOPOFF_charging_time = 0;
@@ -1260,8 +1329,6 @@ PMU_STATUS BAT_BatteryFullAction(void)
 
 PMU_STATUS BAT_BatteryHoldAction(void)
 {
-	
-
 	unsigned int charging_enable;
 
 	battery_log(BAT_LOG_CRTI, "[BATTERY] Hold mode !!\n\r");
@@ -1273,7 +1340,6 @@ PMU_STATUS BAT_BatteryHoldAction(void)
 
 	/*  Disable charger */
 	charging_enable = KAL_FALSE;
-	
 	battery_charging_control(CHARGING_CMD_ENABLE, &charging_enable);
 
 	return PMU_STATUS_OK;
@@ -1288,6 +1354,7 @@ PMU_STATUS BAT_BatteryStatusFailAction(void)
 {
          extern unsigned int g_charger_state ;//added by lvwenkang@wind-mobi.com  20161018 for AGING_POWER_TEST
 	unsigned int charging_enable;
+
 	battery_log(BAT_LOG_CRTI, "[BATTERY] BAD Battery status... Charging Stop !!\n\r");
 
 #if defined(CONFIG_MTK_JEITA_STANDARD_SUPPORT)

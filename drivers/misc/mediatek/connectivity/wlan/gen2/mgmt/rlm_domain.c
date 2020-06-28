@@ -287,8 +287,10 @@ DOMAIN_INFO_ENTRY arSupportedRegDomains[] = {
 	 {
 	  {81, BAND_2G4, CHNL_SPAN_5, 1, 13, FALSE}
 	  ,			/* CH_SET_2G4_1_13 */
-	  {82, BAND_2G4, CHNL_SPAN_5, 14, 1, FALSE}
-	  ,			/* CH_SET_2G4_14_14 */
+	  // wangbing@wind-mobi.com begin 20180208
+	  // {82, BAND_2G4, CHNL_SPAN_5, 14, 1, FALSE}
+	  // ,			/* CH_SET_2G4_14_14 */
+	  // wangbing@wind-mobi.com end 20180208
 	  {115, BAND_5G, CHNL_SPAN_20, 36, 4, FALSE}
 	  ,			/* CH_SET_UNII_LOW_36_48 */
 	  {118, BAND_5G, CHNL_SPAN_20, 52, 4, TRUE}
@@ -716,7 +718,7 @@ P_DOMAIN_INFO_ENTRY rlmDomainGetDomainInfo(P_ADAPTER_T prAdapter)
 	DBGLOG(RLM, TRACE, "eRegChannelListMap=%d, u2CountryCode=0x%04x\n",
 			   prRegInfo->eRegChannelListMap,
 			   prAdapter->rWifiVar.rConnSettings.u2CountryCode);
-
+        printk("Paul hello world");
 	/*
 	* Domain info can be specified by given idx of arSupportedRegDomains table,
 	* customized, or searched by country code,

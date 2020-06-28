@@ -1436,11 +1436,9 @@ static int fanout_add(struct sock *sk, u16 id, u16 type_flags)
 	default:
 		return -EINVAL;
 	}
+
 	mutex_lock(&fanout_mutex);
 
-	err = -EINVAL;
-	if (!po->running)
-		goto out;
 	err = -EALREADY;
 	if (po->fanout)
 		goto out;
@@ -1478,7 +1476,10 @@ static int fanout_add(struct sock *sk, u16 id, u16 type_flags)
 		list_add(&match->list, &fanout_list);
 	}
 	err = -EINVAL;
-	if (match->type == type &&
+
+	spin_lock(&po->bind_lock);
+	if (po->running &&
+	    match->type == type &&
 	    match->prot_hook.type == po->prot_hook.type &&
 	    match->prot_hook.dev == po->prot_hook.dev) {
 		err = -ENOSPC;
@@ -1490,6 +1491,13 @@ static int fanout_add(struct sock *sk, u16 id, u16 type_flags)
 			err = 0;
 		}
 	}
+	spin_unlock(&po->bind_lock);
+
+	if (err && !atomic_read(&match->sk_ref)) {
+		list_del(&match->list);
+		kfree(match);
+	}
+
 out:
 	mutex_unlock(&fanout_mutex);
 	return err;
@@ -1502,7 +1510,6 @@ static void fanout_release(struct sock *sk)
 
 	mutex_lock(&fanout_mutex);
 	f = po->fanout;
-
 	if (f) {
 		po->fanout = NULL;
 
@@ -3829,7 +3836,7 @@ static int packet_set_ring(struct sock *sk, union tpacket_req_u *req_u,
 			goto out;
 		if (po->tp_version >= TPACKET_V3 &&
 		    req->tp_block_size <=
-			 BLK_PLUS_PRIV((u64)req_u->req3.tp_sizeof_priv))
+			  BLK_PLUS_PRIV((u64)req_u->req3.tp_sizeof_priv))
 			goto out;
 		if (unlikely(req->tp_frame_size < po->tp_hdrlen +
 					po->tp_reserve))

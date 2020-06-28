@@ -1,3 +1,18 @@
+/*
+* Copyright(c) 2012, Analogix Semiconductor All rights reserved.
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License version 2 and
+* only version 2 as published by the Free Software Foundation.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+* GNU General Public License for more details.
+*
+*/
+
+
 #if defined(CONFIG_MTK_HDMI_SUPPORT)
 #include <linux/kernel.h>
 
@@ -319,7 +334,7 @@ static int slimport_drv_audio_config(enum HDMI_AUDIO_FORMAT aformat, int bitWidt
 		}
 		default:
 		{
-			printk("slimport_drv_audio_config do not support");
+			pr_info("slimport_drv_audio_config do not support");
 			break;
 		}
 	}
@@ -341,7 +356,7 @@ static int slimport_drv_video_enable(bool enable)
 
 static int slimport_drv_audio_enable(bool enable)  
 {
-    printk("[EXTD]Set_I2S_Pin, enable = %d\n", enable);
+	pr_info("[EXTD]Set_I2S_Pin, enable = %d\n", enable);
 	if (enable)
 		i2s_gpio_ctrl(1);
 	else

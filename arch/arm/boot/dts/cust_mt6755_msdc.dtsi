@@ -1,3 +1,16 @@
+/*
+ * Copyright (c) 2017 MediaTek Inc.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
 /**********************************************
  *MT6755 MSDC DTSI File
 ********************************************/
@@ -143,9 +156,9 @@
 		datwrddly      = /bits/ 8 <0>;
 		cmdrrddly      = /bits/ 8 <0>;
 		cmdrddly       = /bits/ 8 <0>;
-		cmd_edge = /bits/ 8 <MSDC_SMPL_FALLING>;
-		rdata_edge = /bits/ 8 <MSDC_SMPL_FALLING>;
-		wdata_edge = /bits/ 8 <MSDC_SMPL_FALLING>;
+		cmd_edge = /bits/ 8 <MSDC_SMPL_RISING>;
+		rdata_edge = /bits/ 8 <MSDC_SMPL_RISING>;
+		wdata_edge = /bits/ 8 <MSDC_SMPL_RISING>;
 	};
 
 	mmc2_pins_default: mmc2@default {

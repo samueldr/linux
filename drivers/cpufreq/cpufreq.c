@@ -106,6 +106,12 @@ bool have_governor_per_policy(void)
 }
 EXPORT_SYMBOL_GPL(have_governor_per_policy);
 
+bool cpufreq_driver_is_slow(void)
+{
+	return !(cpufreq_driver->flags & CPUFREQ_DRIVER_FAST);
+}
+EXPORT_SYMBOL_GPL(cpufreq_driver_is_slow);
+
 struct kobject *get_governor_parent_kobj(struct cpufreq_policy *policy)
 {
 	if (have_governor_per_policy())
@@ -1696,10 +1702,8 @@ EXPORT_SYMBOL(cpufreq_generic_suspend);
  */
 void cpufreq_suspend(void)
 {
+#if 0
 	struct cpufreq_policy *policy;
-
-	/* Avoid hotplug racing issue */
-	return;
 
 	if (!cpufreq_driver)
 		return;
@@ -1721,6 +1725,10 @@ void cpufreq_suspend(void)
 
 suspend:
 	cpufreq_suspended = true;
+#else
+	/* Avoid hotplug racing issue */
+	return;
+#endif
 }
 
 /**
@@ -1731,10 +1739,8 @@ suspend:
  */
 void cpufreq_resume(void)
 {
+#if 0
 	struct cpufreq_policy *policy;
-
-	/* Avoid hotplug racing issue */
-	return;
 
 	if (!cpufreq_driver)
 		return;
@@ -1766,6 +1772,10 @@ void cpufreq_resume(void)
 		return;
 
 	schedule_work(&policy->update);
+#else
+	/* Avoid hotplug racing issue */
+	return;
+#endif
 }
 
 /**

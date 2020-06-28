@@ -60,6 +60,7 @@
 //liukangping 20170721 begin	
 //#include "nt_smc_call.h" // add leadercore for read id
 #include <../../teei/V1.0/tz_driver/include/nt_smc_call.h>
+#include <../../teei/V1.0/tz_vfs/fp_vendor.h>
 //liukangping 20170721 end
 
 // wangbing@wind-mobi.com 20170727 begin >> note: include wind_device_info.h
@@ -121,6 +122,7 @@ EXPORT_SYMBOL(g_fpsensor);
 /* debug log setting */
 // wangbing@wind-mobi.com 20170824 begin
 static u8 fpsensor_debug_level = ERR_LOG;
+struct spi_device *chipone_spi =NULL;
 // wangbing@wind-mobi.com 20170824 end
 
 #define fpsensor_debug(level, fmt, args...) do { \
@@ -415,7 +417,6 @@ static int fpsensor_irq_gpio_cfg(void)
     fpsensor_data_t *fpsensor;
     u32 ints[2] = {0, 0};
     fpsensor_printk("%s\n", __func__);
-
     fpsensor = g_fpsensor;
 
     spidev_gpio_as_int(fpsensor);
@@ -726,7 +727,7 @@ static long fpsensor_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
             fpsensor_dev->is_sleep_mode = 1;
             break;
         case FPSENSOR_IOC_REMOVE:
-/*
+
 #if FPSENSOR_INPUT
             if (fpsensor_dev->input != NULL)
             {
@@ -750,12 +751,12 @@ static long fpsensor_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
                     input_unregister_device(fpsensor_dev->input);
                 }
 #endif
-*/
-                // if (fpsensor_dev->buffer != NULL)
-                // kfree(fpsensor_dev->buffer);
 
-               // kfree(fpsensor_dev);
-           // }
+                 if (fpsensor_dev->buffer != NULL)
+                 kfree(fpsensor_dev->buffer);
+
+                kfree(fpsensor_dev);
+            }
             //mutex_unlock(&device_list_lock);
 			/*
             if (s_DEVINFO_fpsensor != NULL)
@@ -970,6 +971,76 @@ static int fpsensor_remove(struct spi_device *spi)
     return 0;
 }
 
+// modify INEHSJY-1791 by tianpeng.zhang 20180105 start
+/*#ifndef CONFIG_SPI_MT65XX
+static int tee_spi_transfer(struct mt_chip_conf *smt_conf, int cfg_len, const char *txbuf, char *rxbuf, int len)
+{
+    struct spi_transfer t;
+    struct spi_message m;
+    sf_spi->controller_data = (void *)smt_conf;
+    memset(&t, 0, sizeof(t));
+    spi_message_init(&m);
+    t.tx_buf = txbuf;
+    t.rx_buf = rxbuf;
+    t.bits_per_word = 8;
+    t.len = len;
+    spi_message_add_tail(&t, &m);
+    return spi_sync(sf_spi, &m);
+}
+#else*/
+static int tee_spi_transfer(const char *txbuf, char *rxbuf, int len)
+{
+    struct spi_transfer t;
+    struct spi_message m;
+    memset(&t, 0, sizeof(t));
+    spi_message_init(&m);
+    t.tx_buf = txbuf;
+    t.rx_buf = rxbuf;
+    t.bits_per_word = 8;
+    t.len = len;
+    t.speed_hz = 1*1000000;
+    spi_message_add_tail(&t, &m);
+    return spi_sync(chipone_spi, &m);
+}
+//#endif
+static int get_and_check_chipid(void)
+{
+   int ret = -1;
+   int trytimes = 3;
+   char readbuf[16] = {0};
+   char writebuf[16] = {0};
+   do{
+       memset(readbuf,0,sizeof(readbuf));
+       memset(writebuf,0,sizeof(writebuf));
+       writebuf[0] = (uint8_t)(0x08);
+       writebuf[1] = (uint8_t)(0x55);
+       
+       ret = tee_spi_transfer(writebuf,readbuf,6);
+       if(ret != 0){
+            printk("SPI FIFO transfer failed");
+            continue;
+       }
+       
+       memset(readbuf,0,sizeof(readbuf));
+       memset(writebuf,0,sizeof(writebuf));
+       writebuf[0] = (uint8_t)(0x00);
+       writebuf[1] = (uint8_t)(0x00);
+       writebuf[2] = (uint8_t)(0x00);
+       
+       ret = tee_spi_transfer(writebuf,readbuf,6);
+       if(ret != 0){
+            printk("SPI FIFO transfer failed");
+            continue;
+       }
+       
+       if(readbuf[1] == 0x71){
+          printk("read fingerprint chipid OK");
+          return 0;
+       }           
+    }while(trytimes--);
+    fpsensor_debug(ERR_LOG, "get_and_check_chipid do nothing\n");
+    return -1;
+}
 static int fpsensor_probe(struct spi_device *spi)
 {
     struct device *dev = &spi->dev;
@@ -985,6 +1056,7 @@ static int fpsensor_probe(struct spi_device *spi)
         wind_device_info.fp_module_info.vendor = 0x00;
         wind_device_info.fp_module_info.fwvr = 0x00;
 #endif
+    chipone_spi = spi;
 // wangbing@wind-mobi.com 20170727 end
    
 #ifdef FP_READ_HARDWARE_RD
@@ -1093,9 +1165,26 @@ static int fpsensor_probe(struct spi_device *spi)
     //fpsensor_hw_power_enable(1);
     fpsensor_spi_clk_enable(1);
 
-	fpsensor_hw_reset(1250);
+    fpsensor_hw_reset(1250);
+    
+    //#if FPSENSOR_BEANPOD_CONPATIBLE_V2
+    	if(1 == get_fp_spi_enable()){
+		error = get_and_check_chipid();
+		if (error)
+		{
+		   fpsensor_debug(INFO_LOG, "get_and_check_chipid failed\n");
+		   goto err2;
+		}
+      } else {
+        fpsensor_debug(INFO_LOG, "get_fp_spi_enable failed\n");
+        goto err2;
+       }
+    //set_fp_vendor(FP_VENDOR_CHIPONE);
+     set_fp_ta_name("fp_server_leadcore",32);
+     fpsensor_debug(ERR_LOG, "set fpsensor fp_server done\n");
+    //#endif
     //init wait queue
-	fpsensor_irq_gpio_cfg();
+	 fpsensor_irq_gpio_cfg();
     init_waitqueue_head(&fpsensor_dev->wq_irq_return);
 
     fpsensor_debug(INFO_LOG, "%s probe finished, normal driver version: %s\n", __func__,
@@ -1147,20 +1236,8 @@ static struct spi_driver fpsensor_spi_driver =
 static int __init fpsensor_init(void)
 {
     int status;
-	//liukangping 20170721 begin	
-	uint64_t fp_vendor_id = 0x00;
+    FUNC_ENTRY();
 
-	FUNC_ENTRY();
-	
-	get_t_device_id(&fp_vendor_id); // add leaderCore for read id
-	printk("%s lc_fingerprint_vendor_id = 0x%llx\n", __func__, fp_vendor_id);
-	if(fp_vendor_id != 0xff) {
-		printk("%s, Failed to read leaderCore fingerprint ic id, 0x%llx\n", __func__, fp_vendor_id);
-		return -EINVAL;
-	}
-        
-        
-    //liukangping 20170721 end
 #if FPSENSOR_SPI_BUS_DYNAMIC
     spi_register_board_info(spi_board_devs, ARRAY_SIZE(spi_board_devs));
     printk("[0523tee]fpsensor status ==\n");

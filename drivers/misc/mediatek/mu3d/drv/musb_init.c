@@ -45,11 +45,7 @@
 #include <linux/of_device.h>
 #endif
 
-#ifdef CONFIG_USBIF_COMPLIANCE
 static struct musb_fifo_cfg mtu3d_cfg[] = {
-#else
-static struct musb_fifo_cfg mtu3d_cfg[] __initdata = {
-#endif
 	{.hw_ep_num = 1, .style = FIFO_TX, .maxpacket = 1024,},
 	{.hw_ep_num = 1, .style = FIFO_RX, .maxpacket = 1024,},
 	{.hw_ep_num = 2, .style = FIFO_TX, .maxpacket = 1024,},
@@ -304,7 +300,7 @@ static inline void mtu3d_u3_ltssm_intr_handler(struct musb *musb, u32 dwLtssmVal
 		   If LTSSM state is still at RxDet. Clear USB3_EN and set again. */
 		os_printk(K_INFO, "LTSSM: RXDET_SUCCESS_INTR\n");
 		sts_ltssm = RXDET_SUCCESS_INTR;
-		schedule_delayed_work_on(0, &musb->check_ltssm_work, msecs_to_jiffies(1000));
+		schedule_delayed_work(&musb->check_ltssm_work, msecs_to_jiffies(1000));
 	}
 }
 
@@ -416,7 +412,7 @@ static inline void mtu3d_link_intr_handler(struct musb *musb, u32 dwLinkIntValue
 			if (timespec_compare(&ss_timestamp, &tmp) > 0) {
 				os_printk(K_INFO, "queue reconnect work\n");
 
-				schedule_delayed_work_on(0, &musb->reconnect_work, 0);
+				schedule_delayed_work(&musb->reconnect_work, 0);
 			}
 		}
 		speed_last = speed;
@@ -821,6 +817,10 @@ static int mtu3d_probe(struct platform_device *pdev)
 		else
 			pinctrl_select_state(pinctrl, pinctrl_iddig);
 	}
+#endif
+
+#if defined(CONFIG_FPGA_EARLY_PORTING) || defined(U3_COMPLIANCE) || defined(FOR_BRING_UP)
+	mu3d_force_on = 1;
 #endif
 
 	return 0;

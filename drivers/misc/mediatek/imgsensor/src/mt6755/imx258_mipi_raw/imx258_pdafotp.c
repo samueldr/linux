@@ -58,14 +58,19 @@ static int last_offset = 0;
 
 static bool selective_read_eeprom(kal_uint16 addr, BYTE* data)
 {
-	char pu_send_cmd[2] = {(char)(addr >> 8) , (char)(addr & 0xFF) };
-    if(addr > IMX258_MAX_OFFSET)
+    char pu_send_cmd[2] = {(char)(addr >> 8) , (char)(addr & 0xFF) };
+    if (addr > IMX258_MAX_OFFSET)
+    {
         return false;
+    }
 
-	kdSetI2CSpeed(IMX258_I2C_SPEED);
+    kdSetI2CSpeed(IMX258_I2C_SPEED);
 
-	if(iReadRegI2C(pu_send_cmd, 2, (u8*)data, 1, IMX258_EEPROM_READ_ID)<0)
-		return false;
+    if(iReadRegI2C(pu_send_cmd, 2, (u8*)data, 1, IMX258_EEPROM_READ_ID)<0)
+    {
+        return false;
+    }
+
     return true;
 }
 

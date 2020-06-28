@@ -41,13 +41,19 @@ static int last_offset = 0;
 
 static bool selective_read_eeprom(kal_uint16 addr, BYTE* data)
 {
-	char pu_send_cmd[2] = {(char)(addr >> 8) , (char)(addr & 0xFF) };
+    char pu_send_cmd[2] = {(char)(addr >> 8) , (char)(addr & 0xFF) };
     if(addr > S5K3P3_MAX_OFFSET)
+    {
         return false;
-	kdSetI2CSpeed(S5K3P3_I2C_SPEED);
+    }
 
-	if(iReadRegI2C(pu_send_cmd, 2, (u8*)data, 1, S5K3P3_EEPROM_WRITE_ID)<0)
-		return false;
+    kdSetI2CSpeed(S5K3P3_I2C_SPEED);
+
+    if(iReadRegI2C(pu_send_cmd, 2, (u8*)data, 1, S5K3P3_EEPROM_WRITE_ID)<0)
+    {
+        return false;
+    }
+
     return true;
 }
 

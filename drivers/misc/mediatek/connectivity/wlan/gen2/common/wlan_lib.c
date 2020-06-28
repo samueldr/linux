@@ -23,6 +23,19 @@
 #include "precomp.h"
 #include "mgmt/ais_fsm.h"
 
+#if 0
+//add by zuozhuang@wind-mobi.com 2017-12-1 begin
+#include <linux/uaccess.h>
+#include <linux/fs.h>
+#include <linux/fs_struct.h>
+#include <linux/file.h>
+#include <linux/delay.h>
+#include <linux/suspend.h>
+#include <linux/kernel.h>
+
+//add by zuozhuang@wind-mobi.com 2017-12-1 end
+#endif
+
 /*******************************************************************************
 *                              C O N S T A N T S
 ********************************************************************************
@@ -229,6 +242,7 @@ P_ADAPTER_T wlanAdapterCreate(IN P_GLUE_INFO_T prGlueInfo)
 
 	return prAdpater;
 }				/* wlanAdapterCreate */
+
 
 /*----------------------------------------------------------------------------*/
 /*!
@@ -2550,6 +2564,44 @@ VOID wlanoidClearTimeoutCheck(IN P_ADAPTER_T prAdapter)
 	cnmTimerStopTimer(prAdapter, &(prAdapter->rOidTimeoutTimer));
 }
 
+#if 0
+//add by zuozhuang@wind-mobi.com 2017-12-1 begin
+int read_wind_wifimac(unsigned char *buf)
+{
+     int ret = 0;
+     char path[] = "/data/property/persist.wind.wifimac";
+    //set kernel domain begin
+    mm_segment_t old_fs;
+    struct file *fp;
+
+    printk(KERN_WARNING "read_wind_wifimac()...\n");
+    old_fs = get_fs();
+    set_fs(KERNEL_DS);
+    fp=filp_open(path, O_RDONLY, 0);
+    if (!IS_ERR_OR_NULL(fp)){
+    printk(KERN_WARNING "read_wind_wifimac() fp != null\n");
+        if (fp->f_op){
+    printk(KERN_WARNING "read_wind_wifimac() f_op not null\n");
+            fp->f_pos = 0;
+            if(fp->f_op->read){
+                ret = fp->f_op->read(fp, buf, 6, &fp->f_pos);
+    printk(KERN_WARNING "read_wind_wifimac() op_read ret: %d\n", ret);
+            }else{
+                ret = (int)vfs_read(fp, buf, 6, &fp->f_pos);
+    printk(KERN_WARNING "read_wind_wifimac() vfs_read ret: %d\n", ret);
+            }
+        }
+        filp_close(fp,NULL);
+    }
+    //set user domain again
+    set_fs(old_fs);
+    printk(KERN_WARNING "read_wind_wifimac() ret: %d\n", ret);
+    return ret == 6; 
+
+}
+//add by zuozhuang@wind-mobi.com 2017-12-1 end
+#endif
+
 /*----------------------------------------------------------------------------*/
 /*!
 * @brief This function is called to update network address in firmware domain
@@ -2570,7 +2622,18 @@ WLAN_STATUS wlanUpdateNetworkAddress(IN P_ADAPTER_T prAdapter)
 	P_WIFI_CMD_T prWifiCmd;
 	P_CMD_BASIC_CONFIG prCmdBasicConfig;
 	UINT_32 u4SysTime;
-
+#if 0
+	//add by zuozhuang@wind-mobi.com 2017-12-1 begin
+	unsigned char sn_buf[6];
+	//char sn_6[6];
+	//int i,j=5;
+	//int k = 0;
+	//char tc;
+	//uint64_t sum = 0;
+	//char ctt;
+	//unsigned int rand_num;
+	//add by zuozhuang@wind-mobi.com 2017-12-1 end
+#endif
 	DEBUGFUNC("wlanUpdateNetworkAddress");
 
 	ASSERT(prAdapter);
@@ -2587,14 +2650,42 @@ WLAN_STATUS wlanUpdateNetworkAddress(IN P_ADAPTER_T prAdapter)
 #if CFG_SHOW_MACADDR_SOURCE
 		DBGLOG(INIT, TRACE, "Using dynamically generated MAC address");
 #endif
+
+#if 0
+            //add by zuozhuang@wind-mobi.com 2017-12-1 begin
+			memset(sn_buf, 0, 6);
+			if(read_wind_wifimac(sn_buf)){
+
+ 	            rMacAddr[0] = sn_buf[0];
+	            rMacAddr[1] = sn_buf[1];
+	            rMacAddr[2] = sn_buf[2];
+	            rMacAddr[3] = sn_buf[3];
+	            rMacAddr[4] = sn_buf[4];
+	            rMacAddr[5] = sn_buf[5]; 				
+			}else{
+#endif
+			    /* dynamic generate */
+			    u4SysTime = (UINT_32) kalGetTimeTick();
+
+			    rMacAddr[0] = 0x00;
+			    rMacAddr[1] = 0x08;
+			    rMacAddr[2] = 0x22;
+			    kalMemCopy(&rMacAddr[3], &u4SysTime, 3);
+#if 0
+		    }
+			//add by zuozhuang@wind-mobi.com 2017-12-1 end
+			
+			//dellete by zuozhuang@wind-mobi.com 2017-12-1 begin
+/*		    u4SysTime = (UINT_32) kalGetTimeTick();
+
+ 			rMacAddr[0] = 0x00;
+			rMacAddr[1] = 0x08;
+			rMacAddr[2] = 0x22;
+			kalMemCopy(&rMacAddr[3], &u4SysTime, 3); */
+			//dellete by zuozhuang@wind-mobi.com 2017-12-1 end
 		/* dynamic generate */
-		u4SysTime = kalGetTimeTick();
+#endif
 
-		rMacAddr[0] = 0x00;
-		rMacAddr[1] = 0x08;
-		rMacAddr[2] = 0x22;
-
-		kalMemCopy(&rMacAddr[3], &u4SysTime, 3);
 	} else {
 #if CFG_SHOW_MACADDR_SOURCE
 		DBGLOG(INIT, INFO, "Using host-supplied MAC address");

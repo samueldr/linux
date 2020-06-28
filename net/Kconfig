@@ -199,13 +199,13 @@ config NETFILTER_ADVANCED
 	  basic ones needed by most people will default to 'M'.
 
 	  If unsure, say Y.
-# liqiang@wind-mobi.com 20170512 begin
+
 config BRIDGE_NETFILTER
 	tristate "Bridged IP/ARP packets filtering"
 	depends on BRIDGE
 	depends on NETFILTER && INET
 	depends on NETFILTER_ADVANCED
-	default y
+	default m
 	---help---
 	  Enabling this option will let arptables resp. iptables see bridged
 	  ARP resp. IP traffic. If you want a bridging firewall, you probably
@@ -214,7 +214,7 @@ config BRIDGE_NETFILTER
 	  ebtables.
 
 	  If unsure, say N.
-# liqiang@wind-mobi.com 20170512 end
+
 source "net/netfilter/Kconfig"
 source "net/ipv4/netfilter/Kconfig"
 source "net/ipv6/netfilter/Kconfig"
@@ -405,6 +405,7 @@ config HAVE_BPF_JIT
 config MTK_NET_LOGGING
   bool "Networking log"
   default n
+
 config MTK_NET_RFC7217
 	bool "Enable stable privacy IPv6 address"
 	default n

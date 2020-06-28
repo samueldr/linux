@@ -1252,6 +1252,8 @@ typedef enum {
     MSG28XX_SW_ID_XXXX = 0x001b,	// hd old // wangbing@wind-mobi.com 20171016
     MSG28XX_SW_ID_YYYY = 0x001c,	// hd new // wangbing@wind-mobi.com 20171013
     MSG28XX_SW_ID_ZZZZ = 0x0010,	// fhd    // wangbing@wind-mobi.com 20171013
+    MSG28XX_SW_ID_XXXX_7703 = 0x001b,	// hd old 7703// qiangang@wind-mobi.com 20171206
+    MSG28XX_SW_ID_YYYY_7703 = 0x001c,	// hd new 7703// qiangang@wind-mobi.com 20171206
     MSG28XX_SW_ID_UNDEFINED = 0xFFFF
 } Msg28xxSwId_e;
 #endif //CONFIG_UPDATE_FIRMWARE_BY_SW_ID

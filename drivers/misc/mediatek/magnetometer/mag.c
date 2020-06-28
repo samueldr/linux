@@ -858,6 +858,7 @@ static int x1, y1, z1;
 static long pc;
 static long count;
 
+// wangbing@wind-mobi.com 20171102 begin
 static int check_repeat_data(int x, int y, int z)
 {
 	if ((x1 == x) && (y1 == y) && (z1 == z))
@@ -868,7 +869,7 @@ static int check_repeat_data(int x, int y, int z)
 	x1 = x; y1 = y; z1 = z;
 
 	if (pc > 100) {
-		MAG_ERR("Mag sensor output repeat data\n");
+		// MAG_ERR("Mag sensor output repeat data\n");
 		pc = 0;
 	}
 
@@ -882,8 +883,8 @@ static int check_abnormal_data(int x, int y, int z, int status)
 
 	total = (x*x + y*y + z*z)/(cxt->mag_dev_data.div_m * cxt->mag_dev_data.div_m);
 	if ((total < 100) || (total > 10000)) {
-		if (count % 10 == 0)
-			MAG_ERR("mag sensor abnormal data: x=%d,y=%d,z=%d, status=%d\n", x, y, z, status);
+		// if (count % 10 == 0)
+		// 	MAG_ERR("mag sensor abnormal data: x=%d,y=%d,z=%d, status=%d\n", x, y, z, status);
 		count++;
 		if (count > 1000)
 			count = 0;
@@ -891,6 +892,7 @@ static int check_abnormal_data(int x, int y, int z, int status)
 
 	return 0;
 }
+// wangbing@wind-mobi.com 20171102 end
 
 int mag_data_report(enum MAG_TYPE type, int x, int y, int z, int status, int64_t nt)
 {

@@ -165,17 +165,6 @@ static struct {
 
 #define MAX_DBG_NAME_LENGTH 30
 
-static int parse_strtoull(const char *buf,
-	unsigned long long max, unsigned long long *value)
-{
-	int ret;
-
-	ret = kstrtoull(skip_spaces(buf), 0, value);
-	if (!ret && *value > max)
-		ret = -EINVAL;
-	return ret;
-}
-
 static ssize_t rawfs_proc_write(struct file *filp, const char __user *buf,
 	size_t len, loff_t *ppos)
 {
@@ -187,7 +176,6 @@ static ssize_t rawfs_proc_write(struct file *filp, const char __user *buf,
 	int done = 0;
 	int add;
 	int pos = 0;
-	unsigned long long val;
 
 	RAWFS_PRINT(RAWFS_DBG_SUPER, "rawfs_proc_write, current mask %X, %s\n",
 		rawfs_debug_msg_mask, buf);
@@ -212,11 +200,6 @@ static ssize_t rawfs_proc_write(struct file *filp, const char __user *buf,
 			break;
 		}
 		dbg_name = NULL;
-
-		if (parse_strtoull(buf + pos, -1ULL, &val))
-			return -EINVAL;
-
-		dbg_bit = val;
 
 		for (x = buf + pos, i = 0;
 			 (*x == '_' || (*x >= 'a' && *x <= 'z')) &&
@@ -497,14 +480,16 @@ int rawfs_stat_fs(struct dentry *dentry, struct kstatfs *buf)
 	if (result)
 		goto out;
 
-	buf->f_type = dentry->d_sb->s_magic;	   /* RAWFS_MAGIC */
-	buf->f_bsize = rawfs_sb->page_size;		/* PAGE_CACHE_SIZE; */
-	buf->f_namelen = RAWFS_MAX_FILENAME_LEN;   /* NAME_MAX */
-	buf->f_blocks = rawfs_sb->pages_per_block * rawfs_sb->total_blocks;
-	buf->f_ffree = free_blocks;
-	buf->f_bavail = free_blocks;
-	buf->f_files = entry_count;
-	buf->f_ffree = free_blocks;
+	buf->f_type = dentry->d_sb->s_magic;     /* RAWFS_MAGIC */
+	buf->f_bsize = rawfs_sb->page_size;	     /* PAGE_CACHE_SIZE; */
+	buf->f_namelen = RAWFS_MAX_FILENAME_LEN; /* NAME_MAX */
+
+	/* Total data blocks in filesystem */
+	buf->f_blocks = rawfs_sb->pages_per_block * (RAWFS_NAND_BLOCKS(rawfs_sb)-1);
+	buf->f_bfree = free_blocks;   /* Free blocks in filesystem */
+	buf->f_ffree = free_blocks;   /* Free file nodes in filesystem */
+	buf->f_bavail = free_blocks;  /* Free blocks available to unprivileged user */
+	buf->f_files = entry_count;   /* Total file nodes in filesystem */
 
 	RAWFS_PRINT(RAWFS_DBG_SUPER,
 		"rawfs_stat_fs: f_type %X, f_blocks %d, f_ffree %d, f_bavail %d, f_namelen %d, f_bsize %d\n",
@@ -872,6 +857,7 @@ static int rawfs_fill_super(struct super_block *sb, void *data, int silent)
 	if (result < 0)
 		goto end;
 
+#if 0
 	/* Adding block file */
 	if (rawfs_sb->flags & RAWFS_MNT_BLOCKFILE) {
 		struct rawfs_file_info fi;
@@ -890,6 +876,7 @@ static int rawfs_fill_super(struct super_block *sb, void *data, int silent)
 		strncpy(fi.i_name, ".block1", RAWFS_MAX_FILENAME_LEN+4);
 		rawfs_file_list_add(sb, &fi, 1, -1);
 	}
+#endif
 
 	result = rawfs_page_level_analysis(sb);  /* Build regular file inodes */
 	if (result < 0)
@@ -946,9 +933,7 @@ static struct file_system_type rawfs_fs_type = {
 	.owner = THIS_MODULE,
 	.name = "rawfs",
 	.mount = rawfs_mount,
-/* .get_sb = rawfs_get_sb, */
 	.kill_sb = rawfs_kill_super,
-	/*  .fs_flags */
 };
 
 /* ------------------------------------------------------------------------------ */

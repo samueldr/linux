@@ -596,8 +596,9 @@ static ssize_t txc_alsprx_show_ps(struct device_driver *ddri, char *buf)
     if( res < 0 )
         return snprintf(buf, PAGE_SIZE, "ERROR\n");    
     else    
-        return snprintf(buf, PAGE_SIZE, "%d\n", txc_alsprx_obj->txc_state.prx_db.prx_data);    
-
+	//add by wangjun begin 
+        return snprintf(buf, PAGE_SIZE, "%x\n", txc_alsprx_obj->txc_state.prx_db.prx_data);    
+	//add by wangjun end
 }
 /*----------------------------------------------------------------------------*/
 static ssize_t txc_alsprx_show_reg(struct device_driver *ddri, char *buf)
@@ -1679,6 +1680,7 @@ static int txc_alsprx_i2c_probe(struct i2c_client *client, const struct i2c_devi
     ps_crosstalk      = 10;
     ps_threshold_high = 37;
     ps_threshold_low  = 20;
+	ps_threshold_5cm = 150; 	//add by wangjun 
     //wangjun@wind-mobi.com 20170930 end
     
     if((err = alsprx_set_reg_default(&obj->txc_state, &obj->txc_nv))) {

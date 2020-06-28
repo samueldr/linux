@@ -38,6 +38,11 @@
 //#include <mach/mt_pm_ldo.h>
 //#include <cust_eint.h>
 //#include <mach/eint.h>
+#include <linux/of.h>
+#include <linux/of_address.h>
+#include <linux/of_irq.h>
+#include <linux/gpio.h>
+//#include "core.h"
 #include <asm/atomic.h>
 #include <cust_acc.h>
 #include <accel.h>
@@ -63,12 +68,12 @@
 #undef LSM6DS3_SIGNIFICANT_MOTION
 #endif
 
-
 #include <cust_acc.h>
 
 #ifdef LSM6DS3_NEW_ARCH
 #include <accel.h>
-#ifdef LSM6DS3_STEP_COUNTER //step counter
+
+#if (defined(LSM6DS3_SIGNIFICANT_MOTION) ||defined(LSM6DS3_STEP_COUNTER))
 #include "step_counter.h"
 #endif
 #ifdef LSM6DS3_TILT_FUNC //tilt detector
@@ -83,7 +88,23 @@
 #endif
 /* oujiacheng@wind-mobi.com 20160126 end */
 
+#if (defined(LSM6DS3_TILT_FUNC) ||defined(LSM6DS3_SIGNIFICANT_MOTION) ||defined(LSM6DS3_STEP_COUNTER))
 
+#define GPIO_LSM6DS3_EINT_PIN 1
+#define GPIO_LSM6DS3_EINT_PIN_M_EINT 1
+#define CUST_EINT_LSM6DS3_NUM 1
+
+#define CUST_EINT_LSM6DS3_DEBOUNCE_CN 1 //debounce time
+#define CUST_EINT_LSM6DS3_TYPE 1	//eint trigger type
+
+#define GPIO_LSM6DS3_EINT2_PIN 1
+#define GPIO_LSM6DS3_EINT2_PIN_M_EINT 1
+#define CUST_EINT2_LSM6DS3_NUM 1
+#define CUST_EINT2_LSM6DS3_DEBOUNCE_CN 1 //debounce time
+
+#endif
+struct platform_device *stepPltFmDev;
+int step_irq;
 #if defined(LSM6DS3_TILT_FUNC) //|| defined(LSM6DS3_SIGNIFICANT_MOTION)	
 #define GPIO_LSM6DS3_EINT_PIN GPIO_GSE_1_EINT_PIN		//eint gpio pin num
 #define GPIO_LSM6DS3_EINT_PIN_M_EINT GPIO_GSE_1_EINT_PIN_M_EINT	//eint mode
@@ -95,7 +116,7 @@
 /*---------------------------------------------------------------------------*/
 #define DEBUG 1
 //yangzhigang@wind-mobi.com start 20160407
-#define DEBUG_log 0
+#define DEBUG_log 1
 //yangzhigang@wind-mobi.com end
 /*----------------------------------------------------------------------------*/
 #define CONFIG_LSM6DS3_LOWPASS   /*apply low pass filter on output*/       
@@ -177,13 +198,17 @@ static int LSM6DS3_Reset_Pedo_Data(struct i2c_client *client, LSM6DS3_ACC_GYRO_P
 //modify by qiangang@wind-mobi.com 20170920 end
 #ifdef LSM6DS3_SIGNIFICANT_MOTION
 
-static int LSM6DS3_Enable_SigMotion_Func(struct i2c_client *client, LSM6DS3_ACC_GYRO_SIGN_MOT_t newValue);
+//static int LSM6DS3_Enable_SigMotion_Func(struct i2c_client *client, LSM6DS3_ACC_GYRO_SIGN_MOT_t newValue);
 #endif
 #endif
 #ifdef LSM6DS3_TILT_FUNC //tilt detector
 
 static int LSM6DS3_Enable_Tilt_Func(struct i2c_client *client, bool enable);
 static int LSM6DS3_Enable_Tilt_Func_On_Int(struct i2c_client *client, LSM6DS3_ACC_GYRO_ROUNT_INT_t tilt_int, bool enable);
+#endif
+
+#if (defined(LSM6DS3_TILT_FUNC) ||defined(LSM6DS3_SIGNIFICANT_MOTION) ||defined(LSM6DS3_STEP_COUNTER))
+static int lsm6ds3_setup_eint(void);
 #endif
 
 static struct acc_hw accel_cust;		// wangjun@wind-mobi.com 20170814
@@ -252,6 +277,8 @@ struct lsm6ds3_i2c_data {
 	
 	int 					sensitivity;
 	int 					sample_rate;
+	
+	atomic_t    int1_request_num;
 
 #if defined(CONFIG_LSM6DS3_LOWPASS)
     atomic_t                firlen;
@@ -265,6 +292,41 @@ struct lsm6ds3_i2c_data {
 };
 
 
+#ifdef LSM6DS3_NEW_ARCH
+static int lsm6ds3_probe(struct platform_device *pdev) 
+{
+	stepPltFmDev = pdev;
+	printk("qiangang is in 000\n");
+	return 0;
+}
+/*----------------------------------------------------------------------------*/
+static int lsm6ds3_remove(struct platform_device *pdev)
+{
+    return 0;
+}
+#endif
+/*----------------------------------------------------------------------------*/
+#ifdef CONFIG_OF
+static const struct of_device_id sig_sensor_of_match[] = {
+	{ .compatible = "mediatek,st_step_counter", },
+	//{ .compatible = "mediatek,lsm6ds3_acc", },
+	{},
+};
+#endif
+
+#ifdef LSM6DS3_NEW_ARCH
+static struct platform_driver lsm6ds3_driver = {
+	.probe      = lsm6ds3_probe,
+	.remove     = lsm6ds3_remove,    
+	.driver     = {
+			.name  = "stepcounter",
+		//	.owner	= THIS_MODULE,
+	#ifdef CONFIG_OF
+			.of_match_table = sig_sensor_of_match,
+	#endif
+	}
+};
+#endif
 
 
 /*----------------------------------------------------------------------------*/
@@ -298,6 +360,7 @@ static int lsm6ds3_local_uninit(void);
 static int lsm6ds3_acc_init_flag = -1;
 static unsigned long lsm6ds3_init_flag_test = 0; //initial state
 static DEFINE_MUTEX(lsm6ds3_init_mutex);
+static DEFINE_MUTEX(lsm6ds3_acc_mutex);
 typedef enum {
 	LSM6DS3_ACC = 1,
 	LSM6DS3_STEP_C = 2,
@@ -332,16 +395,15 @@ static struct tilt_init_info  lsm6ds3_tilt_init_info = {
 /*----------------------------------------------------------------------------*/
 static struct i2c_client *lsm6ds3_i2c_client = NULL;
 
-#ifndef LSM6DS3_NEW_ARCH
-static struct platform_driver lsm6ds3_driver;
-#endif
-
 static struct lsm6ds3_i2c_data *obj_i2c_data = NULL;
 static bool sensor_power = false;
 static bool enable_status = false;
 static bool pedo_enable_status = false;
 static bool tilt_enable_status = false;
-
+static bool stepd_enable_status = false;
+#ifdef LSM6DS3_SIGNIFICANT_MOTION
+static bool sigm_enable_status = false;
+#endif
 
 /*----------------------------------------------------------------------------*/
 
@@ -358,7 +420,7 @@ static void LSM6DS3_dumpReg(struct i2c_client *client)
   int i=0;
   u8 addr = 0x10;
   u8 regdata=0;
-  for(i=0; i<25 ; i++)
+  for(i=0; i<80; i++)
   {
     //dump all
     hwmsen_read_byte(client,addr,&regdata);
@@ -544,7 +606,12 @@ static int LSM6DS3_enable_tilt(struct i2c_client *client, bool enable)
 			GSE_LOG(" LSM6DS3_Enable_Tilt_Func_On_Int failed!\n");
 			return LSM6DS3_ERR_STATUS;
 		}	
-		//disable_irq(CUST_EINT_LSM6DS3_NUM);
+		while ( atomic_read(&obj->int1_request_num) >=1){
+		
+		    enable_irq(step_irq);
+		    atomic_dec(&obj->int1_request_num);
+			GSE_LOG(" sigMotion enable with2 sigm_enable_status=%d,stepd_enable_status = %d,irq times %d  \n", sigm_enable_status,stepd_enable_status, atomic_read(&obj->int1_request_num));
+		}
 	}
 	else
 	{
@@ -554,9 +621,11 @@ static int LSM6DS3_enable_tilt(struct i2c_client *client, bool enable)
 			GSE_LOG(" LSM6DS3_Enable_Tilt_Func failed!\n");
 			return LSM6DS3_ERR_STATUS;
 		}
-		if(!enable_status && !pedo_enable_status)
-		{
+		if(!enable_status && !pedo_enable_status && !sigm_enable_status && !stepd_enable_status)
+		{   
+		    mutex_lock(&lsm6ds3_acc_mutex);
 			res = LSM6DS3_acc_SetPowerMode(client, false);
+		    mutex_unlock(&lsm6ds3_acc_mutex);
 			if(res != LSM6DS3_SUCCESS)
 			{
 				GSE_LOG(" LSM6DS3_acc_SetPowerMode failed!\n");
@@ -564,6 +633,12 @@ static int LSM6DS3_enable_tilt(struct i2c_client *client, bool enable)
 			}
 		}
 		//disable_irq(CUST_EINT_LSM6DS3_NUM);
+	if (( sigm_enable_status ==false) &&( stepd_enable_status ==false) )
+		{
+			cancel_work_sync(&obj->eint_work);
+			disable_irq(step_irq);
+			atomic_inc(&obj->int1_request_num);
+		}
 	}
 //	tilt_enable_status = enable;
 	return LSM6DS3_SUCCESS;
@@ -1057,20 +1132,21 @@ static int LSM6DS3_Enable_SigMotion_Func_On_Int(struct i2c_client *client, bool 
 	int res = 0;
 	u8 op_reg = 0;
 	
-	LSM6DS3_ACC_GYRO_FUNC_EN_t func_enable;
-	LSM6DS3_ACC_GYRO_SIGN_MOT_t sigm_enable;
+	//LSM6DS3_ACC_GYRO_FUNC_EN_t func_enable;
+	//LSM6DS3_ACC_GYRO_SIGN_MOT_t sigm_enable;
 //yangzhigang@wind-mobi.com 20160407 start
 #if DEBUG_log
 	GSE_FUN();
 #endif
 //yangzhigang@wind-mobi.com end    
-	
+
+#if 0
 	if(enable)
 	{
 		func_enable = LSM6DS3_ACC_GYRO_FUNC_EN_ENABLED;
 		sigm_enable = LSM6DS3_ACC_GYRO_SIGN_MOT_ENABLED;
 		
-		res = LSM6DS3_acc_Enable_Func(client, func_enable);	
+		res = LSM6DS3_acc_Enable_Func(client, func_enable);	   //bug here need notice
 		if(res != LSM6DS3_SUCCESS)
 		{
 			GSE_LOG(" LSM6DS3_acc_Enable_Func failed!\n");
@@ -1123,7 +1199,43 @@ static int LSM6DS3_Enable_SigMotion_Func_On_Int(struct i2c_client *client, bool 
 		GSE_ERR("write enable tilt func register err!\n");
 		return LSM6DS3_ERR_I2C;
 	}	
-	res = LSM6DS3_Int_Ctrl(client, LSM6DS3_ACC_GYRO_INT_ACTIVE_LOW, LSM6DS3_ACC_GYRO_INT_LATCH);
+#endif
+
+    //Config interrupt for significant motion  , enable/disable WU bit IN MD1
+
+	op_reg = LSM6DS3_MD1_CFG;
+		
+	if(hwmsen_read_byte(client, op_reg, databuf))
+	{
+		GSE_ERR("%s read data format register err!\n", __func__);
+		return LSM6DS3_ERR_I2C;
+	}
+	else
+	{
+		GSE_LOG("read  LSM6DS3_MD1_CFG register: 0x%x\n", databuf[0]);
+	}
+	
+	if(enable)
+	{
+		databuf[0] &= ~0x20;//clear 
+		databuf[0] |= 0x20;			
+	}
+	else
+	{
+		databuf[0] &= ~0x20;//clear 
+		databuf[0] |= 0x00;		
+	}
+	
+	databuf[1] = databuf[0];
+	databuf[0] = op_reg; 	
+	res = i2c_master_send(client, databuf, 0x2);
+	if(res < 0)
+	{
+		GSE_ERR("write enable tilt func register err!\n");
+		return LSM6DS3_ERR_I2C;
+	}	
+	
+	res = LSM6DS3_Int_Ctrl(client, LSM6DS3_ACC_GYRO_INT_ACTIVE_HIGH, LSM6DS3_ACC_GYRO_INT_LATCH);    //default low
 	if(res < 0)
 	{
 		GSE_ERR("write enable tilt func register err!\n");
@@ -1309,47 +1421,75 @@ static int LSM6DS3_Set_SigMotion_Threshold(struct i2c_client *client, u8 SigMoti
 	GSE_FUN();
 #endif
 //yangzhigang@wind-mobi.com end    
+
+    
+	if(hwmsen_read_byte(client, LSM6DS3_WAKE_UP_THS, databuf))
+		{
+			GSE_ERR("read acc data format register err!\n");
+			return LSM6DS3_ERR_I2C;
+		}
+		else
+		{
+			GSE_LOG("read  LSM6DS3_WAKE_UP_THS register: 0x%x\n", databuf[0]);
+		}
+		
+	databuf[1] &= ~0x3f;//clear 
+	databuf[1] |= SigMotion_Threshold; 	
+	databuf[0] = LSM6DS3_WAKE_UP_THS; 
 	
-	if(hwmsen_read_byte(client, LSM6DS3_FUNC_CFG_ACCESS, databuf))
+	res = i2c_master_send(client, databuf, 0x2);
+	if(res <= 0)
 	{
-		GSE_ERR("%s read LSM6DS3_CTRL10_C register err!\n", __func__);
+		GSE_ERR("%s write LSM6DS3_WAKE_UP_THS register err!\n", __func__);
+		return LSM6DS3_ERR_I2C;
+	}
+
+
+	if(hwmsen_read_byte(client, LSM6DS3_WAKE_UP_DUR, databuf))
+	{
+		GSE_ERR("read acc data format register err!\n");
 		return LSM6DS3_ERR_I2C;
 	}
 	else
 	{
-		GSE_LOG("%s read acc data format register: 0x%x\n", __func__, databuf[0]);
+		GSE_LOG("read  LSM6DS3_WAKE_UP_DUR register: 0x%x\n", databuf[0]);
 	}
-	databuf[0] = 0x80;
-	
-	databuf[1] = databuf[0];
-	databuf[0] = LSM6DS3_FUNC_CFG_ACCESS; 	
-	res = i2c_master_send(client, databuf, 0x2);
-	if(res <= 0)
-	{
-		GSE_ERR("%s write LSM6DS3_CTRL10_C register err!\n", __func__);
-		return LSM6DS3_ERR_I2C;
-	}
-	
-	databuf[1] = SigMotion_Threshold;
-	databuf[0] = LSM6DS3_SM_THS; 
+
+	databuf[1] &= ~0x60;//clear 
+	databuf[1] |= 0x40;			
+	databuf[0] = LSM6DS3_WAKE_UP_DUR;//clear 
 	
 	res = i2c_master_send(client, databuf, 0x2);
 	if(res <= 0)
 	{
-		GSE_ERR("%s write LSM6DS3_CTRL10_C register err!\n", __func__);
+		GSE_ERR("%s write LSM6DS3_WAKE_UP_DUR register err!\n", __func__);
 		return LSM6DS3_ERR_I2C;
 	}
+
+    if(hwmsen_read_byte(client, LSM6DS3_TAP_CFG, databuf))
+	{
+		GSE_ERR("read acc data format register err!\n");
+		return LSM6DS3_ERR_I2C;
+	}
+	else
+	{
+		GSE_LOG("read  LSM6DS3_TAP_CFG register: 0x%x\n", databuf[0]);
+	}
+
+	databuf[1] &= ~0x10;//clear  
+	databuf[1] |= 0x00;			 // slope filter
+	databuf[0] = LSM6DS3_TAP_CFG;//clear 
 	
-	databuf[1] = 0x00;
-	databuf[0] = LSM6DS3_FUNC_CFG_ACCESS;
 	res = i2c_master_send(client, databuf, 0x2);
 	if(res <= 0)
 	{
-		GSE_ERR("%s write LSM6DS3_CTRL10_C register err!\n", __func__);
+		GSE_ERR("%s write LSM6DS3_TAP_CFG register err!\n", __func__);
 		return LSM6DS3_ERR_I2C;
-	}	
+	}
 	return LSM6DS3_SUCCESS;    
 }
+
+#if 0
 static int LSM6DS3_Enable_SigMotion_Func(struct i2c_client *client, LSM6DS3_ACC_GYRO_SIGN_MOT_t newValue)
 {
 	u8 databuf[2] = {0}; 
@@ -1383,6 +1523,7 @@ static int LSM6DS3_Enable_SigMotion_Func(struct i2c_client *client, LSM6DS3_ACC_
 
 	return LSM6DS3_SUCCESS;    
 }
+#endif 
 #endif
 #endif
 
@@ -2218,7 +2359,9 @@ static int lsm6ds3_enable_nodata(int en)
 	}
 	else if(!pedo_enable_status && !tilt_enable_status)
 	{
+	    mutex_lock(&lsm6ds3_acc_mutex);
 		err = LSM6DS3_acc_SetPowerMode( priv->client, enable_status);					
+		mutex_unlock(&lsm6ds3_acc_mutex);
 	}
 //yangzhigang@wind-mbi.com 20160407 start
 #if DEBUG_log
@@ -2339,11 +2482,14 @@ static int lsm6ds3_step_c_enable_significant(int en)
 {
 	int res =0;
 	struct lsm6ds3_i2c_data *priv = obj_i2c_data;
+	GSE_FUN();
 	
 	if(1 == en)
 	{
-		pedo_enable_status = true;
-		res = LSM6DS3_Set_SigMotion_Threshold(priv->client, 0x08);
+	          if ( true == sigm_enable_status)
+		     return 0;
+		sigm_enable_status = true;
+		res = LSM6DS3_Set_SigMotion_Threshold(priv->client, 0x02);     // 2 = 125mg
 		if(LSM6DS3_SUCCESS != res)
 		{
 			GSE_ERR("%s run LSM6DS3_Set_SigMotion_Threshold to fail!\n", __func__);
@@ -2354,38 +2500,54 @@ static int lsm6ds3_step_c_enable_significant(int en)
 		{
 			GSE_ERR("%s run LSM6DS3_Set_SigMotion_Threshold to fail!\n", __func__);
 		}
+
+		msleep(50);
+		
 		res = LSM6DS3_Enable_SigMotion_Func_On_Int(priv->client, true); //default route to INT2
 		if(LSM6DS3_SUCCESS != res)
 		{
 			GSE_ERR("%s run LSM6DS3_Enable_SigMotion_Func_On_Int to fail!\n", __func__);
 		}
 		
-		res = LSM6DS3_acc_SetFullScale(priv->client, LSM6DS3_ACC_RANGE_4g); //oujiacheng@wind-mobi.com 20160303 add 
-		if(LSM6DS3_SUCCESS != res)
-		{
-			GSE_ERR("%s run LSM6DS3_Enable_SigMotion_Func_On_Int to fail!\n", __func__);
-		}
-		
-		//enable_irq(CUST_EINT_LSM6DS3_NUM);
+		GSE_LOG(" sigMotion enable with1 int1_count=%d\n", atomic_read(&priv->int1_request_num));
+		while ( atomic_read(&priv->int1_request_num) >=1){
+			//if (( tilt_enable_status ==false) &&( stepd_enable_status ==false) )
+		    		enable_irq(step_irq);
+			atomic_dec(&priv->int1_request_num);
+			GSE_LOG(" sigMotion enable with2 tilt_enable_status=%d,stepd_enable_status = %d,irq times %d  \n", tilt_enable_status,stepd_enable_status, atomic_read(&priv->int1_request_num));
+			}
 	}
 	else if(0 == en)
 	{
-		pedo_enable_status = false;
+	    if ( false == sigm_enable_status)
+		   return 0;
+		sigm_enable_status = false;
 		res = LSM6DS3_Enable_SigMotion_Func_On_Int(priv->client, false);
 		if(LSM6DS3_SUCCESS != res)
 		{
 			GSE_ERR("%s run LSM6DS3_Enable_SigMotion_Func_On_Int to fail!\n", __func__);
 		}
-		if(!enable_status && !tilt_enable_status)
-		{
+
+		if(!enable_status && !tilt_enable_status && !pedo_enable_status && !stepd_enable_status)
+		{   
+		    mutex_lock(&lsm6ds3_acc_mutex);
 			res = LSM6DS3_acc_SetPowerMode(priv->client, false);
+			mutex_unlock(&lsm6ds3_acc_mutex);
 			if(LSM6DS3_SUCCESS != res)
 			{
 				GSE_ERR("%s run LSM6DS3_acc_SetPowerMode to fail!\n", __func__);
 			}
 		}
+		GSE_LOG(" sigMotion disable with1 int1_count=%d\n", atomic_read(&priv->int1_request_num));
+
 		
-		//disable_irq(CUST_EINT_LSM6DS3_NUM);
+		if (( tilt_enable_status ==false) &&( stepd_enable_status ==false) )
+		{
+			cancel_work_sync(&priv->eint_work);
+			disable_irq(step_irq);
+			atomic_inc(&priv->int1_request_num);
+		}
+	        GSE_LOG(" sigMotion enable with2 tilt_enable_status=%d,stepd_enable_status = %d \n", tilt_enable_status,stepd_enable_status);
 	}
 	
 	return res;
@@ -2966,14 +3128,13 @@ static struct miscdevice lsm6ds3_acc_device = {
 /*----------------------------------------------------------------------------*/
 static int lsm6ds3_acc_suspend(struct i2c_client *client, pm_message_t msg) 
 {
-	struct lsm6ds3_i2c_data *obj = i2c_get_clientdata(client);    
-//yangzhigang@wind-mobi.com 20160407 start
-#if DEBUG_log
-	GSE_FUN();
-#endif
-//yangzhigang@wind-mobi.com end    
+	struct lsm6ds3_i2c_data *obj = i2c_get_clientdata(client);       
 	int err = 0;
-	
+//yangzhigang@wind-mobi.com 20160407 start	
+	#if DEBUG_log
+	GSE_FUN();
+    #endif 
+//yangzhigang@wind-mobi.com end	
 	if (msg.event == PM_EVENT_SUSPEND) {   
 		if (obj == NULL) {
 			GSE_ERR("null pointer!!\n");
@@ -2981,11 +3142,15 @@ static int lsm6ds3_acc_suspend(struct i2c_client *client, pm_message_t msg)
 		}
 		atomic_set(&obj->suspend, 1);
 
-		if (pedo_enable_status  || tilt_enable_status) {
+		if(pedo_enable_status  || tilt_enable_status || sigm_enable_status ||stepd_enable_status )
+		{
 			return 0;
 		}
+		mutex_lock(&lsm6ds3_acc_mutex);
 		err = LSM6DS3_acc_SetPowerMode(obj->client, false);
-		if (err) {
+		mutex_unlock(&lsm6ds3_acc_mutex);
+		if(err)
+		{
 			GSE_ERR("write power control fail!!\n");
 			return err;
 		}
@@ -3012,12 +3177,15 @@ static int lsm6ds3_acc_resume(struct i2c_client *client)
 		return -1;
 	}
 
-	if (pedo_enable_status  || tilt_enable_status) {
+	if(pedo_enable_status  || tilt_enable_status || sigm_enable_status ||stepd_enable_status )
+	{
 		atomic_set(&obj->suspend, 0);
 		return 0;
 	}
 	LSM6DS3_power(obj->hw, 1);
+	mutex_lock(&lsm6ds3_acc_mutex);
 	err = LSM6DS3_acc_SetPowerMode(obj->client, enable_status);
+	mutex_unlock(&lsm6ds3_acc_mutex);
 	if (err) {
 		GSE_ERR("initialize client fail! err code %d!\n", err);
 		return err ;        
@@ -3045,12 +3213,14 @@ static void lsm6ds3_early_suspend(struct early_suspend *h)
 		return;
 	}
 	atomic_set(&obj->suspend, 1);
-
-	if(pedo_enable_status  || tilt_enable_status)
+	
+	if(pedo_enable_status  || tilt_enable_status || sigm_enable_status)
 	{
 		return;
 	}
+	mutex_lock(&lsm6ds3_acc_mutex);
 	err = LSM6DS3_acc_SetPowerMode(obj->client, false);
+	mutex_unlock(&lsm6ds3_acc_mutex);
 	if(err)
 	{
 		GSE_ERR("write power control fail!!\n");
@@ -3077,14 +3247,15 @@ static void lsm6ds3_late_resume(struct early_suspend *h)
 		return;
 	}
 	
-	if (pedo_enable_status  || tilt_enable_status) {
+	if (pedo_enable_status  || tilt_enable_status || sigm_enable_status)
 		atomic_set(&obj->suspend, 0);
 		return;
 	}
 
 	LSM6DS3_power(obj->hw, 1);
-	
+	mutex_lock(&lsm6ds3_acc_mutex);
 	err = LSM6DS3_acc_SetPowerMode(obj->client, enable_status);
+	mutex_unlock(&lsm6ds3_acc_mutex);
 
 	if (err) {
 		GSE_ERR("initialize client fail! err code %d!\n", err);
@@ -3094,10 +3265,13 @@ static void lsm6ds3_late_resume(struct early_suspend *h)
 }
 #endif /*CONFIG_HAS_EARLYSUSPEND*/
 
-#ifdef LSM6DS3_TILT_FUNC
+
+#if (defined(LSM6DS3_TILT_FUNC) ||defined(LSM6DS3_SIGNIFICANT_MOTION) ||defined(LSM6DS3_STEP_COUNTER))
 static void lsm6ds3_eint_work(struct work_struct *work)
 {
-	u8 databuf[2] = {0}; 
+	u8 src_value = 0;
+	//u8 src_fifo = 0;
+	u8 wake_src = 0;
 	struct lsm6ds3_i2c_data *obj = obj_i2c_data;
  //yangzhigang@wind-mobi.com 20160407 start
 #if DEBUG_log
@@ -3110,45 +3284,105 @@ static void lsm6ds3_eint_work(struct work_struct *work)
 		goto lsm6ds3_eint_work_exit;
 	}	
 	
-	if(hwmsen_read_byte(obj->client, LSM6DS3_FUNC_SRC, databuf))
+	if(hwmsen_read_byte(obj->client, LSM6DS3_FUNC_SRC, &src_value))
 	{
 		GSE_ERR("%s read LSM6DS3_CTRL10_C register err!\n", __func__);
 		goto lsm6ds3_eint_work_exit;
 	}
-
-	if(atomic_read(&obj->trace) & ACCEL_TRC_DATA)
+	
+		if(hwmsen_read_byte(obj->client, LSM6DS3_WAKE_UP_SRC, &wake_src))
 	{
-		GSE_LOG("%s read acc data format register: 0x%x\n", __func__, databuf[0]);		
+		GSE_ERR("%s read LSM6DS3_WAKE_UP_SRC register err!\n", __func__);
+		goto lsm6ds3_eint_work_exit;
 	}
 
-	if(LSM6DS3_SIGNICANT_MOTION_INT_STATUS & databuf[0])
+   	if(hwmsen_read_byte(obj->client, LSM6DS3_FUNC_SRC, &src_value))
 	{
+		GSE_ERR("%s read LSM6DS3_CTRL10_C register err!\n", __func__);
+		goto lsm6ds3_eint_work_exit;
+	}
+	
 #ifdef LSM6DS3_STEP_COUNTER
-#ifdef LSM6DS3_SIGNIFICANT_MOTION
-		//add the action when receive the significant motion
-		step_notify(TYPE_SIGNIFICANT);
-#endif
+	/* 16bit step count overflow, need to reset */
+	#if 0
+	if(LSM6DS3_STEP_OVERFLOW & src_value)
+	{
+		int res;
+		u16 steps = 0;
+
+		res = lsm6ds3_Get_Pedo_DataReg(obj->client, &steps);
+		if(res == LSM6DS3_SUCCESS)
+		{
+			if(obj->boot_deb == 1)
+			{
+				/* state debounce */
+				obj->boot_deb = 0;
+				GSE_ERR("%s overflow intr first boot time with steps=%d.\n", __func__, steps);
+			}
+			else if((steps == 0) || (steps == 65535))
+			{
+				res = lsm6ds3_Reset_Pedo_Data(obj->client, LSM6DS3_ACC_GYRO_PEDO_RST_STEP_ENABLED);
+				if(res != LSM6DS3_SUCCESS)
+				{
+					GSE_ERR(" LSM6DS3_Reset_Pedo_Data failed!\n");
+				}
+				else
+				{
+					obj->overflow += 1;
+					atomic_set(&obj->reset_sc, 1);
+					GSE_LOG("%s overflow intr done steps=%d en=%d.\n", __func__, steps, pedo_enable_status);
+				}
+			}
+		}
 	}
-	else if(LSM6DS3_STEP_DETECT_INT_STATUS & databuf[0])
+	#endif
+	/* at least 1 step recognized in delta time, readback & send to uplayer */
+	/*if(LSM6DS3_STEP_COUNT_DELTA_IA & src_value)
+	{
+		if(0 == atomic_read(&obj->suspend))
+		{
+			step_notify(TYPE_STEP_COUNTER);
+		}
+		obj->boot_deb = 0;
+	} */
+
+
+	if((stepd_enable_status == true) && (LSM6DS3_STEP_DETECT_INT_STATUS & src_value))
 	{
 		//add the action when receive step detection interrupt
 		step_notify(TYPE_STEP_DETECTOR);
-#endif
 	}
-	
-#ifdef LSM6DS3_TILT_FUNC
-	else if(LSM6DS3_TILT_INT_STATUS & databuf[0])
+#endif
+
+#ifdef LSM6DS3_SIGNIFICANT_MOTION
+	if((sigm_enable_status == true) && (LSM6DS3_SIGNICANT_MOTION_INT_STATUS & wake_src))
 	{
-		//GSE_FUN();
+		//add the action when receive sigm interrupt
+		step_notify(TYPE_SIGNIFICANT);
+	}
+#endif
+
+#ifdef LSM6DS3_TILT_FUNC
+	if(LSM6DS3_TILT_INT_STATUS & src_value)
+	{
 		//add the action when receive the tilt interrupt
 		tilt_notify();
 	}
 #endif
-
 lsm6ds3_eint_work_exit:
-	//enable_irq(CUST_EINT_LSM6DS3_NUM);
+    enable_irq(step_irq);
+	atomic_dec(&obj->int1_request_num);
+
+	GSE_LOG(" enable detect with pedo=%d tilt_enable_status=%d,sigm_enable_status = %d,irq times %d\n", pedo_enable_status, tilt_enable_status,sigm_enable_status, atomic_read(&obj->int1_request_num));
+#ifdef LSM6DS3_FIFO_SUPPORT
+	if(0 != atomic_read(&obj->int2_request_num))
+	{
+		mt_eint_unmask(CUST_EINT2_LSM6DS3_NUM);
+	}
+#endif
 }
 #endif
+
 /*----------------------------------------------------------------------------*/
 /*----------------------------------------------------------------------------*/
 static int lsm6ds3_i2c_probe(struct i2c_client *client, const struct i2c_device_id *id)
@@ -3184,7 +3418,7 @@ static int lsm6ds3_i2c_probe(struct i2c_client *client, const struct i2c_device_
 	
 	memset(obj, 0, sizeof(struct lsm6ds3_i2c_data));
 	
-#ifdef LSM6DS3_TILT_FUNC
+#if(defined(LSM6DS3_TILT_FUNC) || defined(LSM6DS3_SIGNIFICANT_MOTION) || defined(LSM6DS3_STEP_COUNTER))
 	INIT_WORK(&obj->eint_work, lsm6ds3_eint_work);
 #endif
 
@@ -3205,6 +3439,7 @@ static int lsm6ds3_i2c_probe(struct i2c_client *client, const struct i2c_device_
 	
 	atomic_set(&obj->trace, 0);
 	atomic_set(&obj->suspend, 0);
+	atomic_set(&obj->int1_request_num, 0);
 	
 	lsm6ds3_i2c_client = new_client;	
 	err = LSM6DS3_init_client(new_client, false);
@@ -3218,7 +3453,7 @@ static int lsm6ds3_i2c_probe(struct i2c_client *client, const struct i2c_device_
 		goto exit_misc_device_register_failed;
 	}
 #ifdef LSM6DS3_NEW_ARCH
-
+	err = lsm6ds3_create_attr(&lsm6ds3_init_info.platform_diver_addr->driver);
 #else
 	err = lsm6ds3_create_attr(&lsm6ds3_driver.driver);
 #endif
@@ -3267,6 +3502,9 @@ static int lsm6ds3_i2c_probe(struct i2c_client *client, const struct i2c_device_
 	obj->early_drv.suspend  = lsm6ds3_early_suspend,
 	obj->early_drv.resume   = lsm6ds3_late_resume,    
 	register_early_suspend(&obj->early_drv);
+#endif 
+#if (defined(LSM6DS3_TILT_FUNC) ||defined(LSM6DS3_SIGNIFICANT_MOTION) ||defined(LSM6DS3_STEP_COUNTER))
+	lsm6ds3_setup_eint();
 #endif 
 #ifdef LSM6DS3_NEW_ARCH
 	lsm6ds3_acc_init_flag = 0;
@@ -3359,13 +3597,13 @@ static int lsm6ds3_local_init(void)
 
 	if ((0==test_bit(LSM6DS3_STEP_C, &lsm6ds3_init_flag_test)) \
 		&& (0 == test_bit(LSM6DS3_TILT, &lsm6ds3_init_flag_test))) {
-		printk("qiangang 111 lsm6ds3_local_init");
+		printk("qiangang 111 lsm6ds3_local_init\n");
 		res = lsm6ds3_local_init_common();
 		if (res < 0) {
 			goto lsm6ds3_local_init_failed;
 		}
 	}
-	printk("qiangang 555 lsm6ds3_local_init");
+	printk("qiangang 555 lsm6ds3_local_init\n");
 
 	if (lsm6ds3_acc_init_flag == -1) {
 		mutex_unlock(&lsm6ds3_init_mutex);
@@ -3377,12 +3615,13 @@ static int lsm6ds3_local_init(void)
 			GSE_ERR("i2c_data obj is null!!\n");
 			goto lsm6ds3_local_init_failed;
 		}
-		printk("qiangang 666 lsm6ds3_local_init");
-		res = lsm6ds3_create_attr(&(lsm6ds3_init_info.platform_diver_addr->driver));
-		if (res < 0) {
-			goto lsm6ds3_local_init_failed;
-		}
-		printk("qiangang 777 lsm6ds3_local_init");
+		printk("qiangang 666 lsm6ds3_local_init\n");
+		//res = lsm6ds3_create_attr(&(lsm6ds3_init_info.platform_diver_addr->driver));
+		//if (res < 0) {
+			//printk("qiangang error here lsm6ds3_local_init\n");
+			//goto lsm6ds3_local_init_failed;
+		//}
+		printk("qiangang 777 lsm6ds3_local_init\n");
 		ctl.open_report_data= lsm6ds3_open_report_data;
 	    ctl.enable_nodata = lsm6ds3_enable_nodata;
 	    ctl.set_delay  = lsm6ds3_set_delay;
@@ -3391,16 +3630,16 @@ static int lsm6ds3_local_init(void)
 	    //ctl.is_support_batch = obj->hw->is_batch_supported;
 		ctl.is_support_batch = false;
 		//modify by qiangang@wind-mobi.com 20170920 begin
-        printk("wind-999 lsm6ds3_local_init");
+        printk("qiangang wind-999 lsm6ds3_local_init\n");
 	    res = acc_register_control_path(&ctl);
 	    if (res) {
 	         GSE_ERR("register acc control path err\n");
 			 goto lsm6ds3_local_init_failed;
 	    }
 
-        printk("wind-777 lsm6ds3_local_init");
+        printk("qiangang wind-777 lsm6ds3_local_init\n");
 	    data.get_data = lsm6ds3_get_data;
-		printk("wind-888 lsm6ds3_local_init");
+		printk("qiangang  wind-888 lsm6ds3_local_init\n");
 	    data.vender_div = 1000;
 	    res = acc_register_data_path(&data);
 	    if (res) {
@@ -3432,34 +3671,111 @@ static int lsm6ds3_local_uninit(void)
 #ifdef LSM6DS3_TILT_FUNC
 static int lsm6ds3_tilt_get_data(u16 *value, int *status)
 {
-	return 0;
+  return 0;
 }
-static void lsm6ds3_eint_func(void)
+#endif
+
+#ifdef CUST_EINT_LSM6DS3_TYPE
+//static void lsm6ds3_eint_func(void)
+irqreturn_t lsm6ds3_eint_func(int irq , void *desc)
 {
 	struct lsm6ds3_i2c_data *priv = obj_i2c_data;
-	//GSE_FUN();
+	disable_irq_nosync(step_irq);
+	atomic_inc(&priv->int1_request_num);
+	 GSE_LOG(" enable detect with pedo=%d tilt_enable_status=%d,sigm_enable_status = %d,irq times %d\n", pedo_enable_status, tilt_enable_status,sigm_enable_status, atomic_read(&priv->int1_request_num));
+	GSE_FUN();
 	if(!priv)
 	{
-		return;
-	}	
+		return -1;
+	}
 	schedule_work(&priv->eint_work);
-}
+	
 
+	return IRQ_HANDLED;
+}
+#endif
+
+#if (defined(LSM6DS3_TILT_FUNC) ||defined(LSM6DS3_SIGNIFICANT_MOTION) ||defined(LSM6DS3_STEP_COUNTER))
 static int lsm6ds3_setup_eint(void)
 {
-#ifdef CUST_EINT_LSM6DS3_TYPE
-		mt_set_gpio_dir(GPIO_LSM6DS3_EINT_PIN, GPIO_DIR_IN);
-		mt_set_gpio_mode(GPIO_LSM6DS3_EINT_PIN, GPIO_LSM6DS3_EINT_PIN_M_EINT);
-		mt_set_gpio_pull_enable(GPIO_LSM6DS3_EINT_PIN, true);
-		mt_set_gpio_pull_select(GPIO_LSM6DS3_EINT_PIN, GPIO_PULL_UP);
-	
-		mt_eint_set_hw_debounce(CUST_EINT_LSM6DS3_NUM, CUST_EINT_LSM6DS3_DEBOUNCE_CN);
-		mt_eint_registration(CUST_EINT_LSM6DS3_NUM, CUST_EINT_LSM6DS3_TYPE, lsm6ds3_eint_func, 0);
+	int ret;
+	struct device_node *node = NULL;
+	struct pinctrl *pinctrl;
+	//struct pinctrl_state *pins_default;
+	struct pinctrl_state *pins_cfg;
+	u32 ints[2] = {0, 0};
+        struct lsm6ds3_i2c_data *priv = obj_i2c_data;
+/* gpio setting */
 
-		disable_irq(CUST_EINT_LSM6DS3_NUM);
-#endif
+ // alspsPltFmDev = get_alsps_platformdev();
+
+	node = of_find_compatible_node(NULL, NULL, "mediatek,st_step_counter");
+	printk("qiangang node = %s\n",node->name);
+	//printk("qiangang stepPltFmDev->dev = %s\n",stepPltFmDev->dev);
+	printk("qiangang run here 111\n");
+	pinctrl = devm_pinctrl_get(&stepPltFmDev->dev);
+	printk("qiangang run here 222\n");
+	if (IS_ERR(pinctrl)) {
+		ret = PTR_ERR(pinctrl);
+		GSE_ERR("Cannot find step pinctrl!\n");
+		return ret;
+	}
+	printk("qiangang run here 333\n");
+	//pins_default = pinctrl_lookup_state(pinctrl, "pin_default");
+	//printk("qiangang pins_default = %c\n",pins_default->name);
+	//if (IS_ERR(pins_default)) {
+	//	ret = PTR_ERR(pins_default);
+	//	GSE_ERR("Cannot find step qiangang pinctrl default!\n");
+	//}
+
+	pins_cfg = pinctrl_lookup_state(pinctrl, "pin_cfg");
+	//printk("qiangang pins_cfg = %c\n",pins_cfg->name);
+	if (IS_ERR(pins_cfg)) {
+		ret = PTR_ERR(pins_cfg);
+		GSE_ERR("Cannot find step qiangang pinctrl pin_cfg!\n");
+		return ret;
+	}
+	printk("qiangang here is 1\n");
+	pinctrl_select_state(pinctrl, pins_cfg);
+	printk("qiangang here is 2\n");
+
+/* eint request */
+	if (node) {
+		//GSE_LOG("irq node qiangang is ok!");
+		printk("qiangang here is 3\n");
+		of_property_read_u32_array(node, "debounce", ints, ARRAY_SIZE(ints));
+		//GSE_LOG("irq node qiangang is ok!");
+		printk("qiangang here is 4\n");
+		gpio_set_debounce(ints[0], ints[1]);
+		//GSE_LOG("ints[0] = %d, ints[1] = %d!!\n", ints[0], ints[1]);
+		printk("qiangang here is 5 ints[0] = %d, ints[1] = %d!!\n", ints[0], ints[1]);
+		step_irq = irq_of_parse_and_map(node, 0);
+		printk("qiangang here is 6 step_irq = %d\n", step_irq);
+		//GSE_LOG("step_irq = %d\n", step_irq);
+		if (!step_irq) {
+			GSE_ERR("irq_of_parse_and_map fail!!\n");
+			return -EINVAL;
+		}
+
+		//if (request_irq(step_irq, lsm6ds3_eint_func, IRQF_TRIGGER_NONE, "gyroscope", NULL)) {
+        if (request_irq(step_irq, lsm6ds3_eint_func, IRQ_TYPE_LEVEL_HIGH, "gyroscope", NULL)) {	   //	IRQ_TYPE_LEVEL_LOW
+			GSE_ERR("IRQ LINE NOT AVAILABLE!!\n");
+			return -EINVAL;
+		}
+		disable_irq(step_irq);
+		atomic_inc(&priv->int1_request_num);    // after disable irq depth should be 1 add by jonny 
+	} else {
+		GSE_ERR("null irq node!!\n");
+		printk("qiangang here is 7\n");
+		return -EINVAL;
+	}
+printk("qiangang here is 5\n");
 	return 0;
 }
+#endif
+
+#ifdef LSM6DS3_TILT_FUNC
+
 static int lsm6ds3_tilt_local_init(void)
 {
 	int res = 0;
@@ -3488,7 +3804,7 @@ static int lsm6ds3_tilt_local_init(void)
 	}
 	else
 	{
-		res = lsm6ds3_setup_eint();
+		//res = lsm6ds3_setup_eint();
 		tilt_ctl.open_report_data= lsm6ds3_tilt_open_report_data;	
 		res = tilt_register_control_path(&tilt_ctl);
 
@@ -3508,6 +3824,8 @@ static int lsm6ds3_tilt_local_uninit(void)
 	clear_bit(LSM6DS3_TILT, &lsm6ds3_init_flag_test);
     return 0;
 }
+#endif
+
 #endif
 
 #ifdef LSM6DS3_STEP_COUNTER
@@ -3583,49 +3901,7 @@ static int lsm6ds3_step_c_local_uninit(void)
     return 0;
 }
 #endif
-#else
-static int lsm6ds3_probe(struct platform_device *pdev) 
-{
-	//struct acc_hw *accel_hw = get_cust_acc_hw();
-//yangzhigang@wind-mobi.com 20160407 start
-#if DEBUG_log
-	GSE_FUN();
-#endif
-//yangzhigang@wind-mobi.com end
 
-	LSM6DS3_power(hw, 1);
-	
-	if(i2c_add_driver(&lsm6ds3_i2c_driver))
-	{
-		GSE_ERR("add driver error\n");
-		return -1;
-	}
-	return 0;
-}
-/*----------------------------------------------------------------------------*/
-static int lsm6ds3_remove(struct platform_device *pdev)
-{
-	//struct acc_hw *accel_hw = get_cust_acc_hw();
-
-    //GSE_FUN();    
-    LSM6DS3_power(hw, 0);  	
-    i2c_del_driver(&lsm6ds3_i2c_driver);
-    return 0;
-}
-
-static struct platform_driver lsm6ds3_driver = {
-	.probe      = lsm6ds3_probe,
-	.remove     = lsm6ds3_remove,    
-	.driver     = {
-			.name  = "gsensor",
-		//	.owner	= THIS_MODULE,
-	#ifdef CONFIG_OF
-			.of_match_table = gsensor_of_match,
-	#endif
-	}
-};
-
-#endif
 /*----------------------------------------------------------------------------*/
 static int __init lsm6ds3_init(void)
 {
@@ -3651,7 +3927,7 @@ static int __init lsm6ds3_init(void)
 #ifdef LSM6DS3_TILT_FUNC
 	tilt_driver_add(&lsm6ds3_tilt_init_info);
 #endif
-#else
+//#else
 	if (platform_driver_register(&lsm6ds3_driver)) {
 		GSE_ERR("failed to register driver");
 		return -ENODEV;
@@ -3763,9 +4039,9 @@ static void __exit lsm6ds3_exit(void)
 	GSE_FUN();
 #endif
 //yangzhigang@wind-mobi.com end
-#ifndef LSM6DS3_NEW_ARCH	
+
 	platform_driver_unregister(&lsm6ds3_driver);
-#endif
+
 }
 /*----------------------------------------------------------------------------*/
 module_init(lsm6ds3_init);

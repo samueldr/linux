@@ -1,4 +1,3 @@
-// zhaozhensen@wind-mobi.com 20170314 begin
 /*
  * Copyright (C) 2015 MediaTek Inc.
  *
@@ -130,7 +129,7 @@ int chip_reg = 0;
 // zhaozhensen@wind-mobi.com 20161017 end
 
 static int gIsTorch[e_DutyNum] = {  1,  0,  0,  0,  0,  0,  0,  0,  0,   0,   0,   0,   0};
-static int gLedDuty[e_DutyNum]    = { 40, 20, 47, 55, 63, 71, 79, 87, 95, 103, 111, 119, 127}; // liuying@wind-mobi.com 20171012
+static int gLedDuty[e_DutyNum]    = { 40, 20, 47, 55, 63, 71, 79, 85, 85, 85, 85, 85, 85}; // liuying@wind-mobi.com 20171012
 static int gLedDuty_aw[e_DutyNum] = { 20,  8, 23, 28, 31, 35, 39, 43, 47,  51,  55,  59,  63}; // liuying@wind-mobi.com 20171012
         /* current(mA) 50, 94, 141, 188, 281, 375, 469, 563, 656, 750, 844, 938, 1031, 1125, 1220, 1313, 1406, 1500 */
         //           { 16, 31,  47,  63,  23,  31,  39,  47,  55,  63,  71,  79,   87,   95,  103,  111,  119,  127};
@@ -427,6 +426,7 @@ int FL_Enable(void)
 	int buf[2];
 
 	buf[0] = KTD2684_REG_ENABLE;
+#if 0
 	if (gDuty == -1)
 		buf[1] = 0x00; // when "gDuty = -1", close led
 	else if (gIsTorch[gDuty] == 1)
@@ -435,6 +435,19 @@ int FL_Enable(void)
 		buf[1] = 0x0D;  // flash mode LED1 ENABLE LED2 DISABLE
 	writeReg(buf[0], buf[1]);
 	PK_DBG(" FL_Enable line=%d\n", __LINE__);
+#endif
+        if (gDuty == -1) {
+            buf[1] = 0x00; // when "gDuty = -1", close led
+        } else if(gDuty <= 4) {
+	    printk("torch mode\n");
+            buf[1] = 0x09;  // torch mode LED1 ENABLE LED2 DISABLE
+	} else {
+	    printk("flash mode\n");
+            buf[1] = 0x0D;  // flash mode LED1 ENABLE LED2 DISABLE
+	}
+        writeReg(buf[0], buf[1]);
+        PK_DBG(" FL_Enable line=%d\n", __LINE__);
+
 	return 0;
 }
 
@@ -500,6 +513,7 @@ int FL_Init(void)
 	    buf[1] = 0x1F;  // KDT2687 400ms
     }
 	KTD2684_write_reg(KTD2684_i2c_client, buf[0], buf[1]);
+	KTD2684_write_reg(KTD2684_i2c_client, 0x07, readReg(0x07)|0x01);
 // zhaozhensen@wind-mobi.com 20161223 end
 	PK_DBG(" FL_Init line=%d\n", __LINE__);
 	return 0;
@@ -541,7 +555,7 @@ void timerInit(void)
 	if (init_flag == 0) {
 		init_flag = 1;
 		INIT_WORK(&workTimeOut, work_timeOutFunc);
-		g_timeOutTimeMs = 1000;
+		g_timeOutTimeMs = 2000;
 		hrtimer_init(&g_timeOutTimer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 		g_timeOutTimer.function = ledTimeOutCallback;
 	}
@@ -567,7 +581,11 @@ static int constant_flashlight_ioctl(unsigned int cmd, unsigned long arg)
 
 	case FLASH_IOC_SET_TIME_OUT_TIME_MS:
 		PK_DBG("FLASH_IOC_SET_TIME_OUT_TIME_MS: %d\n", (int)arg);
-		g_timeOutTimeMs = arg;
+		if(arg==0)
+			g_timeOutTimeMs = arg;
+		else{
+			g_timeOutTimeMs=2000;
+		}
 		break;
 
 
@@ -676,7 +694,7 @@ MUINT32 constantFlashlightInit(PFLASHLIGHT_FUNCTION_STRUCT *pfFunc)
 		*pfFunc = &constantFlashlightFunc;
 	return 0;
 }
-
+EXPORT_SYMBOL(constantFlashlightInit);
 
 
 /* LED flash control for high current capture mode*/

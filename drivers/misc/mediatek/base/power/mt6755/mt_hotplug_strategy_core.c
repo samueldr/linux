@@ -27,6 +27,7 @@
 #include <linux/kthread.h>	/* kthread_create */
 #include <linux/wakelock.h>	/* wake_lock_init */
 #include <asm-generic/bug.h>	/* BUG_ON */
+#include <mt-plat/mtk_ram_console.h>
 
 /* local includes */
 #include "mt_hotplug_strategy_internal.h"
@@ -438,3 +439,22 @@ int hps_restart_timer(void)
 }
 
 
+static char hps_task_buf[128] = { 0 };
+void hps_dump_task_info(void)
+{
+	aee_sram_fiq_log("\n");
+
+	memset(hps_task_buf, 0, sizeof(hps_task_buf));
+
+	if (hps_ctxt.tsk_struct_ptr) {
+		snprintf(hps_task_buf, sizeof(hps_task_buf),
+			"HPS task info (run on CPU %d)\n", task_cpu(hps_ctxt.tsk_struct_ptr));
+		aee_sram_fiq_log(hps_task_buf);
+		if (hps_ctxt.tsk_struct_ptr->on_cpu == 0)
+			show_stack(hps_ctxt.tsk_struct_ptr, NULL);
+	} else {
+		snprintf(hps_task_buf, sizeof(hps_task_buf),
+			"%s: no hps_main task\n", __func__);
+		aee_sram_fiq_log(hps_task_buf);
+	}
+}

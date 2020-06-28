@@ -157,6 +157,15 @@ static ssize_t ccci_md_enable_show(char *buf)
 
 CCCI_ATTR(md_en, 0660, &ccci_md_enable_show, NULL);
 
+/* Sys -- post fix */
+static ssize_t ccci_md1_post_fix_show(char *buf)
+{
+	get_md_postfix(MD_SYS1, NULL, buf, NULL);
+	return strlen(buf);
+}
+
+CCCI_ATTR(md1_postfix, 0444, &ccci_md1_post_fix_show, NULL);
+
 /* Sys -- dump buff usage */
 static ssize_t ccci_dump_buff_usage_show(char *buf)
 {
@@ -212,7 +221,10 @@ CCCI_ATTR(lk_md, 0444, &ccci_lk_load_md_show, NULL);
 
 /* Sys -- get ccci private feature info */
 /* If platform has special feature setting, platform code will implemet this function */
-int __attribute__((weak)) ccci_get_plat_ft_inf(char buf[], int size);
+int __attribute__((weak)) ccci_get_plat_ft_inf(char buf[], int size)
+{
+	return (ssize_t)snprintf(buf, size, "ft_inf_ver:1");
+}
 static ssize_t ccci_ft_inf_show(char *buf)
 {
 	if (ccci_get_plat_ft_inf) {
@@ -220,7 +232,7 @@ static ssize_t ccci_ft_inf_show(char *buf)
 		return (ssize_t)ccci_get_plat_ft_inf(buf, 4095);
 	}
 	/* Enter here means using default setting */
-	return (ssize_t)snprintf(buf, 4095, "ft_inf_ver:1");
+	return (ssize_t)ccci_get_plat_ft_inf(buf, 4095);
 }
 
 CCCI_ATTR(ft_info, 0444, &ccci_ft_inf_show, NULL);
@@ -249,23 +261,16 @@ static ssize_t kcfg_setting_show(char *buf)
 		"[modem en]:%c-%c-%c-%c-%c\n", md_en[0], md_en[1], md_en[2], md_en[3], md_en[4]);
 	curr += actual_write;
 
-	/* Feature option part */
-#ifdef CONFIG_EVDO_DT_SUPPORT
-	actual_write = snprintf(&buf[curr], 4096 - curr, "[EVDO_DT_SUPPORT]:1\n");
-#else
-	actual_write = snprintf(&buf[curr], 4096 - curr, "[EVDO_DT_SUPPORT]:0\n");
-#endif
-	curr += actual_write;
-#ifdef CONFIG_MTK_LTE_DC_SUPPORT
-	actual_write = snprintf(&buf[curr], 4096 - curr, "[MTK_LTE_DC_SUPPORT]:1\n");
-#else
-	actual_write = snprintf(&buf[curr], 4096 - curr, "[MTK_LTE_DC_SUPPORT]:0\n");
-#endif
-	curr += actual_write;
 	if (ccci_get_opt_val("opt_eccci_c2k") > 0) {
 		actual_write = snprintf(&buf[curr], 4096 - curr, "[MTK_ECCCI_C2K]:1\n");
 		curr += actual_write;
 	}
+
+	if (ccci_port_ver == 6) /* ECCCI_FSM */
+		actual_write = snprintf(&buf[curr], 4096 - curr, "[ccci_drv_ver]:V2\n"); /* FSM using v2 */
+	else
+		actual_write = snprintf(&buf[curr], 4096 - curr, "[ccci_drv_ver]:V1\n");
+	curr += actual_write;
 
 	/* Add total size to tail */
 	actual_write = snprintf(&buf[curr], 4096 - curr, "total:%d\n", curr);
@@ -293,6 +298,7 @@ static struct attribute *ccci_default_attrs[] = {
 	&ccci_attr_lk_md.attr,
 	&ccci_attr_md_chn.attr,
 	&ccci_attr_ft_info.attr,
+	&ccci_attr_md1_postfix.attr,
 	NULL
 };
 
@@ -359,4 +365,3 @@ int ccci_common_sysfs_init(void)
 	CCCI_UTIL_DBG_MSG("ccci attr cnt %d\n", ccci_sys_info->ccci_attr_count);
 	return ret;
 }
-

@@ -222,16 +222,16 @@ static void mdee_dumper_info_dump_v1(struct md_ee *mdee)
 	/* Add additional info */
 	switch (dumper->more_info) {
 	case MD_EE_CASE_ONLY_SWINT:
-		snprintf(ex_info, EE_BUF_LEN, "%s%s", ex_info, "\nOnly SWINT case\n");
+		strncat(ex_info, "\nOnly SWINT case\n", (EE_BUF_LEN - strlen(ex_info)));
 		break;
 	case MD_EE_CASE_SWINT_MISSING:
-		snprintf(ex_info, EE_BUF_LEN, "%s%s", ex_info, "\nSWINT missing case\n");
+		strncat(ex_info, "\nSWINT missing case\n", (EE_BUF_LEN - strlen(ex_info)));
 		break;
 	case MD_EE_CASE_ONLY_EX:
-		snprintf(ex_info, EE_BUF_LEN, "%s%s", ex_info, "\nOnly EX case\n");
+		strncat(ex_info, "\nOnly EX case\n", (EE_BUF_LEN - strlen(ex_info)));
 		break;
 	case MD_EE_CASE_ONLY_EX_OK:
-		snprintf(ex_info, EE_BUF_LEN, "%s%s", ex_info, "\nOnly EX_OK case\n");
+		strncat(ex_info, "\nOnly EX_OK case\n", (EE_BUF_LEN - strlen(ex_info)));
 		break;
 	case MD_EE_CASE_NO_RESPONSE:
 		/* use strcpy, otherwise if this happens after a MD EE, the former EE info will be printed out */
@@ -250,16 +250,16 @@ static void mdee_dumper_info_dump_v1(struct md_ee *mdee)
 	CCCI_ERROR_LOG(md_id, KERN, "ELM_status: %x\n", c);
 	switch (c) {
 	case 0xFF:
-		snprintf(ex_info, EE_BUF_LEN, "%s%s", ex_info, "\nno ELM info\n");
+		strncat(ex_info, "\nno ELM info\n", (EE_BUF_LEN - strlen(ex_info)));
 		break;
 	case 0xAE:
-		snprintf(ex_info, EE_BUF_LEN, "%s%s", ex_info, "\nELM rlat:FAIL\n");
+		strncat(ex_info, "\nELM rlat:FAIL\n", (EE_BUF_LEN - strlen(ex_info)));
 		break;
 	case 0xBE:
-		snprintf(ex_info, EE_BUF_LEN, "%s%s", ex_info, "\nELM wlat:FAIL\n");
+		strncat(ex_info, "\nELM wlat:FAIL\n", (EE_BUF_LEN - strlen(ex_info)));
 		break;
 	case 0xDE:
-		snprintf(ex_info, EE_BUF_LEN, "%s%s", ex_info, "\nELM r/wlat:PASS\n");
+		strncat(ex_info, "\nELM r/wlat:PASS\n", (EE_BUF_LEN - strlen(ex_info)));
 		break;
 	default:
 		break;
@@ -367,12 +367,21 @@ static void mdee_dumper_info_prepare_v1(struct md_ee *mdee)
 
 	case MD_EX_TYPE_ASSERT:
 		debug_info->name = "ASSERT";
-		snprintf(debug_info->assert.file_name, sizeof(debug_info->assert.file_name),
-			 ex_info->content.assert.filename);
-		debug_info->assert.line_num = ex_info->content.assert.linenumber;
-		debug_info->assert.parameters[0] = ex_info->content.assert.parameters[0];
-		debug_info->assert.parameters[1] = ex_info->content.assert.parameters[1];
-		debug_info->assert.parameters[2] = ex_info->content.assert.parameters[2];
+		if (md_id == MD_SYS3) {
+			snprintf(debug_info->assert.file_name, sizeof(debug_info->assert.file_name),
+				 ex_info->content.c2k_assert.filename);
+			debug_info->assert.line_num = ex_info->content.c2k_assert.linenumber;
+			debug_info->assert.parameters[0] = ex_info->content.c2k_assert.parameters[0];
+			debug_info->assert.parameters[1] = ex_info->content.c2k_assert.parameters[1];
+			debug_info->assert.parameters[2] = ex_info->content.c2k_assert.parameters[2];
+		} else {
+			snprintf(debug_info->assert.file_name, sizeof(debug_info->assert.file_name),
+				 ex_info->content.assert.filename);
+			debug_info->assert.line_num = ex_info->content.assert.linenumber;
+			debug_info->assert.parameters[0] = ex_info->content.assert.parameters[0];
+			debug_info->assert.parameters[1] = ex_info->content.assert.parameters[1];
+			debug_info->assert.parameters[2] = ex_info->content.assert.parameters[2];
+		}
 		break;
 
 	case MD_EX_TYPE_FATALERR_TASK:
@@ -402,21 +411,39 @@ static void mdee_dumper_info_prepare_v1(struct md_ee *mdee)
 
 	case MD_EX_TYPE_ASSERT_DUMP:
 		debug_info->name = "ASSERT DUMP";
-		snprintf(debug_info->assert.file_name, sizeof(debug_info->assert.file_name),
-			 ex_info->content.assert.filename);
-		debug_info->assert.line_num = ex_info->content.assert.linenumber;
+		if (md_id == MD_SYS3) {
+			snprintf(debug_info->assert.file_name, sizeof(debug_info->assert.file_name),
+				ex_info->content.c2k_assert.filename);
+			debug_info->assert.line_num = ex_info->content.c2k_assert.linenumber;
+		} else {
+			snprintf(debug_info->assert.file_name, sizeof(debug_info->assert.file_name),
+				ex_info->content.assert.filename);
+			debug_info->assert.line_num = ex_info->content.assert.linenumber;
+		}
 		break;
 
 	case DSP_EX_TYPE_ASSERT:
 		debug_info->name = "MD DMD ASSERT";
-		snprintf(debug_info->dsp_assert.file_name, sizeof(debug_info->dsp_assert.file_name),
-			 ex_info->content.assert.filename);
-		debug_info->dsp_assert.line_num = ex_info->content.assert.linenumber;
-		snprintf(debug_info->dsp_assert.execution_unit, sizeof(debug_info->dsp_assert.execution_unit),
-			 ex_info->envinfo.execution_unit);
-		debug_info->dsp_assert.parameters[0] = ex_info->content.assert.parameters[0];
-		debug_info->dsp_assert.parameters[1] = ex_info->content.assert.parameters[1];
-		debug_info->dsp_assert.parameters[2] = ex_info->content.assert.parameters[2];
+		if (md_id == MD_SYS3) {
+			snprintf(debug_info->dsp_assert.file_name, sizeof(debug_info->dsp_assert.file_name),
+				 ex_info->content.c2k_assert.filename);
+			debug_info->dsp_assert.line_num = ex_info->content.c2k_assert.linenumber;
+			snprintf(debug_info->dsp_assert.execution_unit, sizeof(debug_info->dsp_assert.execution_unit),
+				 ex_info->envinfo.execution_unit);
+			debug_info->dsp_assert.parameters[0] = ex_info->content.c2k_assert.parameters[0];
+			debug_info->dsp_assert.parameters[1] = ex_info->content.c2k_assert.parameters[1];
+			debug_info->dsp_assert.parameters[2] = ex_info->content.c2k_assert.parameters[2];
+
+		} else {
+			snprintf(debug_info->dsp_assert.file_name, sizeof(debug_info->dsp_assert.file_name),
+				 ex_info->content.assert.filename);
+			debug_info->dsp_assert.line_num = ex_info->content.assert.linenumber;
+			snprintf(debug_info->dsp_assert.execution_unit, sizeof(debug_info->dsp_assert.execution_unit),
+				 ex_info->envinfo.execution_unit);
+			debug_info->dsp_assert.parameters[0] = ex_info->content.assert.parameters[0];
+			debug_info->dsp_assert.parameters[1] = ex_info->content.assert.parameters[1];
+			debug_info->dsp_assert.parameters[2] = ex_info->content.assert.parameters[2];
+		}
 		break;
 
 	case DSP_EX_TYPE_EXCEPTION:

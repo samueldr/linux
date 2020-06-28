@@ -39,7 +39,7 @@
 #define LOG_INF(format, args...)    pr_debug(PFX "[%s] " format, __FUNCTION__, ##args)
 #define Hi846_MaxGain 16
 // zhaozhensen@wind-mobi.com 20170317 begin
-#define Hi846_OTP_FUNCTION    1
+#define Hi846_OTP_FUNCTION    0
 static void sensor_init(void);
 
 #if Hi846_OTP_FUNCTION //Hi-846 OPT
@@ -281,10 +281,12 @@ static void set_dummy(void)
 static kal_uint32 return_sensor_id(void)
 {
 	kal_uint32 sensor_id = 0;
-	static kal_uint16 current_module_id = 0;
+	//static kal_uint16 current_module_id = 0;
 	
     sensor_id = (read_cmos_sensor(0x0F17) << 8) | read_cmos_sensor(0x0F16);
-	
+	if(sensor_id == 0x0846){
+		sensor_id = 0x0847;
+	}
 #if Hi846_OTP_FUNCTION
 	if(sensor_id == 0x0846)
 	{

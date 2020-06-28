@@ -1,36 +1,31 @@
-
+#include <generated/autoconf.h>
 /dts-v1/;
 
-#include "mt6755.dtsi"
-#include "cust.dtsi"
+#ifdef CONFIG_MTK_DTBO_FEATURE
+/plugin/;
+#include <dt-bindings/mmc/mt6755-msdc.h>
+#include "mt6755-pinfunc.h"
+#else
+#include "mt6755.dts"
+#endif
 
-/ {
-	memory@40000000 {
-		device_type = "memory";
-		reg = <0 0x40000000 0 0x3e800000>;
-	};
-	// add by zhaozhensen@wind-mobi.com 20161020 begin
-	cam_cal_drv {
-		compatible = "mediatek,cam_cal_drv";
-		main_bus = <2>;
-		sub_bus = <1>;
-	};
-	// add by zhaozhensen@wind-mobi.com 20161020 end
-	/* chosen */
-	chosen {
-		bootargs = "console=tty0 console=ttyMT0,921600n1 root=/dev/ram initrd=0x44000000,0x4B434E loglevel=8";
+/* chosen */
+&chosen {
+	bootargs = "console=tty0 console=ttyMT0,921600n1 root=/dev/ram initrd=0x44000000,0x4B434E loglevel=8";
 
-		/* fpga may has no lk, we need to specify display info here */
-		/* fb buffer is reserved using this dts by memory node above */
-		atag,videolfb-fb_base_h = <0x0>;
-		atag,videolfb-fb_base_l = <0x7E800000>;
-		atag,videolfb-islcmfound = <1>;
-		/* because no lk, so lcm is not inited */
-		atag,videolfb-islcm_inited = <0>;
-		atag,videolfb-fps= <6000>;
-		atag,videolfb-vramSize= <0x01800000>;
-		atag,videolfb-lcmname= "nt35695_fhd_dsi_cmd_truly_nt50358_drv";
-	};	
+	/* fpga may has no lk, we need to specify display info here */
+	/* fb buffer is reserved using this dts by memory node above */
+	atag,videolfb-fb_base_h = <0x0>;
+	atag,videolfb-fb_base_l = <0x7E800000>;
+	atag,videolfb-islcmfound = <1>;
+	/* because no lk, so lcm is not inited */
+	atag,videolfb-islcm_inited = <0>;
+	atag,videolfb-fps= <6000>;
+	atag,videolfb-vramSize= <0x01800000>;
+	atag,videolfb-lcmname= "nt35695_fhd_dsi_cmd_truly_nt50358_drv";
+};
+
+&odm {
 //ranyanhao@wind-mobi.com 20160221 begin
 	led0:led@0 {
 		compatible = "mediatek,red";
@@ -45,7 +40,6 @@
 		pwm_config = <0 0 0 0 0>;
 	};
 //ranyanhao@wind-mobi.com 20160221 end
-	
 	led2:led@2 {
 		compatible = "mediatek,blue";
 		led_mode = <0>;
@@ -84,120 +78,14 @@
 		vib_vol= <6>;
 /* ranyanhao@wind-mobi.com 20161123 end */
 	};
-/*  start sensor */
-/* wangjun@wind-mobi.com 20170421 begin */
-	cust_accel@0 {
-	compatible = "mediatek,kxtj2_1009";
-	i2c_num	= <1>;
-	i2c_addr = <0x0E 0 0 0>;
-	direction = <6>;
-	power_id = <0xffff>;
-	power_vol = <0>;
-	firlen = <16>;
-	is_batch_supported = <1>;
+	// add by zhaozhensen@wind-mobi.com 20161020 begin
+	cam_cal_drv {
+		compatible = "mediatek,cam_cal_drv";
+		main_bus = <2>;
+		sub_bus = <1>;
 	};
+	// add by zhaozhensen@wind-mobi.com 20161020 end
 
-/* wangjun@wind-mobi.com 20170421 end */
-/* liukangping@wind-mobi.com 20161127 begin */
-    cust_accel@1 {
-	compatible = "mediatek,mc3410";
-	i2c_num	= <1>;
-	i2c_addr = <0x4c 0 0 0>;
-	direction = <0>; //3 5 1 2 4 6 7 0  
-	power_id = <0xffff>;
-	power_vol = <0>;
-	firlen = <16>;
-	is_batch_supported = <0>;
-	};
-/* liukangping@wind-mobi.com 20161127 end */
-
-/* qiangang@wind-mobi.com 20170811 begin  */
-/* liukangping@wind-mobi.com 20161127 begin */
-    cust_accel@0{
-	compatible = "mediatek,lsm6ds33a";
-	i2c_num	= <1>;
-		i2c_addr = <0x6a 0 0 0>;
-		direction = <1>; // 5  qiangang@wind-mobi.com 20170817
-	power_id = <0xffff>;
-	power_vol = <0>;
-	firlen = <16>;
-	is_batch_supported = <1>;
-	};
-/* qiangang@wind-mobi.com 20170811  end */
-
-
-/* zhangkaiyuan@wind-mobi.com 20170208 begin */
-    cust_alsps@0 {
-        compatible              = "mediatek,txc_alsprx";
-        i2c_num                 = <2>;
-        i2c_addr                = <0x1E 0 0 0>;
-        polling_mode_ps         = <0>;
-        polling_mode_als        = <1>;
-        power_id                = <0xffff>;
-        power_vol               = <0>;
-        als_level               = <0 40 100 180 270 650 1200 1800 3000 4000 5000 7000 9000 15000 20000>;
-        als_value               = <10 50 150 340 430 570 700 800 950 1500 3000 5000 7000 9000 10240 10240>;
-        ps_threshold_high       = <24>;  
-        ps_threshold_low        = <10>;
-        is_batch_supported_ps   = <0>;
-        is_batch_supported_als  = <0>;
-    };
-    
-/* zhangkaiyuan@wind-mobi.com 20170208 end */
-/*liukangping@wind-mobi.com begin*/
-	cust_mag@0 {
-	compatible			= "mediatek,mmc3680x";
-	i2c_num				= <1>;
-	i2c_addr			= <0x30 0 0 0>;
-	direction			= <1>;  // 3  zhangkaiyuan@wind-mobi.com 20170208
-	power_id			= <0xffff>;
-	power_vol			= <0>;
-	is_batch_supported	= <0>;
-	};
-	
-	cust_mag@1 {
-	    compatible				= "mediatek,afx133";
-	    i2c_num				    = <1>;
-	    i2c_addr				= <0x1e 0 0 0>;
- 	    direction				= <0>;
-	    power_id				= <0xffff>;
-	    power_vol				= <0>;
-	    is_batch_supported		= <0>;
-	};
-/*liukangping@wind-mobi.com end*/
-	cust_gyro@0 {
-	compatible			= "mediatek,mpu6515g";
-	i2c_num				= <1>;
-	/* i2c_addr			= <0x68 0 0 0>; */
-	direction			= <6>;
-	power_id			= <0xffff>;
-	power_vol			= <0>;
-	firlen				= <0>;
-	is_batch_supported		= <0>;
-	};
-/*qiangang@wind-mobi.com begin*/
-	cust_gyro@1{
-	compatible = "mediatek,lsm6ds33g";
-		i2c_num	= <1>;
-		i2c_addr = <0x6a 0 0 0>;
-		direction = <1>;
-		power_id = <0xffff>;
-		power_vol = <0>;
-		firlen = <16>;
-		is_batch_supported = <1>;
-	};
-/*qiangang@wind-mobi.com end*/
-	cust_baro@0 {
-	compatible			= "mediatek,bmp280new";
-	i2c_num				= <1>;
-	/* i2c_addr			= <0x68 0 0 0>; */
-	direction			= <0>;
-	power_id			= <0xffff>;
-	power_vol			= <0>;
-	firlen				= <32>;
-	is_batch_supported		= <0>;
-	};
-/* end sensor */
 /* ranyanhao@wimd-mobi.com 20160829 begin */
 	chr_stat: chr_stat {
 		compatible = "mediatek,chr_stat";
@@ -213,14 +101,130 @@
 		compatible = "mediatek,lcmtppin";
 	};
 /* wangjun@wimd-mobi.com 20170515 end */
+
+/* qiangang begin */
+	acc_sigmotion: acc_sigmotion {
+	    compatible = "mediatek,st_step_counter";
+	};
+/* qiangang end */
+};
+
+&i2c1 {
+//liulinsheng@wind-mobi.com 20170212 begin
+	rt9466@53 {
+		compatible = "richtek,rt9466";
+		reg = <0x53>;
+		rt,intr_gpio_num = <101>;	/* direct defined GPIO num */
+		status = "okay";
+		charger_name = "primary_charger";
+		ichg = <200000>;	/* 10uA */
+		aicr = <50000>;		/* 10uA */
+		mivr = <4400>;		/* mV */
+		cv = <4350000>;		/* uV */
+		ieoc = <250>;		/* mA */
+		safety_timer = <12>;	/* hour */
+		ircmp_resistor = <80>;	/* mohm */
+		ircmp_vclamp = <224>;	/* mV */
+		enable_te;
+		enable_wdt;
+	};
+//qiangang@wind-mobi.com 20170811 begin
+
+	gsensor_mc34xx@4c {
+		compatible = "mediatek,gsensor_mc34xx";
+		i2c_num	= <1>;
+		i2c_addr = <0x4c 0 0 0>;
+		direction = <0>; //3 5 1 2 4 6 7 0  
+		power_id = <0xffff>;
+		power_vol = <0>;
+		firlen = <16>;
+		is_batch_supported = <0>;
+                reg = <0x4c>;
+                status = "okay";
+        };
+	
+	gsensor_lsm6da@6a {
+		compatible = "mediatek,gsensor_lsm6da";
+		i2c_num	= <1>;
+		i2c_addr = <0x6a 0 0 0>;
+		direction = <1>; // 5  qiangang@wind-mobi.com 20170817
+		power_id = <0xffff>;
+		power_vol = <0>;
+		firlen = <16>;
+		is_batch_supported = <1>;
+                reg = <0x6a>;
+                status = "okay";
+        };
+
+	msensor_mmc3680@30 {
+		compatible = "mediatek,msensor_mmc3680";
+		i2c_num				= <1>;
+		i2c_addr			= <0x30 0 0 0>;
+		direction			= <1>;  // 3  zhangkaiyuan@wind-mobi.com 20170208
+		power_id			= <0xffff>;
+		power_vol			= <0>;
+		is_batch_supported	= <0>;
+		reg = <0x30>;
+                status = "okay";
+	};
+	
+	msensor_afxx@1e {
+		compatible = "mediatek,msensor_afxx";
+		i2c_num	 = <1>;
+		i2c_addr = <0x1e 0 0 0>;
+		direction = <0>;
+		power_id = <0xffff>;
+		power_vol = <0>;
+		is_batch_supported = <0>;
+		reg = <0x1e>;
+		status = "okay";
+	};
+
+
+	lsm6ds33g@01 {
+		pinctrl-names = "pin_default", "pin_cfg";
+		pinctrl-0 = <&gyro_intpin_default>;
+		pinctrl-1 = <&gyro_intpin_cfg>;
+		status = "okay";
+		/* customization */
+		i2c_num	= <1>;
+		i2c_addr = <0x01 0 0 0>;
+		direction = <1>;
+		power_id = <0xffff>;
+		power_vol = <0>;
+		firlen = <16>;
+		is_batch_supported = <1>;
+	};
+};
+
+&i2c2 {
+	alsps@1e {
+		pinctrl-names = "pin_default", "pin_cfg";
+		pinctrl-0 = <&alsps_intpin_default>;
+		pinctrl-1 = <&alsps_intpin_cfg>;
+		status = "okay";
+		/* customization */
+        	i2c_num                 = <2>;
+	        i2c_addr                = <0x1E 0 0 0>;
+        	polling_mode_ps         = <0>;
+	        polling_mode_als        = <1>;
+        	power_id                = <0xffff>;
+	        power_vol               = <0>;
+        	als_level               = <0 40 100 180 270 650 1200 1800 3000 4000 5000 7000 9000 15000 20000>;
+	        als_value               = <10 50 150 340 430 570 700 800 950 1500 3000 5000 7000 9000 10240 10240>;
+        	ps_threshold_high       = <24>;  
+	        ps_threshold_low        = <10>;
+        	is_batch_supported_ps   = <0>;
+	        is_batch_supported_als  = <0>;
+	};
 };
 
 /* ranyanhao@wind-mobi.com 20160120 begin */
 /* zhangkaiyuan@wind-mobi.com 20170327 begin */
 &accdet {
 		accdet-mic-vol = <7>;
-		headset-mode-setting = <0x500 0x500 1 0x3F0 0x800 0x800 0x200>;
-		accdet-plugout-debounce = <20>;
+		headset-mode-setting = <0x500 0x500 1 0x3F0 0x800 0x800 0x1000>;
+		accdet-plugout-debounce = <1>;
 		/*1:ACC mode, 2:low cost without in bias, 6:low cost with in bias*/
 		accdet-mic-mode = <1>;
 		/*0--MD_MAX--UP_MAX--DW_MAX*/
@@ -453,6 +457,38 @@
 	};
 };
 /*FINGERPRINT GPIO end*/
+
+//qiangang begin 
+&acc_sigmotion {
+	pinctrl-names = "pin_default","pin_cfg";
+	pinctrl-0 = <&st_sigmotion_pins_default>;
+	pinctrl-1 = <&st_sigmotion_pins_enp0>;
+	status = "okay";
+
+};
+
+
+&acc_sigmotion {
+	interrupt-parent = <&eintc>;
+	interrupts = <0 4>;
+	debounce = <0 0>;
+	status = "okay";
+};
+
+&pio {
+	st_sigmotion_pins_default:pin_default{
+	};
+	
+	st_sigmotion_pins_enp0:pin_cfg{
+		    pins_cmd_dat {
+			pins = <PINMUX_GPIO0__FUNC_GPIO0>;
+			slew-rate = <1>;
+			output-low;
+		};
+	};
+};
+
+//qiangang end
 
 /* ranyanhao@wimd-mobi.com 20161018 begin  lcmbias */
 &lcmbias {
@@ -882,17 +918,17 @@
 };
 
 &alsps {
-	pinctrl-names = "pin_default", "pin_cfg";
-	pinctrl-0 = <&alsps_intpin_default>;
-	pinctrl-1 = <&alsps_intpin_cfg>;
-	status = "okay";
+        pinctrl-names = "pin_default", "pin_cfg";
+        pinctrl-0 = <&alsps_intpin_default>;
+        pinctrl-1 = <&alsps_intpin_cfg>;
+        status = "okay";
 };
 
 &gyroscope {
-	pinctrl-names = "pin_default", "pin_cfg";
-	pinctrl-0 = <&gyro_intpin_default>;
-	pinctrl-1 = <&gyro_intpin_cfg>;
-	status = "okay";
+        pinctrl-names = "pin_default", "pin_cfg";
+        pinctrl-0 = <&gyro_intpin_default>;
+        pinctrl-1 = <&gyro_intpin_cfg>;
+        status = "okay";
 };
 
 //zhaozhensen@wind-mobi.com 20161015 begin
@@ -1001,7 +1037,7 @@
 		};
 	};
 
-	mtkfb_pins_default: default {
+	mtkfb_pins_default: mtkfb_default {
 	};
 };
 
@@ -1020,7 +1056,7 @@
 
 /* CONSYS GPIO standardization */
 &pio {
-	consys_pins_default: default {
+	consys_pins_default: consys_default {
 	};
 
 	gpslna_pins_init: gpslna@0 {
@@ -1327,7 +1363,7 @@
 
 /* NFC GPIO standardization */
 &pio {
-	nfc_default: default {
+	nfc_default: nfc_default {
 
 	};
 
@@ -1454,39 +1490,6 @@
 	status = "okay";
 };
 
-&i2c1 {
-//liulinsheng@wind-mobi.com 20170212 begin
-	rt9466@53 {
-		compatible = "richtek,rt9466";
-		reg = <0x53>;
-		rt,intr_gpio_num = <101>;	/* direct defined GPIO num */
-		status = "okay";
-		charger_name = "primary_charger";
-		ichg = <200000>;	/* 10uA */
-		aicr = <50000>;		/* 10uA */
-		mivr = <4400>;		/* mV */
-		cv = <4350000>;		/* uV */
-		ieoc = <250>;		/* mA */
-		safety_timer = <12>;	/* hour */
-		ircmp_resistor = <80>;	/* mohm */
-		ircmp_vclamp = <224>;	/* mV */
-		enable_te;
-		enable_wdt;
-	};
-//qiangang@wind-mobi.com 20170811 begin
-	gyro@01 {
-		compatible = "mediatek,gyro";
-		reg = <0x01>;
-		status = "okay";
-	};
-
-	gsensor@6a {
-		compatible = "mediatek,gsensor";
-		reg = <0x6a>;
-		status = "okay";
-	};
-};
-//qiangang@wind-mobi.com 20170811 end
 &ext_buck_vmd1 {
 	pinctrl-names = "default", "vmd1_sel_low", "vmd1_sel_high";
 
@@ -1520,3 +1523,6 @@
 	cd_level = /bits/ 8 <MSDC_CD_HIGH>;  
 };
 /* lihaiyan@wind-mobi.com  for SD card end 20170207 */
+#include <E262L/cust.dtsi>
+/*End of this file, DO NOT ADD ANYTHING HERE*/
+

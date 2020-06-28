@@ -1,77 +1,70 @@
+/*
+ * Copyright (c) 2015-2017 MICROTRUST Incorporated
+ * All Rights Reserved.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ */
+
 #include "fp_vendor.h"
-#include<linux/types.h>
-#include "../tz_driver/include/nt_smc_call.h"
-#include<linux/kernel.h>
+#include <linux/types.h>
+#include <linux/kernel.h>
 #include <linux/mutex.h>
+#include <linux/string.h>
+#include <linux/module.h>
+#include <linux/fs.h>
+#include <linux/errno.h>
+#include <linux/mm.h>
+#include <linux/sched.h>
+#include <linux/init.h>
+#include <imsg_log.h>
 
+int fp_spi_enable = 1;
 
-#define FPC_VENDOR_ID       0x01
-#define SUNWAVE_VENDOR_ID    0x02
-#define GOODIX_VENDOR_ID    0x03
-#define MICROARRAY_ID  0x04  //zhangkaiyuan@wind-mobi.com 20171009
-#define LEADCORE_VENDOR_ID    0xff
+static uint8_t __fp_ta_name[MAX_TA_NAME_LEN];
 
-
-int fp_vendor_active = 0;
-int fp_vendor = FP_VENDOR_INVALID;
-static DEFINE_MUTEX(fp_vendor_lock);
-
-int get_fp_vendor(void)
+void set_fp_ta_name(uint8_t *ta_name_from_vendor, uint8_t fp_name_len)
 {
-    uint64_t fp_vendor_id_64 = 0;
-    uint32_t *p_temp = NULL;
-    uint32_t fp_vendor_id_32 = 0;
+	memset(__fp_ta_name, 0, sizeof(__fp_ta_name));
 
+	strncpy(__fp_ta_name, DEFAULT_FP_TA_NAME, strlen(DEFAULT_FP_TA_NAME));/*set FP_TA default name*/
 
-    mutex_lock(&fp_vendor_lock);
-    if(fp_vendor_active) {
-        mutex_unlock(&fp_vendor_lock);
-        return fp_vendor;
-    }
+	if (ta_name_from_vendor == NULL) {
+		IMSG_ERROR("ta_name_from_vendor is NULL");
+		return;
+	}
 
-    get_t_device_id(&fp_vendor_id_64);
-    printk("%s:%d lichen--->fp_vendor_id_64 = 0x%llx\n", __func__, __LINE__,fp_vendor_id_64);
-    p_temp = (uint32_t *)&fp_vendor_id_64;
-    fp_vendor_id_32 = *p_temp;
-//     fp_vendor_id_32 = (fp_vendor_id_32 >> 8) & 0xff;
-    printk("%s:%d lichen--->fp_vendor_id_32 = 0x%x\n", __func__, __LINE__, fp_vendor_id_32);
+	if ((fp_name_len > MAX_TA_NAME_LEN) || (fp_name_len == 0)) {
+		IMSG_ERROR("ta_name_from_vendor length is invalid");
+		return;
+	}
 
-    switch(fp_vendor_id_32) {
-        case FPC_VENDOR_ID:
-            fp_vendor = FPC_VENDOR;
-            break;
-	case SUNWAVE_VENDOR_ID:
-            fp_vendor = SUNWAVE_VENDOR;
-	    printk("lichen--->it's sunwave chip");
-            break;
-	case GOODIX_VENDOR_ID:
-            fp_vendor = GOODIX_VENDOR;
-	   
-	    printk("lichen--->it's goodix chip");
-            break;
+	if (strcmp("fp_server", ta_name_from_vendor) == 0) {
+		IMSG_ERROR("maybe you can use other fp_ta_name instead of default name");
+		return;
+	}
 
-        case LEADCORE_VENDOR_ID:
-            fp_vendor = LEADCORE_VENDOR;
-	 	
-	    printk("lichen--->it's leadcore chip");
-            break;
-//zhangkaiyuan@wind-mobi.com 20171009 begin			
-		case MICROARRAY_ID:
-            fp_vendor = MICROARRAY_VENDOR;
-	 	
-	    printk("lichen--->it's microarray chip");
-            break;
-//zhangkaiyuan@wind-mobi.com 20171009 end
-        default:
-            fp_vendor = FP_VENDOR_INVALID;
-            break;
-    }
-    fp_vendor_active = 1;
-
-    //fp_vendor = FPC_VENDOR;
-  //  fp_vendor = GOODIX_VENDOR;
-    printk("%s:%d lichen-->fp_vendor = 0x%x\n", __func__, __LINE__, fp_vendor);
-    mutex_unlock(&fp_vendor_lock);
-    return fp_vendor;
+	strncpy(__fp_ta_name, ta_name_from_vendor, fp_name_len);
 }
-//liukangping 20170112 end
+
+void get_fp_ta_name(char *ta_name_to_user)
+{
+	memcpy(ta_name_to_user, __fp_ta_name, strlen(__fp_ta_name));
+	IMSG_INFO("fp_ta_name = %s", ta_name_to_user);
+}
+
+int get_fp_spi_enable(void)
+{
+	if (fp_spi_enable == 0)
+		IMSG_ERROR("ERROR fp_spi_enable==0");
+
+	IMSG_INFO("fp_spi_enable==%d", fp_spi_enable);
+
+	return fp_spi_enable;
+}

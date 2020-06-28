@@ -186,24 +186,6 @@ void Panel_Master_DDIC_config(void)
 	mutex_unlock(&fb_config_lock);
 }
 
-/*static void print_from_head_to_tail(void)
-{
-	int i;
-	struct list_head *p;
-	CONFIG_RECORD_LIST *print;
-	pr_debug("DDIC=====>:print_from_head_to_tail  START\n");
-
-	list_for_each_prev(p, &head_list.list) {
-		print = list_entry(p, CONFIG_RECORD_LIST, list);
-		pr_debug("type:%d num %d value:\r\n", print->record.type, print->record.ins_num);
-		for (i = 0; i < print->record.ins_num; i++)
-			pr_debug("0x%x\t", print->record.ins_array[i]);
-		pr_debug("\r\n");
-	}
-	pr_debug("DDIC=====>:print_from_head_to_tail  END\n");
-
-}*/
-
 static void free_list_memory(void)
 {
 	struct list_head *p, *n;
@@ -225,13 +207,9 @@ static void free_list_memory(void)
 
 static int fbconfig_open(struct inode *inode, struct file *file)
 {
-	PM_TOOL_T *pm_params = NULL;
+	PM_TOOL_T *pm_params;
 	file->private_data = inode->i_private;
 	pm_params = (PM_TOOL_T *) pm_get_handle();
-	if (pm_params == NULL) {
-		pr_debug("*****pm_params is empty!!\n");
-		return -EFAULT;
-	}
 	PanelMaster_set_PM_enable(1);
 	pm_params->pLcm_drv = DISP_GetLcmDrv();
 	pm_params->pLcm_params = DISP_GetLcmPara();
@@ -243,8 +221,7 @@ static int fbconfig_open(struct inode *inode, struct file *file)
 			pm_params->dsi_id = PM_DSI1;
 		return 0;
 	} else
-		return -EFAULT;
-
+		return -EINVAL;
 }
 
 
@@ -531,17 +508,25 @@ static long fbconfig_ioctl(struct file *file, unsigned int cmd, unsigned long ar
 	{
 		ESD_PARA esd_para;
 		uint8_t *buffer = NULL;
+		int buffer_size;
 
 		copy_ret_val = copy_from_user(&esd_para, argp, sizeof(esd_para));
 		if (copy_ret_val != 0) {
 			pr_debug("fbconfig=>LCM_GET_ESD copy_from_user failed @line %d\n", __LINE__);
 			return -EFAULT;
 		}
-		if (esd_para.para_num < 0 || esd_para.para_num > 0x30) {
-			pr_debug("wrong  esd_para.para_num = %d\n", esd_para.para_num);
-			return -EFAULT;
+		if (esd_para.para_num <= 0 || esd_para.para_num > 100) {
+			pr_debug("fbconfig=>LCM_GET_ESD para_num:%d < 0\n", esd_para.para_num);
+			return -EINVAL;
 		}
-		buffer = kzalloc(esd_para.para_num + 6, GFP_KERNEL);
+
+		buffer_size = esd_para.para_num + 6;
+		if (buffer_size < 0) {
+			pr_debug("buffer size overflow: buffer_size:%d, para_num:%d\n",
+				buffer_size, esd_para.para_num);
+			return -EINVAL;
+		}
+		buffer = kzalloc(buffer_size, GFP_KERNEL);
 		if (buffer == NULL)
 			return -ENOMEM;
 
@@ -1380,8 +1365,10 @@ static const struct file_operations fbconfig_fops = {
 
 void PanelMaster_Init(void)
 {
+#if defined(CONFIG_MT_ENG_BUILD)
 	ConfigPara_dbgfs = debugfs_create_file("fbconfig",
 					       S_IFREG | S_IRUGO, NULL, (void *)0, &fbconfig_fops);
+#endif
 
 	INIT_LIST_HEAD(&head_list.list);
 	mutex_init(&fb_config_lock);

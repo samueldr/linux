@@ -72,6 +72,23 @@ enum ccci_ipi_op_id {
 	CCCI_OP_ASSERT_TEST,
 };
 
+enum md_bc_event {
+	MD_STA_EV_INVALID = 0,
+	MD_STA_EV_RESET_REQUEST,
+	MD_STA_EV_F_ASSERT_REQUEST,
+	MD_STA_EV_STOP_REQUEST,
+	MD_STA_EV_START_REQUEST,
+	MD_STA_EV_ENTER_FLIGHT_REQUEST,
+	MD_STA_EV_LEAVE_FLIGHT_REQUEST,
+	MD_STA_EV_ENTER_FLIGHT_E_REQUEST,
+	MD_STA_EV_LEAVE_FLIGHT_E_REQUEST,
+	MD_STA_EV_HS1,
+	MD_STA_EV_READY,
+};
+
+void inject_md_status_event(int md_id, int event_type, char reason[]);
+int get_lock_rst_user_cnt(int md_id);
+
 enum {
 	SCP_CCCI_STATE_INVALID = 0,
 	SCP_CCCI_STATE_BOOTING = 1,
@@ -294,6 +311,7 @@ typedef enum {
 	OTHER_MD_NONE,
 	OTHER_MD_STOP,
 	OTHER_MD_RESET,
+	OTHER_MD_ENTER_FLIGHT_MODE,
 } OTHER_MD_OPS;
 
 struct ccci_force_assert_shm_fmt {
@@ -329,7 +347,9 @@ typedef enum{
 	DT_USB_SHARE_MEMORY,
 	EE_AFTER_EPOF,
 	CCMNI_MTU, /* max Rx packet buffer size on AP side */
+	MISC_INFO_CUSTOMER_VAL = 21,
 	CCCI_FAST_HEADER = 22,
+	MISC_INFO_C2K_MEID = 24,
 	MD_RUNTIME_FEATURE_ID_MAX,
 } MD_CCCI_RUNTIME_FEATURE_ID;
 
@@ -434,6 +454,7 @@ enum {
 	MD_CFG_MDLOG_MODE,
 	MD_CFG_SBP_CODE,
 	MD_CFG_DUMP_FLAG,
+	MD_CFG_SBP_SUB_CODE,
 };
 
 enum {
@@ -460,6 +481,7 @@ extern int ccci_subsys_dfo_init(void);
 /* per-modem sub-system */
 extern int switch_MD1_Tx_Power(unsigned int mode);
 extern int switch_MD2_Tx_Power(unsigned int mode);
+extern int ccci_update_rf_desense(struct ccci_modem *md, int rf_desense);
 
 #ifdef FEATURE_MTK_SWITCH_TX_POWER
 int swtp_init(int md_id);
@@ -538,10 +560,17 @@ int swtp_init(int md_id);
 #define CCCI_IOC_GET_MD_BOOT_MODE       _IOR(CCCI_IOC_MAGIC, 59, unsigned int) /* md_init */
 
 #define CCCI_IOC_GET_AT_CH_NUM			_IOR(CCCI_IOC_MAGIC, 60, unsigned int) /* RILD */
+#define CCCI_IOC_ENTER_UPLOAD		_IO(CCCI_IOC_MAGIC, 61) /* modem log for S */
+#define CCCI_IOC_GET_RAT_STR			_IOR(CCCI_IOC_MAGIC, 62, unsigned int[16])
+#define CCCI_IOC_SET_RAT_STR			_IOW(CCCI_IOC_MAGIC, 63, unsigned int[16])
 
 #define CCCI_IOC_SET_HEADER				_IO(CCCI_IOC_MAGIC,  112) /* emcs_va */
 #define CCCI_IOC_CLR_HEADER				_IO(CCCI_IOC_MAGIC,  113) /* emcs_va */
 #define CCCI_IOC_DL_TRAFFIC_CONTROL		_IOW(CCCI_IOC_MAGIC, 119, unsigned int) /* mdlogger */
+
+#define CCCI_IOC_ENTER_DEEP_FLIGHT_ENHANCED     _IO(CCCI_IOC_MAGIC,  123) /* RILD  factory */
+#define CCCI_IOC_LEAVE_DEEP_FLIGHT_ENHANCED     _IO(CCCI_IOC_MAGIC,  124) /* RILD  factory */
+
 
 #define CCCI_IPC_MAGIC 'P' /* only for IPC user */
 /* CCCI == EEMCS */
@@ -811,6 +840,7 @@ enum {
 	MD_SW_MD1_TX_POWER_REQ = 0x110,
 	MD_SW_MD2_TX_POWER_REQ = 0x111,
 	MD_THROTTLING = 0x112, /* SW throughput throttling */
+	MD_RF_DESENSE = 0x113,
 	/* TEST_MESSAGE for IT only */
 	TEST_MSG_ID_MD2AP = 0x114,
 	TEST_MSG_ID_AP2MD = 0x115,

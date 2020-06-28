@@ -36,7 +36,10 @@
 #include "hi846_mipi_raw_Sensor.h"
 
 #define PFX "HI846_camera_sensor"
-#define LOG_INF(format, args...)    pr_debug(PFX "[%s] " format, __FUNCTION__, ##args)
+//dingyisheng@wind-mobi.com 20171103 begin
+#define LOG_INF(format, args...)    pr_err(PFX "[%s] " format, __FUNCTION__, ##args)
+//dingyisheng@wind-mobi.com 20171103 end
+
 #define Hi846_MaxGain 16
 // zhaozhensen@wind-mobi.com 20170317 begin
 #define Hi846_OTP_FUNCTION    1

@@ -632,6 +632,7 @@ typedef struct {
 	unsigned int height;
 	unsigned int virtual_width;
 	unsigned int virtual_height;
+	unsigned int density;
 	unsigned int io_select_mode;	/* DBI or DPI should select IO mode according to chip spec */
 
 	/* particular parameters */
@@ -644,12 +645,12 @@ typedef struct {
 	unsigned int physical_height_um;	/* length: um, for more precise precision */
 	unsigned int od_table_size;
 	void *od_table;
-	// wangjun@wind-mobi.com 20170828 begin 
 	#ifdef CONFIG_MTK_ROUND_CORNER_SUPPORT
-			unsigned int corner_pattern_width;
-			unsigned int corner_pattern_height;
+        unsigned int full_content;
+	unsigned int corner_pattern_width;
+	unsigned int corner_pattern_height;
+        unsigned int corner_pattern_height_bot;
 	#endif
-	// wangjun@wind-mobi.com 20170828 begin 
 } LCM_PARAMS;
 
 
@@ -771,6 +772,10 @@ typedef struct {
 				 unsigned char force_update);
 	void (*dsi_set_cmdq_V2)(unsigned cmd, unsigned char count, unsigned char *para_list,
 				 unsigned char force_update);
+	void (*dsi_set_cmdq_V2_DCS)(unsigned cmd, unsigned char count, unsigned char *para_list,
+				 unsigned char force_update);
+	void (*dsi_set_cmdq_V2_generic)(unsigned cmd, unsigned char count, unsigned char *para_list,
+				 unsigned char force_update);
 	void (*dsi_set_cmdq)(unsigned int *pdata, unsigned int queue_size,
 			      unsigned char force_update);
 	void (*dsi_set_null)(unsigned cmd, unsigned char count, unsigned char *para_list,
@@ -790,9 +795,14 @@ typedef struct {
 	int (*set_gpio_dir)(unsigned int pin, unsigned int dir);
 	int (*set_gpio_pull_enable)(unsigned int pin, unsigned char pull_en);
 	long (*set_gpio_lcd_enp_bias)(unsigned int value);
+	long (*set_gpio_lcd_enp_bias_ByName)(bool bOn, char *pinName);
 	void (*dsi_set_cmdq_V11)(void *cmdq, unsigned int *pdata, unsigned int queue_size,
 				  unsigned char force_update);
 	void (*dsi_set_cmdq_V22)(void *cmdq, unsigned cmd, unsigned char count,
+				  unsigned char *para_list, unsigned char force_update);
+	void (*dsi_set_cmdq_V22_DCS)(void *cmdq, unsigned cmd, unsigned char count,
+				  unsigned char *para_list, unsigned char force_update);
+	void (*dsi_set_cmdq_V22_generic)(void *cmdq, unsigned cmd, unsigned char count,
 				  unsigned char *para_list, unsigned char force_update);
 	void (*dsi_swap_port)(int swap);
 	void (*dsi_set_cmdq_V23)(void *cmdq, unsigned cmd, unsigned char count,
@@ -874,7 +884,4 @@ int lcm_vgp_supply_enable(void);
 int lcm_vgp_supply_disable(void);
 extern LCM_DSI_MODE_CON lcm_dsi_mode;
 
-extern int display_bias_enable(void);
-extern int display_bias_disable(void);
-extern int display_bias_regulator_init(void);
 #endif /* __LCM_DRV_H__ */

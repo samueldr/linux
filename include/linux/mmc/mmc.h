@@ -345,6 +345,9 @@ struct _mmc_csd {
 #define EXT_CSD_FIRMWAARE_VERSION	254	/* RO */
 #endif
 // wangjun@wind-mobi.com 20170818 end
+#define EXT_CSD_PRE_EOL_INFO		267	/* RO */
+#define EXT_CSD_DEVICE_LIFE_TIME_EST_TYP_A	268	/* RO */
+#define EXT_CSD_DEVICE_LIFE_TIME_EST_TYP_B	269	/* RO */
 #define EXT_CSD_NUM_OF_FW_SEC_PROG	302	/* RO */
 #define EXT_CSD_CMDQ_DEPTH		307	/* RO */
 #define EXT_CSD_CMDQ_SUPPORT		308	/* RO */

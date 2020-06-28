@@ -1,3 +1,17 @@
+/*
+ * Copyright (c) 2015-2017 MICROTRUST Incorporated
+ * All Rights Reserved.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ */
+
 #ifndef __VFS_TEEI_ID_H_
 #define __VFS_TEEI_ID_H_
 
@@ -11,7 +25,7 @@
 #define SMC_INTERRUPTED     2
 #define SMC_PENDING         1
 #define SMC_SUCCESS         0
-/*extern void __flush_dcache_area(void *addr, size_t len);*/
+
 /**
  * @brief Encoding data type
  */
@@ -41,7 +55,7 @@ enum _global_cmd_id {
 /* add by lodovico */
 /* void printff(); */
 
-#if 1
+
 int service_smc_call(u32 teei_cmd_type, u32 dev_file_id, u32 svc_id,
 			u32 cmd_id, u32 context, u32 enc_id,
 			const void *cmd_buf,
@@ -52,12 +66,12 @@ int service_smc_call(u32 teei_cmd_type, u32 dev_file_id, u32 svc_id,
 			int *ret_resp_len,
 			void *wq,
 			void *arg_lock, int *error_code);
-#endif
+
 
 enum teei_cmd_type {
 	TEEI_CMD_TYPE_INVALID = 0x0,
 	TEEI_CMD_TYPE_SOCKET_INIT,
-	TEEI_CMD_TYPE_INITILIZE_CONTEXT,
+	TEEI_CMD_TYPE_INITIALIZE_CONTEXT,
 	TEEI_CMD_TYPE_FINALIZE_CONTEXT,
 	TEEI_CMD_TYPE_OPEN_SESSION,
 	TEEI_CMD_TYPE_CLOSE_SESSION,

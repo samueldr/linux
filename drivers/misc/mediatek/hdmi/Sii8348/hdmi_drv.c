@@ -415,14 +415,12 @@ bool chip_inited = false;
 static int hdmi_drv_init(void)
 {
     MHL_DBG("hdmi_drv_init, not_switch_to_d3: %d, init-%d\n", not_switch_to_d3, chip_inited);
-    if(chip_inited == true)
-        return 0;
+	if (chip_inited == true)
+		return 0;
 
 	/*cust_hdmi_power_on(true);*/
-	if(not_switch_to_d3 == 0) 
-    {
-        HalOpenI2cDevice("Sil_MHL", "sii8348drv");
-	}
+	if (not_switch_to_d3 == 0)
+		HalOpenI2cDevice("Sil_MHL", "sii8348drv");
 	
 	txInitFlag = 0;
 	chip_inited = true;
@@ -521,7 +519,7 @@ void hdmi_drv_power_off(void)
     	 ForceSwitchToD3(si_dev_context);
     }
     else
-        need_reset_usb_switch = false;
+		need_reset_usb_switch = false;
 
 	/*cust_hdmi_power_on(false);*/
 	chip_inited = false;
@@ -602,9 +600,14 @@ void hdmi_GetEdidInfo(void *pv_get_info)
 		}
     }
 
+	if (ptr->ui4_pal_resolution & SINK_2160p30)
+		ptr->ui4_pal_resolution &= (~SINK_2160p24);
+
 #ifdef MHL_RESOLUTION_LIMIT_720P_60
 		ptr->ui4_pal_resolution &= (~SINK_1080P60);
 		ptr->ui4_pal_resolution &= (~SINK_1080P30);
+		ptr->ui4_pal_resolution &= (~SINK_2160p30);
+		ptr->ui4_pal_resolution &= (~SINK_2160p24);
 #endif
 
 #ifdef MHL_RESOLUTION_LIMIT_1080P_30
@@ -615,9 +618,6 @@ void hdmi_GetEdidInfo(void *pv_get_info)
 		}
 #endif
 
-	if(ptr->ui4_pal_resolution & SINK_2160p30)
-		ptr->ui4_pal_resolution &= (~SINK_2160p24); 
-	
     if(si_dev_context)
     {
         MHL_DBG("MHL hdmi_GetEdidInfo ntsc 0x%x,pal: 0x%x, packed: %d, parsed 0x%x\n", ptr->ui4_ntsc_resolution  , 

@@ -1,3 +1,17 @@
+/*
+ * Copyright (c) 2015-2017 MICROTRUST Incorporated
+ * All Rights Reserved.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ */
+
 #include <linux/kernel.h>
 #include <linux/slab.h>
 #include <linux/err.h>
@@ -15,20 +29,20 @@ static unsigned long nt_t_buffer;
 unsigned long t_nt_buffer;
 
 
-/***********************************************************************
-
- create_notify_queue:
-     Create the two way notify queues between T_OS and NT_OS.
-
- argument:
-     size    the notify queue size.
-
- return value:
-     EINVAL  invalid argument
-     ENOMEM  no enough memory
-     EAGAIN  The command ID in the response is NOT accordant to the request.
-
- ***********************************************************************/
+/*
+*
+* create_notify_queue:
+*     Create the two way notify queues between T_OS and NT_OS.
+*
+* argument:
+*     size    the notify queue size.
+*
+* return value:
+*     EINVAL  invalid argument
+*     ENOMEM  no enough memory
+*     EAGAIN  The command ID in the response is NOT accordant to the request.
+*
+ */
 
 static long create_notify_queue(unsigned long msg_buff, unsigned long size)
 {
@@ -39,7 +53,8 @@ static long create_notify_queue(unsigned long msg_buff, unsigned long size)
 
 	/* Check the argument */
 	if (size > MAX_BUFF_SIZE) {
-		IMSG_ERROR("[%s][%d]: The NQ buffer size is too large, DO NOT Allow to create it.\n", __FILE__, __LINE__);
+		IMSG_ERROR("[%s][%d]: The NQ buffer size is too large, DO NOT Allow to create it.\n",
+						__FILE__, __LINE__);
 		retVal = -EINVAL;
 		goto return_fn;
 	}
@@ -48,7 +63,7 @@ static long create_notify_queue(unsigned long msg_buff, unsigned long size)
 #ifdef UT_DMA_ZONE
 	nt_t_buffer = (unsigned long) __get_free_pages(GFP_KERNEL | GFP_DMA, get_order(ROUND_UP(size, SZ_4K)));
 #else
-	nt_t_buffer = (unsigned long) __get_free_pages(GFP_KERNEL , get_order(ROUND_UP(size, SZ_4K)));
+	nt_t_buffer = (unsigned long) __get_free_pages(GFP_KERNEL, get_order(ROUND_UP(size, SZ_4K)));
 #endif
 	if ((unsigned char *)nt_t_buffer == NULL) {
 		IMSG_ERROR("[%s][%d]: kmalloc nt_t_buffer failed.\n", __func__, __LINE__);
@@ -98,18 +113,19 @@ static long create_notify_queue(unsigned long msg_buff, unsigned long size)
 
 	Invalidate_Dcache_By_Area((unsigned long)msg_buff, (unsigned long)msg_buff + MESSAGE_SIZE);
 	memcpy((void *)(&msg_head), (void *)msg_buff, sizeof(struct message_head));
-	memcpy((void *)(&msg_ack), (void *)(msg_buff + sizeof(struct message_head)), sizeof(struct ack_fast_call_struct));
+	memcpy((void *)(&msg_ack), (void *)(msg_buff + sizeof(struct message_head)),
+			sizeof(struct ack_fast_call_struct));
 
 	/* Check the response from T_OS. */
 
 	if ((msg_head.message_type == FAST_CALL_TYPE) && (msg_head.child_type == FAST_ACK_CREAT_NQ)) {
 		retVal = msg_ack.retVal;
 
-		if (retVal == 0) {
+		if (retVal == 0)
 			goto return_fn;
-		} else {
+		else
 			goto Destroy_t_nt_buffer;
-		}
+
 	} else {
 		retVal = -EAGAIN;
 	}
@@ -131,6 +147,7 @@ void NQ_init(unsigned long NQ_buff)
 long init_nq_head(unsigned char *buffer_addr)
 {
 	struct NQ_head *temp_head = NULL;
+
 	temp_head = (struct NQ_head *)buffer_addr;
 	memset(temp_head, 0, NQ_BLOCK_SIZE);
 	temp_head->start_index = 0;
@@ -142,13 +159,12 @@ long init_nq_head(unsigned char *buffer_addr)
 
 static __always_inline unsigned int get_end_index(struct NQ_head *nq_head)
 {
-	if (nq_head->end_index == BLOCK_MAX_COUNT) {
+	if (nq_head->end_index == BLOCK_MAX_COUNT)
 		return 1;
-	} else {
+	else
 		return nq_head->end_index + 1;
-	}
-}
 
+}
 
 int add_nq_entry(u32 command_buff, int command_length, int valid_flag)
 {
@@ -157,9 +173,9 @@ int add_nq_entry(u32 command_buff, int command_length, int valid_flag)
 
 	temp_head = (struct NQ_head *)nt_t_buffer;
 
-	if (temp_head->start_index == ((temp_head->end_index + 1) % temp_head->Max_count)) {
+	if (temp_head->start_index == ((temp_head->end_index + 1) % temp_head->Max_count))
 		return -ENOMEM;
-	}
+
 	temp_entry = (struct NQ_entry *)(nt_t_buffer + NQ_BLOCK_SIZE + temp_head->end_index * NQ_BLOCK_SIZE);
 
 	temp_entry->valid_flag = valid_flag;
@@ -169,7 +185,7 @@ int add_nq_entry(u32 command_buff, int command_length, int valid_flag)
 	temp_head->end_index = (temp_head->end_index + 1) % temp_head->Max_count;
 
 	Flush_Dcache_By_Area((unsigned long)nt_t_buffer, (unsigned long)(nt_t_buffer + NQ_BUFF_SIZE));
-    return 0;
+	return 0;
 }
 
 
@@ -182,7 +198,8 @@ unsigned char *get_nq_entry(unsigned char *buffer_addr)
 	temp_head = (struct NQ_head *)buffer_addr;
 
 	if (temp_head->start_index == temp_head->end_index) {
-		IMSG_DEBUG("[cache] temp_head->start_index = %d  temp_head->end_index = %d\n ", temp_head->start_index,  temp_head->end_index);
+		IMSG_DEBUG("[cache] temp_head->start_index = %d  temp_head->end_index = %d\n ",
+					temp_head->start_index,  temp_head->end_index);
 		return NULL;
 	}
 

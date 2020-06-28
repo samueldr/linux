@@ -1,3 +1,17 @@
+/*
+ * Copyright (c) 2015-2017 MICROTRUST Incorporated
+ * All Rights Reserved.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ */
+
 #include <linux/kernel.h>
 #include <linux/platform_device.h>
 #include <linux/module.h>
@@ -8,8 +22,8 @@
 #include <linux/sched.h>
 #include <linux/init.h>
 #include <linux/cdev.h>
-#include <asm/io.h>
-#include <asm/uaccess.h>
+#include <linux/io.h>
+#include <linux/uaccess.h>
 #include <linux/semaphore.h>
 #include <linux/slab.h>
 #include "TEEI.h"
@@ -19,6 +33,7 @@
 #define SOCKET_MAJOR	253
 #define SHMEM_ENABLE    0
 #define SHMEM_DISABLE   1
+#define SEMA_INIT_ZERO	0
 
 #define IMSG_TAG "[tz_socket]"
 #include <imsg_log.h>
@@ -38,7 +53,7 @@ EXPORT_SYMBOL_GPL(daulOS_rd_sem);
 struct semaphore daulOS_wr_sem;
 EXPORT_SYMBOL_GPL(daulOS_wr_sem);
 
-struct socket_dev *socket_devp = NULL;
+struct socket_dev *socket_devp;
 
 int socket_open(struct inode *inode, struct file *filp)
 {
@@ -191,6 +206,7 @@ int socket_init(void)
 {
 	int result = 0;
 	struct device *class_dev = NULL;
+
 	devno = MKDEV(socket_major, 0);
 
 	result = alloc_chrdev_region(&devno, 0, 1, "tz_socket");
@@ -225,8 +241,8 @@ int socket_init(void)
 	memset(socket_devp, 0, sizeof(struct socket_dev));
 	socket_setup_cdev(socket_devp, 0);
 	sema_init(&socket_devp->sem, 1);
-	sema_init(&daulOS_rd_sem, 0);
-	sema_init(&daulOS_wr_sem, 0);
+	sema_init(&daulOS_rd_sem, SEMA_INIT_ZERO);
+	sema_init(&daulOS_wr_sem, SEMA_INIT_ZERO);
 	goto return_fn;
 
 class_device_destroy:

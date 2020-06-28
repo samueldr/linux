@@ -109,11 +109,11 @@ int ccci_get_ccmni_channel(int md_id, int ccmni_idx, struct ccmni_ch *channel)
 		channel->multiq = md_id == MD_SYS1 ? 1 : 0;
 		break;
 	case 8: /* a replica for ccmni-lan, so should not be used */
-		channel->rx = CCCI_CCMNILAN_RX;
+		channel->rx = CCCI_INVALID_CH_ID;
 		channel->rx_ack = 0xFF;
-		channel->tx = CCCI_CCMNILAN_TX;
+		channel->tx = CCCI_INVALID_CH_ID;
 		channel->tx_ack = 0xFF;
-		channel->dl_ack = CCCI_CCMNILAN_TX;
+		channel->dl_ack = CCCI_INVALID_CH_ID;
 		channel->multiq = 0;
 		break;
 	case 9:
@@ -194,7 +194,7 @@ int ccci_get_ccmni_channel(int md_id, int ccmni_idx, struct ccmni_ch *channel)
 		channel->rx_ack = 0xFF;
 		channel->tx = CCCI_CCMNILAN_TX;
 		channel->tx_ack = 0xFF;
-		channel->dl_ack = CCCI_CCMNILAN_TX;
+		channel->dl_ack = CCCI_CCMNILAN_DLACK_RX;
 		channel->multiq = 0;
 		break;
 #endif
@@ -315,17 +315,8 @@ struct ccmni_ccci_ops eccci_cc3mni_ops = {
 	.ccmni_ver = CCMNI_DRV_V0,
 	.ccmni_num = 8,
 	.name = "cc3mni",
-#if defined CONFIG_MTK_IRAT_SUPPORT
-#if defined CONFIG_MTK_C2K_SLOT2_SUPPORT
-	.md_ability = MODEM_CAP_CCMNI_IRAT | MODEM_CAP_TXBUSY_STOP | MODEM_CAP_WORLD_PHONE,
-#else
 	.md_ability = MODEM_CAP_CCMNI_IRAT | MODEM_CAP_TXBUSY_STOP,
-#endif
 	.irat_md_id = MD_SYS1,
-#else
-	.md_ability = MODEM_CAP_TXBUSY_STOP,
-	.irat_md_id = -1,
-#endif
 	.napi_poll_weigh = 0,
 	.send_pkt = ccmni_send_pkt,
 	.napi_poll = ccmni_napi_poll,
@@ -370,7 +361,7 @@ static int port_net_init(struct ccci_port *port)
 		atomic_set(&mbim_ccmni_index[port->md_id], -1);
 
 		eccci_ccmni_ops.md_ability |= port_proxy_get_capability(port->port_proxy);
-#if defined CONFIG_MTK_IRAT_SUPPORT
+#if defined CONFIG_MTK_MD3_SUPPORT
 		CCCI_INIT_LOG(port->md_id, NET, "clear MODEM_CAP_SGIO flag for IRAT enable\n");
 		eccci_ccmni_ops.md_ability &= (~(MODEM_CAP_SGIO));
 #endif
@@ -421,7 +412,7 @@ static int port_net_recv_skb(struct ccci_port *port, struct sk_buff *skb)
 
 #ifdef CCCI_SKB_TRACE
 	netif_rx_profile[3] = sched_clock() - netif_time;
-	ccmni_ops.dump_rx_status(port->md_id, ccci_h->channel, netif_rx_profile);
+	ccmni_ops.dump_rx_status(port->md_id, netif_rx_profile);
 #endif
 #ifdef PORT_NET_TRACE
 	rx_cb_time = sched_clock() - rx_cb_time;
@@ -434,25 +425,27 @@ static int port_net_recv_skb(struct ccci_port *port, struct sk_buff *skb)
 
 static void port_net_md_state_notice(struct ccci_port *port, MD_STATE state)
 {
-	int dir = state & 0x10000000;
+	int dir = (state & (1<<31)) >> 31;
 	int qno = (state & 0x00FF0000) >> 16;
+	int is_ack = 0;
 
 	state = state & 0x0000FFFF;
-
+	if (dir == OUT && qno == NET_ACK_TXQ_INDEX(port) && port->txq_index != qno)
+		is_ack = 1;
 	if (port->md_id != MD_SYS3) {
-		if (((state == TX_IRQ) && ((port->flags & PORT_F_RX_FULLED) == 0)) ||
-			((state == TX_FULL) && (port->flags & PORT_F_RX_FULLED)))
+		if (((state == TX_IRQ) &&
+				((!is_ack && ((port->flags & PORT_F_TX_DATA_FULLED) == 0)) ||
+				(is_ack && ((port->flags & PORT_F_TX_ACK_FULLED) == 0)))))
 			return;
 	}
-	ccmni_ops.md_state_callback(port->md_id, GET_CCMNI_IDX(port), state,
-		(dir == OUT && qno == NET_ACK_TXQ_INDEX(port)));
+	ccmni_ops.md_state_callback(port->md_id, GET_CCMNI_IDX(port), state, is_ack);
 
 	switch (state) {
 	case TX_IRQ:
-		port->flags &= ~PORT_F_RX_FULLED;
+		port->flags &= ~(is_ack ? PORT_F_TX_ACK_FULLED : PORT_F_TX_DATA_FULLED);
 		break;
 	case TX_FULL:
-		port->flags |= PORT_F_RX_FULLED;	/* for convenient in traffic log */
+		port->flags |= (is_ack ? PORT_F_TX_ACK_FULLED : PORT_F_TX_DATA_FULLED);
 		break;
 	default:
 		break;

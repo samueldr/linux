@@ -68,7 +68,6 @@ static DECLARE_TASKLET(kpd_hall_tasklet, kpd_hall_handle, 0);
 struct keypad_dts_data kpd_dts_data;
 /* for Power key using EINT */
 #ifdef CONFIG_KPD_PWRKEY_USE_EINT
-
 static void kpd_pwrkey_handler(unsigned long data);
 static DECLARE_TASKLET(kpd_pwrkey_tasklet, kpd_pwrkey_handler, 0);
 #endif
@@ -1134,7 +1133,7 @@ static struct sb_handler kpd_sb_handler_desc = {
 static int __init kpd_mod_init(void)
 {
 	int r;
-    printk("yutao add test kpd_mod_init!!\n");
+
 	r = platform_driver_register(&kpd_pdrv);
 	if (r) {
 		kpd_info("register driver failed (%d)\n", r);

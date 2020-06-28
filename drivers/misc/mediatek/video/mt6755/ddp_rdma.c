@@ -380,6 +380,7 @@ void rdma_set_ultra_l(unsigned int idx, unsigned int bpp, void *handle, golden_s
 
 	if (idx == 1)
 		is_wrot_sram = 0;
+
 	if (idx == 0) {
 		if (fifo_mode == 0) {
 #if 0
@@ -486,7 +487,7 @@ void rdma_set_ultra_l(unsigned int idx, unsigned int bpp, void *handle, golden_s
 
 
 	issue_req_threshold = (fifo_valid_size - preultra_low) < 255  ? (fifo_valid_size - preultra_low) : 255;
-	temp = (long long)rdma_golden_setting->rdma_width * rdma_golden_setting->rdma_height * bpp;
+	temp = (unsigned long long)rdma_golden_setting->rdma_width * rdma_golden_setting->rdma_height * bpp;
 	do_div(temp, 16*8);
 	temp--;
 
@@ -1009,15 +1010,13 @@ static int setup_rdma_sec(DISP_MODULE_ENUM module, disp_ddp_path_config *pConfig
 			cmdqRecSecureEnablePortSecurity(handle, (1LL << cmdq_engine));
 			/* cmdqRecSecureEnableDAPC(handle, (1LL << cmdq_engine)); */
 
-			if (rdma_is_sec[rdma_idx] == 0) {
+			if (rdma_is_sec[rdma_idx] == 0)
 				DISPMSG("[SVP] switch rdma%d to sec\n", rdma_idx);
-				mdelay(3);
-			}
 			rdma_is_sec[rdma_idx] = 1;
 		} else {
 			if (rdma_is_sec[rdma_idx]) {
 				/* rdma is in sec stat, we need to switch it to nonsec */
-				cmdqRecHandle nonsec_switch_handle = NULL;
+				cmdqRecHandle nonsec_switch_handle;
 
 				int ret;
 

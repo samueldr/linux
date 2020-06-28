@@ -1,3 +1,16 @@
+/*
+ * Copyright (C) 2016 MediaTek Inc.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See http://www.gnu.org/licenses/gpl-2.0.html for more details.
+ */
+
 /**********************************************
  *MT6755 MSDC DTSI File
 ********************************************/
@@ -29,7 +42,7 @@
 	sd-uhs-sdr12;
 	sd-uhs-sdr25;
 	sd-uhs-sdr50;
-	sd-uhs-sdr104;
+	/*sd-uhs-sdr104;*/
 	/*sd-uhs-ddr50;*/
 	pinctl = <&mmc1_pins_default>;
 	pinctl_sdr104 = <&mmc1_pins_sdr104>;
@@ -39,6 +52,7 @@
 	host_function = /bits/ 8 <MSDC_SD>;
 	cd_level = /bits/ 8 <MSDC_CD_LOW>;
 	cd-gpios = <&pio 3 0>;
+	cd-debounce = <1>;
 	status = "okay";
 	vmmc-supply = <&mt_pmic_vmch_ldo_reg>;
 	vqmmc-supply = <&mt_pmic_vmc_ldo_reg>;
@@ -105,10 +119,10 @@
 
 	mmc1_pins_sdr104: mmc1@sdr104 {
 		pins_cmd {
-			drive-strength = /bits/ 8 <2>;
+			drive-strength = /bits/ 8 <3>;
 		};
 		pins_dat {
-			drive-strength = /bits/ 8 <2>;
+			drive-strength = /bits/ 8 <3>;
 		};
 		pins_clk {
 			drive-strength = /bits/ 8 <3>;
@@ -117,10 +131,10 @@
 
 	mmc1_pins_sdr50: mmc1@sdr50 {
 		pins_cmd {
-			drive-strength = /bits/ 8 <2>;
+			drive-strength = /bits/ 8 <3>;
 		};
 		pins_dat {
-			drive-strength = /bits/ 8 <2>;
+			drive-strength = /bits/ 8 <3>;
 		};
 		pins_clk {
 			drive-strength = /bits/ 8 <3>;
@@ -144,20 +158,20 @@
 		datwrddly      = /bits/ 8 <0>;
 		cmdrrddly      = /bits/ 8 <0>;
 		cmdrddly       = /bits/ 8 <0>;
-		cmd_edge = /bits/ 8 <MSDC_SMPL_FALLING>;
-		rdata_edge = /bits/ 8 <MSDC_SMPL_FALLING>;
-		wdata_edge = /bits/ 8 <MSDC_SMPL_FALLING>;
+		cmd_edge = /bits/ 8 <MSDC_SMPL_RISING>;
+		rdata_edge = /bits/ 8 <MSDC_SMPL_RISING>;
+		wdata_edge = /bits/ 8 <MSDC_SMPL_RISING>;
 	};
 
 	mmc2_pins_default: mmc2@default {
 		pins_cmd {
-			drive-strength = /bits/ 8 <1>;
+			drive-strength = /bits/ 8 <3>;
 		};
 		pins_dat {
-			drive-strength = /bits/ 8 <1>;
+			drive-strength = /bits/ 8 <3>;
 		};
 		pins_clk {
-			drive-strength = /bits/ 8 <1>;
+			drive-strength = /bits/ 8 <3>;
 		};
 	};
 

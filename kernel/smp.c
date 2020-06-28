@@ -23,7 +23,9 @@
 #endif
 
 #include "smpboot.h"
+#if defined(CONFIG_ARCH_MT6738)
 #include "mt-plat/mt_devinfo.h"
+#endif
 
 enum {
 	CSD_FLAG_LOCK		= 0x01,
@@ -215,6 +217,30 @@ void generic_smp_call_function_single_interrupt(void)
 	flush_smp_call_function_queue(true);
 }
 
+#ifdef CONFIG_MTPROF
+static unsigned long long mt_record_smp_call_func_start(void)
+{
+	return sched_clock();
+}
+
+static void mt_record_smp_call_func_end(struct call_single_data *csd,
+					unsigned long long start)
+{
+#define WARN_LONG_CALL_FUNC_TIME       3000000
+	unsigned long long duration;
+
+	duration = sched_clock() - start;
+	if (duration > WARN_LONG_CALL_FUNC_TIME)
+		pr_warn("func:%pF: too long: %llu ns\n", csd->func, duration);
+}
+#else
+static unsigned long long mt_record_smp_call_func_start(void) { return 0; }
+
+static void mt_record_smp_call_func_end(struct call_single_data *csd,
+					unsigned long long start) {}
+#endif
+
+
 /**
  * flush_smp_call_function_queue - Flush pending smp-call-function callbacks
  *
@@ -258,7 +284,11 @@ static void flush_smp_call_function_queue(bool warn_cpu_offline)
 	}
 
 	llist_for_each_entry_safe(csd, csd_next, entry, llist) {
+		unsigned long long start;
+
+		start = mt_record_smp_call_func_start();
 		csd->func(csd->info);
+		mt_record_smp_call_func_end(csd, start);
 		csd_unlock(csd);
 	}
 
@@ -767,7 +797,9 @@ static int create_procfs(void)
 /* Called by boot processor to activate the rest. */
 void __init smp_init(void)
 {
-	unsigned int cpu, segment, i;
+	unsigned int cpu;
+#if defined(CONFIG_ARCH_MT6738)
+	unsigned int segment, i;
 
 	segment =  get_devinfo_with_index(21) & 0xFF;
 	if ((segment == 0x43) || (segment == 0x4B)) {
@@ -777,7 +809,7 @@ void __init smp_init(void)
 				set_cpu_online(i, false);
 			}
 	}
-
+#endif
 	idle_threads_init();
 
 #if defined(CONFIG_PROFILE_CPU) || defined(CONFIG_MTK_CPU_HOTPLUG_DEBUG_3)

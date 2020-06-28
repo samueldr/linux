@@ -1,3 +1,17 @@
+/*
+ * Copyright (c) 2015-2017 MICROTRUST Incorporated
+ * All Rights Reserved.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ */
+
 #include <linux/kernel.h>
 #include <linux/slab.h>
 #include <linux/semaphore.h>
@@ -60,7 +74,8 @@ unsigned long create_fp_fdrv(int buff_size)
 
 	/* Notify the T_OS that there is ctl_buffer to be created. */
 	memcpy((void *)message_buff, (void *)(&msg_head), sizeof(struct message_head));
-	memcpy((void *)(message_buff + sizeof(struct message_head)), (void *)(&msg_body), sizeof(struct create_fdrv_struct));
+	memcpy((void *)(message_buff + sizeof(struct message_head)), (void *)(&msg_body),
+			sizeof(struct create_fdrv_struct));
 	Flush_Dcache_By_Area((unsigned long)message_buff, (unsigned long)message_buff + MESSAGE_SIZE);
 
 	/* Call the smc_fast_call */
@@ -72,7 +87,8 @@ unsigned long create_fp_fdrv(int buff_size)
 
 	Invalidate_Dcache_By_Area((unsigned long)message_buff, (unsigned long)message_buff + MESSAGE_SIZE);
 	memcpy((void *)(&msg_head), (void *)(message_buff), sizeof(struct message_head));
-	memcpy((void *)(&msg_ack), (void *)(message_buff + sizeof(struct message_head)), sizeof(struct ack_fast_call_struct));
+	memcpy((void *)(&msg_ack), (void *)(message_buff + sizeof(struct message_head)),
+			sizeof(struct ack_fast_call_struct));
 
 	/*local_irq_restore(irq_flag);*/
 
@@ -80,9 +96,9 @@ unsigned long create_fp_fdrv(int buff_size)
 	if ((msg_head.message_type == FAST_CALL_TYPE) && (msg_head.child_type == FAST_ACK_CREAT_FDRV)) {
 		retVal = msg_ack.retVal;
 
-		if (retVal == 0) {
+		if (retVal == 0)
 			return temp_addr;
-		}
+
 	} else {
 		retVal = (unsigned long)NULL;
 	}
@@ -106,22 +122,20 @@ void set_fp_command(unsigned long memory_size)
 	memcpy((void *)fdrv_message_buff, (void *)(&fdrv_msg_head), sizeof(struct fdrv_message_head));
 
 	Flush_Dcache_By_Area((unsigned long)fdrv_message_buff, (unsigned long)fdrv_message_buff + MESSAGE_SIZE);
-
-	return;
 }
 
 int __send_fp_command(unsigned long share_memory_size)
 {
 	uint64_t smc_type = 2;
+
 	set_fp_command(share_memory_size);
 	Flush_Dcache_By_Area((unsigned long)fp_buff_addr, fp_buff_addr + FP_BUFF_SIZE);
 
 	fp_call_flag = GLSCH_HIGH;
 	n_invoke_t_drv(&smc_type, 0, 0);
 
-	while (smc_type == 0x54) {
+	while (smc_type == 0x54)
 		nt_sched_t(&smc_type);
-	}
 
 	return 0;
 }
@@ -145,7 +159,6 @@ int send_fp_command(unsigned long share_memory_size)
 	fdrv_ent.fdrv_call_buff_size = share_memory_size;
 
 	/* with a wmb() */
-	wmb();
 
 	Flush_Dcache_By_Area((unsigned long)&fdrv_ent, (unsigned long)&fdrv_ent + sizeof(struct fdrv_call_struct));
 	retVal = add_work_entry(FDRV_CALL, (unsigned char *)(&fdrv_ent));
@@ -160,7 +173,6 @@ int send_fp_command(unsigned long share_memory_size)
 	down(&fdrv_sema);
 	IMSG_DEBUG("send_fp_command end\n");
 	/* with a rmb() */
-	rmb();
 
 	Invalidate_Dcache_By_Area((unsigned long)fp_buff_addr, (unsigned long)fp_buff_addr + FP_BUFF_SIZE);
 

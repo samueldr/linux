@@ -31,7 +31,7 @@
 #define FRAME_WIDTH  										(1080)
 #define FRAME_HEIGHT 										(2160)
 //#define FRAME_HEIGHT 										(1280) //liukangping
-#define LCM_ID_HX8399                                                              (0x0C)
+#define LCM_ID_HX8399                                       (0x99) //qiangang
 #define REGFLAG_DELAY             								0xFC
 #define REGFLAG_END_OF_TABLE      							0xFD   // END OF REGISTERS MARKER
 
@@ -197,7 +197,7 @@ static struct LCM_setting_table lcm_initialization_setting1[] =
               0x01,0x1A,0x29,0x26,0x59,0x64,0x73,0x6F,0x77,0x80, 
               0x87,0x8D,0x92,0x9A,0xA2,0xA6,0xAA,0xB1,0xB4,0xC0, 
               0xB4,0xC1,0xC3,0x63,0x5E,0x68,0x73}}, 
-    {0xB6,2,{0x97,0x97}}, 
+    //{0xB6,2,{0x97,0x97}}, 
     {0xCC,1,{0x08}}, 
     //{0xE3,1,{0x01}}, 
     //{0xCF,4,{0x00,0x14,0x00,0x80}}, 
@@ -321,8 +321,8 @@ static void lcm_get_params(LCM_PARAMS *params)
 		params->dsi.vertical_backporch				       = 3;  //14  
 		params->dsi.vertical_frontporch				       = 9;  //16  
 		params->dsi.vertical_active_line				       = FRAME_HEIGHT;     
-		params->dsi.horizontal_sync_active				= 40;   //4
-		params->dsi.horizontal_backporch				= 40;  //60   liukangping update
+		params->dsi.horizontal_sync_active				= 44;   //4
+		params->dsi.horizontal_backporch				= 44;  //60   liukangping update
 		params->dsi.horizontal_frontporch				= 30;    //60  liukangping update
 //		params->dsi.horizontal_blanking_pixel				= 60;   
 		params->dsi.horizontal_active_pixel				= FRAME_WIDTH;  
@@ -339,7 +339,7 @@ static void lcm_get_params(LCM_PARAMS *params)
     
 //zhounengwen@wind-mobi.com 20150327 beign
 // To fix lcm rf
-        params->dsi.PLL_CLOCK = 490; //modify by qiangang
+        params->dsi.PLL_CLOCK = 494; //modify by qiangang
 		params->dsi.ssc_disable = 1; //add by qiangang
 //		params->dsi.CLK_TRAIL = 17;
 //qiangang@wind-mobi.com 20170912 begin	

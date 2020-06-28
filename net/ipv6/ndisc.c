@@ -1131,9 +1131,11 @@ static void ndisc_router_discovery(struct sk_buff *skb)
 		in6_dev->if_flags |= IF_RA_RCVD;
 	}
 
+#ifdef CONFIG_MTK_IPV6_VZW
 	/*add for VzW feature : remove IF_RS_VZW_SENT flag*/
 	if (in6_dev->if_flags & IF_RS_VZW_SENT)
 		in6_dev->if_flags &= ~IF_RS_VZW_SENT;
+#endif
 	/*
 	 * Remember the managed/otherconf flags from most recently
 	 * received RA message (RFC 2462) -- yoshfuji
@@ -1342,6 +1344,8 @@ skip_linkparms:
 			if (ri->prefix_len == 0 &&
 			    !in6_dev->cnf.accept_ra_defrtr)
 				continue;
+			if (ri->prefix_len < in6_dev->cnf.accept_ra_rt_info_min_plen)
+				continue;
 			if (ri->prefix_len > in6_dev->cnf.accept_ra_rt_info_max_plen)
 				continue;
 			rt6_route_rcv(skb->dev, (u8 *)p, (p->nd_opt_len) << 3,
@@ -1391,7 +1395,7 @@ skip_routeinfo:
 			rt6_mtu_change(skb->dev, mtu);
 		}
 	}
-#ifdef CONFIG_MTK_DHCPV6C_WIFI
+#ifdef MTK_DHCPV6C_WIFI
 	if (in6_dev->if_flags & IF_RA_OTHERCONF) {
 		pr_debug("receive RA with o bit!\n");
 		in6_dev->cnf.ra_info_flag = 1;
@@ -1407,8 +1411,8 @@ skip_routeinfo:
 		     p;
 		     p = ndisc_next_useropt(p, ndopts.nd_useropts_end)) {
 			ndisc_ra_useropt(skb, p);
-#ifdef CONFIG_MTK_DHCPV6C_WIFI
-			/* only clear ra_info_flag when O bit is set */
+#ifdef MTK_DHCPV6C_WIFI
+		/* only clear ra_info_flag when O bit is set */
 			 if (p->nd_opt_type == ND_OPT_RDNSS && in6_dev->if_flags & IF_RA_OTHERCONF) {
 				pr_debug("RDNSS, ignore RA with o bit!\n");
 				in6_dev->cnf.ra_info_flag = 0;

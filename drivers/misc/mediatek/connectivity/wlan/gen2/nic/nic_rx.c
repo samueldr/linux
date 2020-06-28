@@ -3044,13 +3044,19 @@ WLAN_STATUS nicRxProcessActionFrame(IN P_ADAPTER_T prAdapter, IN P_SW_RFB_T prSw
 	case CATEGORY_RM_ACTION:
 		switch (prActFrame->ucAction) {
 		case RM_ACTION_RM_REQUEST:
-			rlmProcessRadioMeasurementRequest(prAdapter, prSwRfb);
+		   //liqiang@wind-mobi.com 20171114  begin
+			// rlmProcessRadioMeasurementRequest(prAdapter, prSwRfb);
+			DBGLOG(RX, INFO, "RM_ACTION_RM_REQUEST ignore it\n");
+		//liqiang@wind-mobi.com 20171114  end
 			break;
 		/*case RM_ACTION_LM_REQUEST:
 			rlmProcessLinkMeasurementRequest(prAdapter, prActFrame);
 			break;*/ /* Link Measurement is handled in Firmware */
 		case RM_ACTION_REIGHBOR_RESPONSE:
-			rlmProcessNeighborReportResonse(prAdapter, prActFrame, prSwRfb->u2PacketLen);
+		    //liqiang@wind-mobi.com 20171114  begin
+			//rlmProcessNeighborReportResonse(prAdapter, prActFrame, prSwRfb->u2PacketLen);
+			DBGLOG(RX, INFO, "RM_ACTION_REIGHBOR_RESPONSE ignore it\n");
+			//liqiang@wind-mobi.com 20171114  end
 			break;
 	}
 	break;

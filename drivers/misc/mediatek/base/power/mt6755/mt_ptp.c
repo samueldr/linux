@@ -267,10 +267,10 @@ unsigned int p15Tbl[][9] = {
 	{0x06, 0xa, 0x0c, 0x8, 0x1, 0x0cc, 0x828, 0x40, 0x30},/* 663 */
 	{0x02, 0xb, 0x05, 0xa, 0x1, 0x0B0, 0x70a, 0x35, 0x20},/* 286 */
 };
+#endif
 
 unsigned int gpuSb[8] = {0x54, 0x54, 0x54, 0x40, 0x40, 0x40, 0x40, 0x35};
 unsigned int gpuFy[8] = {0x54, 0x40, 0x40, 0x40, 0x40, 0x35, 0x00, 0x00};
-#endif
 static unsigned int record_tbl_locked[8];
 static unsigned int *recordTbl;
 static unsigned int cpu_speed;
@@ -346,13 +346,10 @@ static unsigned int cpu_speed;
 	#include "mach/mt_thermal.h"
 	#include "mach/mt_ppm_api.h"
 	#include "mt_gpufreq.h"
+	#include "../../../power/mt6755/mt6311.h"
 	#if defined(CONFIG_MTK_PMIC_CHIP_MT6353) && defined(CONFIG_MTK_MT6750TT)
 		#include "mt_eem_turbo.h"
-	#else
-		#include "../../../power/mt6755/mt6311.h"
-		/* #include "mach/mt6311.h" */
 	#endif
-
 #else
 	#include "mach/mt_ptpslt.h"
 	#include "kernel2ctp.h"
@@ -583,7 +580,12 @@ enum {
 void __iomem *eem_base;
 static u32 eem_irq_number;
 #if defined(CONFIG_MTK_PMIC_CHIP_MT6353)
-void __iomem *eem_apmixed_base;
+	void __iomem *eem_apmixed_base;
+	#define cpu_eem_is_extbuck_valid()     (is_ext_buck_exist() && is_ext_buck_sw_ready())
+	static unsigned int eem_is_extbuck_valid;
+	static unsigned int eemFeatureSts = 0x5;
+#else
+	static unsigned int eemFeatureSts = 0x7;
 #endif
 #endif
 
@@ -1542,6 +1544,7 @@ static void restore_record(struct eem_det *det)
 static void mt_cpufreq_set_ptbl_funcEEM(enum mt_cpu_dvfs_id id, int restore)
 {
 	struct eem_det *det = id_to_eem_det((id == MT_CPU_DVFS_LITTLE) ? EEM_CTRL_LITTLE : EEM_CTRL_BIG);
+
 	if (restore)
 		restore_record(det);
 	else
@@ -1633,9 +1636,9 @@ static void restore_default_volt_cpu(struct eem_det *det)
 static void get_freq_table_cpu(struct eem_det *det)
 {
 	int i;
-	unsigned int binLevel, binLevel_eng;
+	unsigned int binLevel;
 	#if !defined(CONFIG_MTK_PMIC_CHIP_MT6353)
-	unsigned int freq_bound;
+	unsigned int freq_bound, binLevel_eng;
 	#endif
 	#ifndef EARLY_PORTING
 	enum mt_cpu_dvfs_id cpu;
@@ -1647,21 +1650,27 @@ static void get_freq_table_cpu(struct eem_det *det)
 
 	/* det->max_freq_khz = mt_cpufreq_get_freq_by_idx(cpu, 0); */
 	#ifdef __KERNEL__
-		#if defined(CONFIG_MTK_PMIC_CHIP_MT6353)
-		binLevel = 1;
-		cpuBinLevel = binLevel;
-		cpuBinLevel_eng = 0x20;
-		#else
 		binLevel = GET_BITS_VAL(7:0, get_devinfo_with_index(21));
+		#if defined(CONFIG_MTK_PMIC_CHIP_MT6353)
+		if (eem_is_extbuck_valid) {
+			if ((binLevel == 0x82) || (binLevel == 0x86))
+				binLevel = 2;
+			else
+				binLevel = 1;
+		} else
+			binLevel = 1;
+		cpuBinLevel = binLevel;
+		#else
 		binLevel_eng = GET_BITS_VAL(15:0, get_devinfo_with_index(19));
 		freq_bound = GET_BITS_VAL(25:23, get_devinfo_with_index(4));
 		#endif
 	#else
+		binLevel_eng = GET_BITS_VAL(15:0, eem_read(0x10206278));
 		#if defined(CONFIG_MTK_PMIC_CHIP_MT6353)
+		/* binLevel = (eem_is_extbuck_valid) ? 2 : 1; */
 		binLevel = 1;
 		#else
 		binLevel = GET_BITS_VAL(7:0, eem_read(0x1020627C));
-		binLevel_eng = GET_BITS_VAL(15:0, eem_read(0x10206278));
 		freq_bound = GET_BITS_VAL(25:23, eem_read(0x10206044));
 		#endif
 	#endif
@@ -1702,16 +1711,21 @@ static void get_freq_table_cpu(struct eem_det *det)
 						((freq_bound == 5) ? bigFreq_FY_M[i] : bigFreq_FY[i]),
 					#endif
 					det->max_freq_khz);
+				#if defined(CONFIG_MTK_PMIC_CHIP_MT6353)
+				} else if (2 == binLevel) {
+				#else
 				} else if ((2 == binLevel) || (4 == binLevel)) {
+				#endif
 					det->freq_tbl[i] =
 					PERCENT((det_to_id(det) == EEM_DET_LITTLE) ? littleFreq_SB[i] : bigFreq_SB[i],
 					det->max_freq_khz);
-#ifdef CONFIG_ARCH_MT6755_TURBO
-				} else if (0x22 == binLevel) {
+				#ifdef CONFIG_ARCH_MT6755_TURBO
+				} else if (0x20 == (binLevel & 0xF0)) {
 					det->freq_tbl[i] =
 					PERCENT((det_to_id(det) == EEM_DET_LITTLE) ? littleFreq_P15[i] : bigFreq_P15[i],
 					det->max_freq_khz);
-#endif
+				#endif
+				#if !defined(CONFIG_MTK_PMIC_CHIP_MT6353)
 				} else {
 					if ((2 == ((binLevel_eng >> 4) & 0x07)) ||
 					    (2 == ((binLevel_eng >> 10) & 0x07))) {
@@ -1719,11 +1733,7 @@ static void get_freq_table_cpu(struct eem_det *det)
 							PERCENT(
 							(det_to_id(det) == EEM_DET_LITTLE) ?
 								littleFreq_FY[i] :
-								#if defined(CONFIG_MTK_PMIC_CHIP_MT6353)
-								bigFreq_FY[i],
-								#else
 								((freq_bound == 5) ? bigFreq_FY_M[i] : bigFreq_FY[i]),
-								#endif
 							det->max_freq_khz);
 					} else {
 						det->freq_tbl[i] =
@@ -1734,6 +1744,9 @@ static void get_freq_table_cpu(struct eem_det *det)
 							det->max_freq_khz);
 					}
 				}
+				#else
+				}
+				#endif
 			}
 		#endif
 		if (0 == det->freq_tbl[i])
@@ -2051,6 +2064,9 @@ static int eem_volt_thread_handler(void *data)
 	struct eem_det *det = id_to_eem_det(ctrl->det_id);
 
 	FUNC_ENTER(FUNC_LV_HELP);
+	if (det == NULL)
+		return 0;
+
 #ifdef __KERNEL__
 
 	do {
@@ -2334,6 +2350,10 @@ static void eem_init_det(struct eem_det *det, struct eem_devinfo *devinfo)
 	FUNC_EXIT(FUNC_LV_HELP);
 }
 
+int __attribute__((weak)) tscpu_is_temp_valid(void)
+{
+	return 1;
+}
 
 static void eem_set_eem_volt(struct eem_det *det)
 {
@@ -2342,9 +2362,12 @@ static void eem_set_eem_volt(struct eem_det *det)
 	int cur_temp, low_temp_offset;
 	struct eem_ctrl *ctrl = id_to_eem_ctrl(det->ctrl_id);
 
+	if (ctrl == NULL)
+		return;
+
 	cur_temp = det->ops->get_temp(det);
-	/* eem_debug("eem_set_eem_volt cur_temp = %d\n", cur_temp); */
-	if (cur_temp <= 33000) {
+	/* eem_debug("eem_set_eem_volt cur_temp = %d, valid = %d\n", cur_temp, tscpu_is_temp_valid()); */
+	if ((cur_temp <= 33000) || !tscpu_is_temp_valid()) {
 		low_temp_offset = 10;
 		ctrl->volt_update |= EEM_VOLT_UPDATE;
 	} else {
@@ -2368,6 +2391,17 @@ static void eem_set_eem_volt(struct eem_det *det)
 		else if (det_to_id(det) == EEM_DET_BIG)
 			det->volt_tbl_pmic[i] = min(det->volt_tbl_pmic[i], (*(recordTbl + (i + 8) * 9 + 8) & 0x7F));
 		#if defined(CONFIG_MTK_PMIC_CHIP_MT6353)
+		else {
+			if (eem_is_extbuck_valid) {
+				if (8 == det->num_freq_tbl)
+					det->volt_tbl_pmic[i] = min(det->volt_tbl_pmic[i], gpuSb[i]);
+				else {
+					if (0 == gpuFy[i])
+						break;
+					det->volt_tbl_pmic[i] = min(det->volt_tbl_pmic[i], gpuFy[i]);
+				}
+			}
+		}
 		#else
 		else {
 			if (8 == det->num_freq_tbl)
@@ -2407,6 +2441,9 @@ static void eem_restore_eem_volt(struct eem_det *det)
 {
 #if SET_PMIC_VOLT
 	struct eem_ctrl *ctrl = id_to_eem_ctrl(det->ctrl_id);
+
+	if (ctrl == NULL)
+		return;
 
 	ctrl->volt_update |= EEM_VOLT_RESTORE;
 #ifdef __KERNEL__
@@ -2475,6 +2512,7 @@ static inline void handle_init01_isr(struct eem_det *det)
 #if DUMP_DATA_TO_DE
 	{
 		unsigned int i;
+
 		for (i = 0; i < ARRAY_SIZE(reg_dump_addr_off); i++) {
 			det->reg_dump_data[i][EEM_PHASE_INIT01] = eem_read(EEM_BASEADDR + reg_dump_addr_off[i]);
 			#ifdef __KERNEL__
@@ -3246,7 +3284,7 @@ void eem_init01(void)
 			else if ((EEM_CTRL_BIG == det->ctrl_id) && (1 == det->eem_eemen[EEM_PHASE_INIT01]))
 				out |= BIT(EEM_CTRL_BIG);
 		}
-		if ((0x07 == out) || (30 == timeout)) {
+		if ((eemFeatureSts == out) || (30 == timeout)) {
 			eem_debug("init01 finish time is %d\n", timeout);
 			break;
 		}
@@ -3366,15 +3404,17 @@ void get_devinfo(struct eem_devinfo *p)
 #endif
 
 	#if defined(CONFIG_MTK_PMIC_CHIP_MT6353)
-	if ((p->CPU0_BDES != 0) && (p->CPU1_BDES != 0))
-		val[7] = 0x01;
-	if ((p->CPU0_MTDES != 0) && (p->CPU1_MTDES != 0))
-		val[7] = val[7] | (0x01<<8);
+	if ((p->CPU0_MDES != 0) && (p->CPU1_MDES != 0)) {
+			val[7] = 0x01;
+			val[7] = val[7] | (0x01<<8);
+	}
+
 	#else
-	if ((p->CPU0_BDES != 0) && (p->CPU1_BDES != 0) && (p->GPU_BDES != 0))
+	if ((p->CPU0_MDES != 0) && (p->CPU1_MDES != 0) && (p->GPU_MDES != 0)) {
 		val[7] = 0x01;
-	if ((p->CPU0_MTDES != 0) && (p->CPU1_MTDES != 0) && (p->GPU_MTDES != 0))
 		val[7] = val[7] | (0x01<<8);
+	}
+
 	#endif
 
 	eem_debug("M_HW_RES0 = 0x%X\n", val[0]);
@@ -3392,7 +3432,11 @@ void get_devinfo(struct eem_devinfo *p)
 	#if defined(CONFIG_MTK_PMIC_CHIP_MT6353)
 	fab = get_devinfo_with_index(28) & 0x40000000;
 	segment = get_devinfo_with_index(21) & 0xFF;
-	if (((segment == 0x41) || (segment == 0x45) || (segment == 0x40)) && !(fab))
+	if (((segment == 0x41) ||
+	     (segment == 0x45) ||
+	     (segment == 0x40) ||
+	     (segment == 0xC1) ||
+	     (segment == 0xC5)) && !(fab))
 		#if defined(CONFIG_MTK_MT6750TT)
 		ctrl_ITurbo = 1; /* t */
 		#else
@@ -3511,9 +3555,13 @@ static int eem_probe(struct platform_device *pdev)
 		pmic_set_register_value(PMIC_RG_VPROC_MODESET, 1);
 		pmic_set_register_value(PMIC_RG_VCORE_MODESET, 1);
 		pmic_set_register_value(PMIC_RG_VCORE2_MODESET, 1);
+		if (cpu_eem_is_extbuck_valid()) {
+			eem_is_extbuck_valid = 1;
+			mt6311_config_interface(0x7C, 0x1, 0x1, 6); /* set PWM mode for MT6311 */
+		}
 	#else
 		/* for Jade/Everest/Olympus(MT6351) */
-		pmic_config_interface(0x44E, 0x1, 0x1, 1); /* set PWM mode for MT6351 */
+		pmic_force_vcore_pwm(true); /* set PWM mode for MT6351 */
 		mt6311_config_interface(0x7C, 0x1, 0x1, 6); /* set PWM mode for MT6311 */
 	#endif
 
@@ -3544,10 +3592,12 @@ static int eem_probe(struct platform_device *pdev)
 		pmic_set_register_value(PMIC_RG_VPROC_MODESET, 0);
 		pmic_set_register_value(PMIC_RG_VCORE_MODESET, 0);
 		pmic_set_register_value(PMIC_RG_VCORE2_MODESET, 0);
+		if (cpu_eem_is_extbuck_valid())
+			mt6311_config_interface(0x7C, 0x0, 0x1, 6); /* set non-PWM mode for MT6311 */
 	#else
 		/* for Jade/Everest/Olympus(MT6351) */
 		mt6311_config_interface(0x7C, 0x0, 0x1, 6); /* set non-PWM mode for MT6311 */
-		pmic_config_interface(0x44E, 0x0, 0x1, 1); /* set non-PWM mode for MT6351 */
+		pmic_force_vcore_pwm(false); /* set non-PWM mode for MT6351 */
 	#endif
 
 	#ifdef __KERNEL__
@@ -3706,6 +3756,10 @@ int mt_eem_opp_num(enum eem_det_id id)
 	struct eem_det *det = id_to_eem_det(id);
 
 	FUNC_ENTER(FUNC_LV_API);
+
+	if (det == NULL)
+		return 0;
+
 	FUNC_EXIT(FUNC_LV_API);
 
 	return det->num_freq_tbl;
@@ -3718,6 +3772,9 @@ void mt_eem_opp_freq(enum eem_det_id id, unsigned int *freq)
 	int i = 0;
 
 	FUNC_ENTER(FUNC_LV_API);
+
+	if (det == NULL)
+		return;
 
 	for (i = 0; i < det->num_freq_tbl; i++)
 		freq[i] = det->freq_tbl[i];
@@ -3732,6 +3789,9 @@ void mt_eem_opp_status(enum eem_det_id id, unsigned int *temp, unsigned int *vol
 	int i = 0;
 
 	FUNC_ENTER(FUNC_LV_API);
+
+	if (det == NULL)
+		return;
 
 #if defined(__KERNEL__) && defined(CONFIG_THERMAL) && !defined(EARLY_PORTING)
 	*temp = tscpu_get_temp_by_bank(
@@ -3881,9 +3941,9 @@ static int eem_dump_proc_show(struct seq_file *m, void *v)
 		for (i = EEM_PHASE_INIT01; i < NR_EEM_PHASE; i++) {
 			seq_printf(m, "Bank_number = %d\n", det->ctrl_id);
 			if (i < EEM_PHASE_MON)
-				seq_printf(m, "mode = init%d\n", i);
+				seq_printf(m, "mode = init%d\n", i+1);
 			else
-				seq_puts(m, "mode = mon");
+				seq_puts(m, "mode = mon\n");
 			if (eem_log_en) {
 				seq_printf(m, "0x%08X, 0x%08X, 0x%08X, 0x%08X, 0x%08X\n",
 					det->dcvalues[i],
@@ -4596,6 +4656,9 @@ void eem_set_pi_offset(enum eem_ctrl_id id, int step)
 {
 	struct eem_det *det = id_to_eem_det(id);
 
+	if (det == NULL)
+		return;
+
 	det->pi_offset = step;
 
 #ifdef CONFIG_EEM_AEE_RR_REC
@@ -4663,11 +4726,17 @@ static int __init eem_conf(void)
 	eem_error("0--->The cpu_speed = %d\n", cpu_speed);
 
 	/* read E-fuse for segment selection */
+	binLevel = GET_BITS_VAL(7:0, get_devinfo_with_index(21));
 	#if defined(CONFIG_MTK_PMIC_CHIP_MT6353)
-	binLevel = 1;
+	if (cpu_eem_is_extbuck_valid()) {
+		if ((binLevel == 0x82) || (binLevel == 0x86))
+			binLevel = 2;
+		else
+			binLevel = 1;
+	} else
+		binLevel = 1;
 	if (0) {
 	#else
-	binLevel = GET_BITS_VAL(7:0, get_devinfo_with_index(21));
 	binLevel_eng = GET_BITS_VAL(15:0, get_devinfo_with_index(19));
 	freq_bound = GET_BITS_VAL(25:23, get_devinfo_with_index(4));
 	if (1001 == cpu_speed) {
@@ -4700,18 +4769,20 @@ static int __init eem_conf(void)
 				recordTbl = &fyTbl[0][0];
 				eem_error("@The table ----->(fyTbl)\n");
 			}
-		#if !defined(CONFIG_MTK_PMIC_CHIP_MT6353)
+		#if defined(CONFIG_MTK_PMIC_CHIP_MT6353)
+		} else if (2 == binLevel) {
+		#else
 		} else if ((2 == binLevel) || (4 == binLevel)) {
+		#endif
 			recordTbl = &sbTbl[0][0];
 			eem_error("@The table ----->(sbTbl)\n");
-		#endif
 		#ifdef CONFIG_ARCH_MT6755_TURBO
-		} else if (0x22 == binLevel) {
+		} else if (0x20 == (binLevel & 0xF0)) {
 			recordTbl = &p15Tbl[0][0];
 			eem_error("@The table ----->(p15Tbl)\n");
 		#endif
+		#if !defined(CONFIG_MTK_PMIC_CHIP_MT6353)
 		} else {
-			#if !defined(CONFIG_MTK_PMIC_CHIP_MT6353)
 			if ((2 == ((binLevel_eng >> 4) & 0x07)) || (2 == ((binLevel_eng >> 10) & 0x07))) {
 				if (freq_bound == 5) {
 					recordTbl = &fyTbl_M[0][0];
@@ -4724,10 +4795,10 @@ static int __init eem_conf(void)
 				recordTbl = &sbTbl[0][0];
 				eem_error("@The table ----->(ENG sbTbl)\n");
 			}
-			#else
-			recordTbl = &fyTbl[0][0];
-			#endif
 		}
+		#else
+		}
+		#endif
 	}
 
 	/* [13:7] = Vsram pmic value, [6:0] = Vproc pmic value */
@@ -4897,7 +4968,7 @@ static void __exit eem_exit(void)
 }
 
 #ifdef __KERNEL__
-module_init(eem_conf);
+device_initcall_sync(eem_conf);
 arch_initcall(vcore_ptp_init); /* I-Chang */
 late_initcall(eem_init);
 #endif

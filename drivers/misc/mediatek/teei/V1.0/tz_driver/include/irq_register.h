@@ -1,3 +1,17 @@
+/*
+ * Copyright (c) 2015-2017 MICROTRUST Incorporated
+ * All Rights Reserved.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ */
+
 #ifndef IRQ_REGISTER_H
 #define IRQ_REGISTER_H
 
@@ -7,6 +21,9 @@ extern struct service_handler reetime;
 extern struct service_handler socket;
 extern struct service_handler vfs_handler;
 extern struct service_handler printer_driver;
+#ifdef TUI_SUPPORT
+extern struct semaphore tui_notify_sema;
+#endif
 
 struct work_entry {
 	int call_no;
