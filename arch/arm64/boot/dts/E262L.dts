@@ -2,7 +2,7 @@
 /dts-v1/;
 
 #include "mt6755.dtsi"
-#include "cust.dtsi"
+#include <E262L/cust.dtsi>
 
 / {
 	memory@40000000 {
