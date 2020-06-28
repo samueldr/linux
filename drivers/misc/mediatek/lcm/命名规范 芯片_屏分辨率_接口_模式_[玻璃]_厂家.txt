@@ -1,0 +1,22 @@
+芯片：         驱动 IC 名称
+
+屏分辨率：     标屏：                       宽屏：
+               QVGA:  320x240               WQVGA:  400x240
+               VGA:   640x480               WVGA:   800x480
+               SVGA:  800x600               WSVGA:  1024x600
+               XGA:   1024x768              WXGA:   1280x768/1280x800/1280x960
+               SXGA:  1280x1024             WXGA+:  1440x900
+               SXGA+: 1400x1050             WSXGA+: 1680x1050
+               UXGA:  1600x1200             WUXGA:  1920x1200
+               QXGA:  2048x1536             WQXGA:  2560x1536               
+               hd720: 720x1280
+               
+               其他各种。。。
+               
+接口：dsi/dpi/rgb/dbi
+
+模式：vdo(video)/cmd(command)
+               
+玻璃：见开发进度表
+
+厂家：厂家名字首字母缩写
