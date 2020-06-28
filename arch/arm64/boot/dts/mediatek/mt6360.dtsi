@@ -93,7 +93,7 @@
 			compatible = "mediatek,mt6360_pmu_rgbled";
 			mt,led_name = "white", "mt6360_pmu_led2",
 				      "mt6360_pmu_led3", "mt6360_pmu_led4";
-			mt,led_default_trigger = "cc_mode", "cc_mode",
+			mt,led_default_trigger = "default-on", "cc_mode",
 						 "cc_mode", "none";
 		};
 		core {
