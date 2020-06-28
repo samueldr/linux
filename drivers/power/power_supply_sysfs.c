@@ -45,10 +45,10 @@ static ssize_t power_supply_show_property(struct device *dev,
 					  char *buf) {
 	static char *type_text[] = {
 		"Unknown", "Battery", "UPS", "Mains", "USB",
-		"USB_DCP", "USB_CDP", "USB_ACA"
+		"USB_DCP", "USB_CDP", "USB_ACA", "Wireless"
 	};
 	static char *status_text[] = {
-		"Unknown", "Charging", "Discharging", "Not charging", "Full"
+		"Unknown", "Charging", "Discharging", "Not charging", "Full", "Cmd discharging"
 	};
 	static char *charge_type[] = {
 		"Unknown", "N/A", "Trickle", "Fast"
@@ -106,7 +106,10 @@ static ssize_t power_supply_show_property(struct device *dev,
 	else if (off >= POWER_SUPPLY_PROP_MODEL_NAME)
 		return sprintf(buf, "%s\n", value.strval);
 
-	return sprintf(buf, "%d\n", value.intval);
+	if (off == POWER_SUPPLY_PROP_CHARGE_COUNTER_EXT)
+		return sprintf(buf, "%lld\n", value.int64val);
+	else
+		return sprintf(buf, "%d\n", value.intval);
 }
 
 static ssize_t power_supply_store_property(struct device *dev,
@@ -197,6 +200,42 @@ static struct device_attribute power_supply_attrs[] = {
 	POWER_SUPPLY_ATTR(scope),
 	POWER_SUPPLY_ATTR(charge_term_current),
 	POWER_SUPPLY_ATTR(calibrate),
+	/* Local extensions */
+	POWER_SUPPLY_ATTR(usb_hc),
+	POWER_SUPPLY_ATTR(usb_otg),
+	POWER_SUPPLY_ATTR(charge_enabled),
+	/* Local extensions of type int64_t */
+	POWER_SUPPLY_ATTR(charge_counter_ext),
+	/* 20100723 James Lo */
+	POWER_SUPPLY_ATTR(batt_vol),
+	POWER_SUPPLY_ATTR(batt_temp),
+	POWER_SUPPLY_ATTR(charge_count),              //renyongwei@wind-mobi.com 20170923 add
+	POWER_SUPPLY_ATTR(bat_current),              //liulinsheng@wind-mobi.com 20171002 add
+	POWER_SUPPLY_ATTR(usb_ntc),	              //liulinsheng@wind-mobi.com  20170309
+	//liulinsheng@wind-mobi.com  for ap temp check
+	#ifdef CONFIG_AUAS_AP_TEMP	
+	POWER_SUPPLY_ATTR(ap_thermal_temp),
+	#endif
+	//liulinsheng@wind-mobi.com  for ap temp check
+	/* 20100405 Add for EM */
+	POWER_SUPPLY_ATTR(TemperatureR),
+	POWER_SUPPLY_ATTR(TempBattVoltage),
+	POWER_SUPPLY_ATTR(InstatVolt),
+	POWER_SUPPLY_ATTR(BatteryAverageCurrent),
+	POWER_SUPPLY_ATTR(BatterySenseVoltage),
+	POWER_SUPPLY_ATTR(ISenseVoltage),
+	POWER_SUPPLY_ATTR(ChargerVoltage),
+	/* Dual battery */
+	POWER_SUPPLY_ATTR(status_smb),
+	POWER_SUPPLY_ATTR(capacity_smb),
+	POWER_SUPPLY_ATTR(present_smb),
+	/* ADB CMD Discharging */
+	POWER_SUPPLY_ATTR(adjust_power),
+	//liqiang@wind-mobi.com 20170321 begin
+	#ifdef CONFIG_WIND_ASUS_BATTERY_LIFE_SUPPORT
+	POWER_SUPPLY_ATTR(batlife_tbl),
+	#endif
+	//liqiang@wind-mobi.com 20170321 end	
 	/* Properties of type `const char *' */
 	POWER_SUPPLY_ATTR(model_name),
 	POWER_SUPPLY_ATTR(manufacturer),
@@ -285,7 +324,7 @@ int power_supply_uevent(struct device *dev, struct kobj_uevent_env *env)
 	}
 
 	dev_dbg(dev, "POWER_SUPPLY_NAME=%s\n", psy->name);
-
+	printk("POWER_SUPPLY_NAME=%s\n", psy->name);
 	ret = add_uevent_var(env, "POWER_SUPPLY_NAME=%s", psy->name);
 	if (ret)
 		return ret;
@@ -322,7 +361,7 @@ int power_supply_uevent(struct device *dev, struct kobj_uevent_env *env)
 		}
 
 		dev_dbg(dev, "prop %s=%s\n", attrname, prop_buf);
-
+		printk("prop %s=%s\n", attrname, prop_buf);
 		ret = add_uevent_var(env, "POWER_SUPPLY_%s=%s", attrname, prop_buf);
 		kfree(attrname);
 		if (ret)

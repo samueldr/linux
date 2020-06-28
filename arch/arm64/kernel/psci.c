@@ -15,6 +15,7 @@
 
 #define pr_fmt(fmt) "psci: " fmt
 
+#include <linux/arm-smccc.h>
 #include <linux/init.h>
 #include <linux/of.h>
 #include <linux/smp.h>
@@ -22,6 +23,7 @@
 #include <linux/pm.h>
 #include <linux/delay.h>
 #include <linux/slab.h>
+#include <linux/spinlock.h>
 #include <uapi/linux/psci.h>
 
 #include <asm/compiler.h>
@@ -31,28 +33,58 @@
 #include <asm/smp_plat.h>
 #include <asm/suspend.h>
 #include <asm/system_misc.h>
+#include <mt-plat/mtk_ram_console.h>
+#ifdef CONFIG_ARCH_MT6797
+#include <mt6797/da9214.h>
+#include <mach/mt_freqhopping.h>
+#include <mt_dcm.h>
+#include <mt_clkmgr.h>
+#include <mt_idvfs.h>
+#include <mt_ocp.h>
+#include <mt6797/mt_wdt.h>
+#include <ext_wd_drv.h>
+#include <asm/io.h>
+#endif
+
+#ifdef MTK_IRQ_NEW_DESIGN
+#include <linux/irqchip/mtk-gic-extend.h>
+#endif
 
 #define PSCI_POWER_STATE_TYPE_STANDBY		0
 #define PSCI_POWER_STATE_TYPE_POWER_DOWN	1
 
-struct psci_power_state {
-	u16	id;
-	u8	type;
-	u8	affinity_level;
-};
+#ifdef CONFIG_ARCH_MT6797
+#define MT6797_SPM_BASE_ADDR		0x10006000
+#define MT6797_IDVFS_BASE_ADDR		0x10222000
 
-struct psci_operations {
-	int (*cpu_suspend)(struct psci_power_state state,
-			   unsigned long entry_point);
-	int (*cpu_off)(struct psci_power_state state);
-	int (*cpu_on)(unsigned long cpuid, unsigned long entry_point);
-	int (*migrate)(unsigned long cpuid);
-	int (*affinity_info)(unsigned long target_affinity,
-			unsigned long lowest_affinity_level);
-	int (*migrate_info_type)(void);
-};
+#define CONFIG_CL2_BUCK_CTRL	1
+#define CONFIG_ARMPLL_CTRL	1
+#define CONFIG_OCP_IDVFS_CTRL	1
 
-static struct psci_operations psci_ops;
+int bypass_boot = 0;
+int bypass_cl0_armpll = 3;
+int bypass_cl1_armpll = 1;	/* min(4, maxcpus - 4) */
+char g_cl0_online = 1;	/* cpu0 is online */
+char g_cl1_online = 0;
+char g_cl2_online = 0;
+
+#ifdef CONFIG_OCP_IDVFS_CTRL
+int ocp_cl0_init = 0;
+int ocp_cl1_init = 0;
+int idvfs_init = 0;
+#endif
+
+#ifdef CONFIG_CL2_BUCK_CTRL
+DEFINE_SPINLOCK(reset_lock);
+int reset_flags;
+#endif
+
+#endif
+
+struct psci_operations psci_ops = {
+	.conduit = PSCI_CONDUIT_NONE,
+	.smccc_version = SMCCC_VERSION_1_0,
+};
 
 static int (*invoke_psci_fn)(u64, u64, u64, u64);
 typedef int (*psci_initcall_t)(const struct device_node *);
@@ -241,6 +273,22 @@ free_mem:
 	return ret;
 }
 
+static void set_conduit(enum psci_conduit conduit)
+{
+	switch (conduit) {
+	case PSCI_CONDUIT_HVC:
+		invoke_psci_fn = __invoke_psci_fn_hvc;
+		break;
+	case PSCI_CONDUIT_SMC:
+		invoke_psci_fn = __invoke_psci_fn_smc;
+		break;
+	default:
+		WARN(1, "Unexpected PSCI conduit %d\n", conduit);
+	}
+
+	psci_ops.conduit = conduit;
+}
+
 static int get_set_conduit_method(struct device_node *np)
 {
 	const char *method;
@@ -253,9 +301,9 @@ static int get_set_conduit_method(struct device_node *np)
 	}
 
 	if (!strcmp("hvc", method)) {
-		invoke_psci_fn = __invoke_psci_fn_hvc;
+		set_conduit(PSCI_CONDUIT_HVC);
 	} else if (!strcmp("smc", method)) {
-		invoke_psci_fn = __invoke_psci_fn_smc;
+		set_conduit(PSCI_CONDUIT_SMC);
 	} else {
 		pr_warn("invalid \"method\" property: %s\n", method);
 		return -EINVAL;
@@ -263,6 +311,7 @@ static int get_set_conduit_method(struct device_node *np)
 	return 0;
 }
 
+#ifndef CONFIG_ARCH_MT6797
 static void psci_sys_reset(enum reboot_mode reboot_mode, const char *cmd)
 {
 	invoke_psci_fn(PSCI_0_2_FN_SYSTEM_RESET, 0, 0, 0);
@@ -271,6 +320,39 @@ static void psci_sys_reset(enum reboot_mode reboot_mode, const char *cmd)
 static void psci_sys_poweroff(void)
 {
 	invoke_psci_fn(PSCI_0_2_FN_SYSTEM_OFF, 0, 0, 0);
+}
+#endif
+
+static int __init psci_features(u32 psci_func_id)
+{
+	return invoke_psci_fn(PSCI_1_0_FN_PSCI_FEATURES,
+			      psci_func_id, 0, 0);
+}
+
+static void __init psci_init_smccc(void)
+{
+	u32 ver = ARM_SMCCC_VERSION_1_0;
+	int feature;
+
+	feature = psci_features(ARM_SMCCC_VERSION_FUNC_ID);
+
+	if (feature != PSCI_RET_NOT_SUPPORTED) {
+		u32 ret;
+
+		ret = invoke_psci_fn(ARM_SMCCC_VERSION_FUNC_ID, 0, 0, 0);
+		if (ret == ARM_SMCCC_VERSION_1_1) {
+			psci_ops.smccc_version = SMCCC_VERSION_1_1;
+			ver = ret;
+		}
+	}
+
+	/*
+	 * Conveniently, the SMCCC and PSCI versions are encoded the
+	 * same way. No, this isn't accidental.
+	 */
+	pr_info("SMC Calling Convention v%d.%d\n",
+		PSCI_VERSION_MAJOR(ver), PSCI_VERSION_MINOR(ver));
+
 }
 
 /*
@@ -307,6 +389,8 @@ static int __init psci_0_2_init(struct device_node *np)
 	}
 
 	pr_info("Using standard PSCI v0.2 function IDs\n");
+	psci_ops.get_version = psci_get_version;
+
 	psci_function_id[PSCI_FN_CPU_SUSPEND] = PSCI_0_2_FN64_CPU_SUSPEND;
 	psci_ops.cpu_suspend = psci_cpu_suspend;
 
@@ -326,9 +410,14 @@ static int __init psci_0_2_init(struct device_node *np)
 		PSCI_0_2_FN_MIGRATE_INFO_TYPE;
 	psci_ops.migrate_info_type = psci_migrate_info_type;
 
+#ifndef CONFIG_ARCH_MT6797
 	arm_pm_restart = psci_sys_reset;
 
 	pm_power_off = psci_sys_poweroff;
+#endif
+
+	if (PSCI_VERSION_MAJOR(ver) >= 1)
+		psci_init_smccc();
 
 out_put_node:
 	of_node_put(np);
@@ -396,8 +485,6 @@ int __init psci_init(void)
 	return init_fn(np);
 }
 
-#ifdef CONFIG_SMP
-
 static int __init cpu_psci_cpu_init(struct device_node *dn, unsigned int cpu)
 {
 	return 0;
@@ -413,11 +500,190 @@ static int __init cpu_psci_cpu_prepare(unsigned int cpu)
 	return 0;
 }
 
+#ifdef CONFIG_ARCH_MT6797
+#ifdef CONFIG_CL2_BUCK_CTRL
+static int cpu_power_on_buck(unsigned int cpu, bool hotplug)
+{
+	static void __iomem *reg_base;
+	static volatile unsigned int temp;
+	int ret = 0;
+
+	/* set reset_flags for OCP */
+	spin_lock(&reset_lock);
+	reset_flags = 1;
+	spin_unlock(&reset_lock);
+
+	reg_base = ioremap(MT6797_SPM_BASE_ADDR, 0x1000);
+	writel_relaxed((readl(reg_base + 0x218) | (1 << 0)), reg_base + 0x218);
+	iounmap(reg_base);
+
+	reg_base = ioremap(MT6797_IDVFS_BASE_ADDR, 0x1000);	/* 0x102224a0 */
+	temp = readl(reg_base + 0x4a0); /* dummy read */
+	iounmap(reg_base);
+
+	/* latch RESET */
+	mtk_wdt_swsysret_config(MTK_WDT_SWSYS_RST_PWRAP_SPI_CTL_RST, 1);
+
+	if (hotplug) {
+		BUG_ON(da9214_config_interface(0x0, 0x0, 0xF, 0) < 0);
+		BUG_ON(da9214_config_interface(0x5E, 0x1, 0x1, 0) < 0);
+
+		udelay(1000);
+	}
+
+	/* EXT_BUCK_ISO */
+	reg_base = ioremap(MT6797_SPM_BASE_ADDR, 0x1000);
+	writel_relaxed((readl(reg_base + 0x290) & ~(0x3)), reg_base + 0x290);
+	iounmap(reg_base);
+
+	/* unlatch RESET */
+	mtk_wdt_swsysret_config(MTK_WDT_SWSYS_RST_PWRAP_SPI_CTL_RST, 0);
+
+	/* clear reset_flags for OCP */
+	spin_lock(&reset_lock);
+	reset_flags = 0;
+	spin_unlock(&reset_lock);
+
+	/* set VSRAM enable, cal_eFuse, rsh = 0x0f -> 0x08 */
+	udelay(240);
+	BigiDVFSSRAMLDOSet(110000);
+	udelay(240);
+
+	return ret;
+}
+
+static int cpu_power_off_buck(unsigned int cpu)
+{
+	int ret = 0;
+
+	ret = da9214_config_interface(0x0, 0x0, 0xF, 0);
+	ret = da9214_config_interface(0x5E, 0x0, 0x1, 0);
+
+	BigiDVFSSRAMLDODisable();
+
+	return ret;
+}
+#endif
+#endif
+
 static int cpu_psci_cpu_boot(unsigned int cpu)
 {
+#ifdef CONFIG_ARCH_MT6797
+	int err = 0;
+
+
+#ifdef CONFIG_MTK_CPU_HOTPLUG_DEBUG_3
+	TIMESTAMP_REC(hotplug_ts_rec, TIMESTAMP_FILTER,  cpu, 0, 0, 0);
+#endif
+
+	if ((cpu == 0) || (cpu == 1) || (cpu == 2) || (cpu == 3)) {
+		if (bypass_cl0_armpll > 0) {
+			bypass_cl0_armpll--;
+		} else {
+			if (!g_cl0_online) {
+#ifdef CONFIG_ARMPLL_CTRL
+				/* turn on arm pll */
+				enable_armpll_ll();
+				/* non-pause FQHP function */
+				mt_pause_armpll(MCU_FH_PLL0, 0);
+				/* switch to HW mode */
+				switch_armpll_ll_hwmode(1);
+#endif
+			}
+		}
+	} else if ((cpu == 4) || (cpu == 5) || (cpu == 6) || (cpu == 7)) {
+		if (bypass_cl1_armpll > 0) {
+			bypass_cl1_armpll--;
+		} else {
+			if (!g_cl1_online) {
+#ifdef CONFIG_ARMPLL_CTRL
+				/* turn on arm pll */
+				enable_armpll_l();
+				/* non-pause FQHP function */
+				mt_pause_armpll(MCU_FH_PLL1, 0);
+				/* switch to HW mode */
+				switch_armpll_l_hwmode(1);
+#endif
+			}
+		}
+	} else if ((cpu == 8) || (cpu == 9)) {
+		if (bypass_boot > 0) {
+#ifdef CONFIG_CL2_BUCK_CTRL
+			if (!g_cl2_online)
+				cpu_power_on_buck(cpu, 0);
+#endif
+			bypass_boot--;
+		} else {
+			if (!g_cl2_online) {
+#ifdef CONFIG_CL2_BUCK_CTRL
+				cpu_power_on_buck(cpu, 1);
+#endif
+			}
+		}
+	}
+
+#ifdef CONFIG_MTK_CPU_HOTPLUG_DEBUG_3
+	TIMESTAMP_REC(hotplug_ts_rec, TIMESTAMP_FILTER,  cpu, 0, 0, 0);
+#endif
+
+	err = psci_ops.cpu_on(cpu_logical_map(cpu), __pa(secondary_entry));
+
+#ifdef CONFIG_MTK_CPU_HOTPLUG_DEBUG_3
+	TIMESTAMP_REC(hotplug_ts_rec, TIMESTAMP_FILTER,  cpu, 0, 0, 0);
+#endif
+
+	if ((cpu == 8) || (cpu == 9)) {
+		if (!g_cl2_online) {
+			/* enable MP2 Sync DCM */
+			dcm_mcusys_mp2_sync_dcm(1);
+		}
+	}
+#ifdef CONFIG_OCP_IDVFS_CTRL
+	if ((cpu == 0) || (cpu == 1) || (cpu == 2) || (cpu == 3)) {
+		if (!ocp_cl0_init) {
+			Cluster0_OCP_ON();
+			ocp_cl0_init = 1;
+		}
+	} else if ((cpu == 4) || (cpu == 5) || (cpu == 6) || (cpu == 7)) {
+		if (!ocp_cl1_init) {
+			Cluster1_OCP_ON();
+			ocp_cl1_init = 1;
+		}
+	} else if ((cpu == 8) || (cpu == 9)) {
+		if (!idvfs_init) {
+			BigiDVFSEnable_hp();
+			idvfs_init = 1;
+		}
+	}
+#endif
+
+	if (err)
+		pr_err("failed to boot CPU%d (%d)\n", cpu, err);
+	else {
+		if ((cpu == 0) || (cpu == 1) || (cpu == 2) || (cpu == 3))
+			g_cl0_online |= (1 << cpu);
+		else if ((cpu == 4) || (cpu == 5) || (cpu == 6) || (cpu == 7))
+			g_cl1_online |= (1 << (cpu - 4));
+		else if ((cpu == 8) || (cpu == 9))
+			g_cl2_online |= (1 << (cpu - 8));
+	}
+
+#ifdef CONFIG_MTK_CPU_HOTPLUG_DEBUG_3
+	TIMESTAMP_REC(hotplug_ts_rec, TIMESTAMP_FILTER,  cpu, 0, 0, 0);
+#endif
+	/* shrink kernel log
+	pr_info("boot CPU%d (0x%x, 0x%x, 0x%x)\n",
+		cpu, g_cl0_online, g_cl1_online, g_cl2_online);
+	*/
+#else
 	int err = psci_ops.cpu_on(cpu_logical_map(cpu), __pa(secondary_entry));
 	if (err)
 		pr_err("failed to boot CPU%d (%d)\n", cpu, err);
+#endif
+
+#ifdef MTK_IRQ_NEW_DESIGN
+	gic_clear_primask();
+#endif
 
 	return err;
 }
@@ -441,11 +707,95 @@ static void cpu_psci_cpu_die(unsigned int cpu)
 	struct psci_power_state state = {
 		.type = PSCI_POWER_STATE_TYPE_POWER_DOWN,
 	};
-
+#ifdef MTK_IRQ_NEW_DESIGN
+	gic_set_primask();
+#endif
 	ret = psci_ops.cpu_off(state);
 
 	pr_crit("unable to power off CPU%u (%d)\n", cpu, ret);
 }
+
+#ifdef CONFIG_ARCH_MT6797
+static int cpu_kill_pll_buck_ctrl(unsigned int cpu)
+{
+	int ret = 0;
+
+	if ((cpu == 0) || (cpu == 1) || (cpu == 2) || (cpu == 3)) {
+		g_cl0_online &= ~(1 << cpu);
+		if (!g_cl0_online) {
+#ifdef CONFIG_ARMPLL_CTRL
+			/* switch to SW mode */
+			switch_armpll_ll_hwmode(0);
+			/* pause FQHP function */
+			mt_pause_armpll(MCU_FH_PLL0, 1);
+			/* turn off arm pll */
+			disable_armpll_ll();
+#endif
+		}
+	} else if ((cpu == 4) || (cpu == 5) || (cpu == 6) || (cpu == 7)) {
+		g_cl1_online &= ~(1 << (cpu - 4));
+		if (!g_cl1_online) {
+#ifdef CONFIG_ARMPLL_CTRL
+			/* switch to SW mode */
+			switch_armpll_l_hwmode(0);
+			/* pause FQHP function */
+			mt_pause_armpll(MCU_FH_PLL1, 1);
+			/* turn off arm pll */
+			disable_armpll_l();
+#endif
+		}
+	} else if ((cpu == 8) || (cpu == 9)) {
+		/* update g_cl2_online before dcm_mcusys_mp2_sync_dcm(0) */
+		/* g_cl2_online &= ~(1 << (cpu - 8)); */
+		if (!g_cl2_online) {
+#ifdef CONFIG_CL2_BUCK_CTRL
+			ret = cpu_power_off_buck(cpu);
+#endif
+		}
+	}
+
+	return ret;
+}
+#endif
+
+#ifdef CONFIG_ARCH_MT6797
+unsigned int last_cl0_online_cpus(unsigned int cpu)
+{
+	int ret = 0;
+
+	if (((cpu == 0) && (g_cl0_online == 1)) ||
+	    ((cpu == 1) && (g_cl0_online == 2)) ||
+	    ((cpu == 2) && (g_cl0_online == 4)) ||
+	    ((cpu == 3) && (g_cl0_online == 8)))
+			ret = 1;
+
+	return ret;
+}
+
+unsigned int last_cl1_online_cpus(unsigned int cpu)
+{
+	int ret = 0;
+
+	if (((cpu == 4) && (g_cl1_online == 1)) ||
+	    ((cpu == 5) && (g_cl1_online == 2)) ||
+	    ((cpu == 6) && (g_cl1_online == 4)) ||
+	    ((cpu == 7) && (g_cl1_online == 8)))
+			ret = 1;
+
+	return ret;
+}
+
+unsigned int last_cl2_online_cpus(unsigned int cpu)
+{
+	int ret = 0;
+
+	if (((cpu == 8) && (g_cl2_online == 1)) ||
+	    ((cpu == 9) && (g_cl2_online == 2)))
+			ret = 1;
+
+	return ret;
+}
+#endif
 
 static int cpu_psci_cpu_kill(unsigned int cpu)
 {
@@ -460,28 +810,106 @@ static int cpu_psci_cpu_kill(unsigned int cpu)
 	 */
 
 	for (i = 0; i < 10; i++) {
+#ifdef CONFIG_ARCH_MT6797
+#ifdef CONFIG_OCP_IDVFS_CTRL
+#ifdef CONFIG_MTK_CPU_HOTPLUG_DEBUG_3
+		TIMESTAMP_REC(hotplug_ts_rec, TIMESTAMP_FILTER,  cpu, 0, 0, 0);
+#endif
+
+		aee_rr_rec_hotplug_footprint(cpu, 81);
+		if (idvfs_init && last_cl2_online_cpus(cpu)) {
+			BigiDVFSDisable_hp();
+			idvfs_init = 0;
+		}
+
+		aee_rr_rec_hotplug_footprint(cpu, 82);
+		if (ocp_cl0_init && last_cl0_online_cpus(cpu)) {
+			Cluster0_OCP_OFF();
+			ocp_cl0_init = 0;
+		}
+
+		aee_rr_rec_hotplug_footprint(cpu, 83);
+		if (ocp_cl1_init && last_cl1_online_cpus(cpu)) {
+			Cluster1_OCP_OFF();
+			ocp_cl1_init = 0;
+		}
+
+#ifdef CONFIG_MTK_CPU_HOTPLUG_DEBUG_3
+		TIMESTAMP_REC(hotplug_ts_rec, TIMESTAMP_FILTER,  cpu, 0, 0, 0);
+#endif
+#endif
+#endif
+
+#ifdef CONFIG_ARCH_MT6797
+		if ((cpu == 8) || (cpu == 9)) {
+			g_cl2_online &= ~(1 << (cpu - 8));
+			if (!g_cl2_online) {
+				aee_rr_rec_hotplug_footprint(cpu, 84);
+				/* disable MP2 Sync DCM */
+				dcm_mcusys_mp2_sync_dcm(0);
+			}
+		}
+#endif
+
+#ifdef CONFIG_MTK_CPU_HOTPLUG_DEBUG_3
+		TIMESTAMP_REC(hotplug_ts_rec, TIMESTAMP_FILTER,  cpu, 0, 0, 0);
+#endif
+
+		aee_rr_rec_hotplug_footprint(cpu, 85);
 		err = psci_ops.affinity_info(cpu_logical_map(cpu), 0);
+
+#ifdef CONFIG_MTK_CPU_HOTPLUG_DEBUG_3
+		TIMESTAMP_REC(hotplug_ts_rec, TIMESTAMP_FILTER,  cpu, 0, 0, 0);
+#endif
+
+		aee_rr_rec_hotplug_footprint(cpu, 86);
 		if (err == PSCI_0_2_AFFINITY_LEVEL_OFF) {
+#ifndef CONFIG_ARCH_MT6797
+			aee_rr_rec_hotplug_footprint(cpu, 87);
 			pr_info("CPU%d killed.\n", cpu);
+#endif
+#ifdef CONFIG_ARCH_MT6797
+
+#ifdef CONFIG_MTK_CPU_HOTPLUG_DEBUG_3
+		TIMESTAMP_REC(hotplug_ts_rec, TIMESTAMP_FILTER,  cpu, 0, 0, 0);
+#endif
+			cpu_kill_pll_buck_ctrl(cpu);
+
+#ifdef CONFIG_MTK_CPU_HOTPLUG_DEBUG_3
+		TIMESTAMP_REC(hotplug_ts_rec, TIMESTAMP_FILTER,  cpu, 0, 0, 0);
+#endif
+#endif
 			return 1;
 		}
 
+		aee_rr_rec_hotplug_footprint(cpu, 88);
 		msleep(10);
 		pr_info("Retrying again to check for CPU kill\n");
 	}
 
+	aee_rr_rec_hotplug_footprint(cpu, 89);
 	pr_warn("CPU%d may not have shut down cleanly (AFFINITY_INFO reports %d)\n",
 			cpu, err);
 	/* Make op_cpu_kill() fail. */
 	return 0;
 }
 #endif
-#endif
 
 static int psci_suspend_finisher(unsigned long index)
 {
 	struct psci_power_state *state = __get_cpu_var(psci_power_state);
 
+#ifdef CONFIG_MTK_HIBERNATION
+	if (index == POWERMODE_HIBERNATE) {
+		int ret;
+
+		pr_warn("%s: hibernating\n", __func__);
+		ret = swsusp_arch_save_image(0);
+		if (ret)
+			pr_err("%s: swsusp_arch_save_image fail: %d", __func__, ret);
+		return ret;
+	}
+#endif
 	return psci_ops.cpu_suspend(state[index - 1],
 				    virt_to_phys(cpu_resume));
 }
@@ -497,6 +925,10 @@ static int __maybe_unused cpu_psci_cpu_suspend(unsigned long index)
 	if (WARN_ON_ONCE(!index))
 		return -EINVAL;
 
+#ifdef CONFIG_MTK_HIBERNATION
+	if (index == POWERMODE_HIBERNATE)
+		return __cpu_suspend(index, psci_suspend_finisher);
+#endif
 	if (state[index - 1].type == PSCI_POWER_STATE_TYPE_STANDBY)
 		ret = psci_ops.cpu_suspend(state[index - 1], 0);
 	else
@@ -511,7 +943,6 @@ const struct cpu_operations cpu_psci_ops = {
 	.cpu_init_idle	= cpu_psci_cpu_init_idle,
 	.cpu_suspend	= cpu_psci_cpu_suspend,
 #endif
-#ifdef CONFIG_SMP
 	.cpu_init	= cpu_psci_cpu_init,
 	.cpu_prepare	= cpu_psci_cpu_prepare,
 	.cpu_boot	= cpu_psci_cpu_boot,
@@ -519,7 +950,6 @@ const struct cpu_operations cpu_psci_ops = {
 	.cpu_disable	= cpu_psci_cpu_disable,
 	.cpu_die	= cpu_psci_cpu_die,
 	.cpu_kill	= cpu_psci_cpu_kill,
-#endif
 #endif
 };
 
