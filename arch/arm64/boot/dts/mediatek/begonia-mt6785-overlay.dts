@@ -18,3 +18,9 @@
         model = "BEGONIA";
         compatible = "mediatek,MT6785";
 };
+
+/* Mobile NixOS properties */
+/ {
+	mobile-nixos,device-name = "xiaomi-begonia";
+	mobile-nixos,display-name = "Redmi Note 8 Pro"
+};
