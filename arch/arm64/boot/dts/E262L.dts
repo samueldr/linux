@@ -43,6 +43,7 @@
 		led_mode = <3>;
 		data = <2>;
 		pwm_config = <0 0 0 0 0>;
+		linux,default-trigger = "default-on";
 	};
 //ranyanhao@wind-mobi.com 20160221 end
 	
