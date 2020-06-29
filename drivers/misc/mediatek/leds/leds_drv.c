@@ -770,13 +770,15 @@ static int mt65xx_leds_probe(struct platform_device *pdev)
 			goto err;
 		}
 
+		/* Configure the custom data */
 		g_leds_data[i]->cust.mode = cust_led_list[i].mode;
 		g_leds_data[i]->cust.data = cust_led_list[i].data;
 		g_leds_data[i]->cust.name = cust_led_list[i].name;
-
-		g_leds_data[i]->cdev.name = cust_led_list[i].name;
 		g_leds_data[i]->cust.config_data = cust_led_list[i].config_data;	/* bei add */
 
+		/* Configure the LED's classdev */
+		g_leds_data[i]->cdev.name = cust_led_list[i].name;
+		g_leds_data[i]->cdev.default_trigger = cust_led_list[i].default_trigger;
 		g_leds_data[i]->cdev.brightness_set = mt65xx_led_set;
 		g_leds_data[i]->cdev.blink_set = mt65xx_blink_set;
 

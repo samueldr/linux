@@ -236,6 +236,8 @@ struct cust_mt65xx_led *get_cust_led_dtsi(void)
 				pled_dtsi[i].data = -1;
 			} else {
 				isSupportDTS = true;
+
+				/* led_mode node */
 				ret =
 				    of_property_read_u32(led_node, "led_mode",
 							 &mode);
@@ -251,6 +253,7 @@ struct cust_mt65xx_led *get_cust_led_dtsi(void)
 					pled_dtsi[i].mode = 0;
 				}
 
+				/* data node */
 				ret =
 				    of_property_read_u32(led_node, "data",
 							 &data);
@@ -266,6 +269,7 @@ struct cust_mt65xx_led *get_cust_led_dtsi(void)
 					pled_dtsi[i].data = -1;
 				}
 
+				/* pwm_config node */
 				ret =
 				    of_property_read_u32_array(led_node,
 							       "pwm_config",
@@ -292,6 +296,12 @@ struct cust_mt65xx_led *get_cust_led_dtsi(void)
 				} else
 					LEDS_DEBUG
 					    ("led dts can not get pwm config data.\n");
+
+				/* led_mode node */
+
+				pled_dtsi[i].default_trigger = of_get_property(led_node, "linux,default-trigger", NULL);
+
+				/* (Done with reading device tree node) */
 
 				switch (pled_dtsi[i].mode) {
 				case MT65XX_LED_MODE_CUST_LCM:
