@@ -744,10 +744,39 @@
 	};
 };
 
+&spi0 {
+	/* On Low speed expansion */
+	status = "okay";
+	spidev@0 {
+		compatible = "rohm,dh2228fv";
+		reg = <0>;
+		spi-max-frequency = <10000000>;
+		spi-cpha;
+	};
+
+	spidev@1 {
+		compatible = "spidev";
+		spi-max-frequency = <500000>;
+		reg = <1>;
+	};
+};
+
 &spi2 {
 	/* On Low speed expansion */
 	label = "LS-SPI0";
 	status = "okay";
+	spidev@0 {
+		compatible = "rohm,dh2228fv";
+		reg = <0>;
+		spi-max-frequency = <10000000>;
+		spi-cpha;
+	};
+
+	spidev@1 {
+		compatible = "spidev";
+		spi-max-frequency = <500000>;
+		reg = <1>;
+	};
 };
 
 &tlmm {
