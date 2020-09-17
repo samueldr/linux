@@ -239,6 +239,12 @@
 
 		vin-supply = <&vbat_som>;
 	};
+
+	clk40M: can_clock {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <40000000>;
+	};
 };
 
 &adsp_pas {
@@ -747,17 +753,16 @@
 &spi0 {
 	/* On Low speed expansion */
 	status = "okay";
-	spidev@0 {
-		compatible = "rohm,dh2228fv";
+	can@0 {
+		compatible = "microchip,mcp2517fd";
 		reg = <0>;
+		clocks = <&clk40M>;
+		interrupt-parent = <&tlmm>;
+		interrupts = <104 IRQ_TYPE_LEVEL_HIGH>;
 		spi-max-frequency = <10000000>;
-		spi-cpha;
-	};
-
-	spidev@1 {
-		compatible = "spidev";
-		spi-max-frequency = <500000>;
-		reg = <1>;
+		vdd-supply = <&vdc_5v>;
+		xceiver-supply = <&vdc_5v>;
+		status = "okay";
 	};
 };
 
