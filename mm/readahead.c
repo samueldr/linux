@@ -81,7 +81,7 @@ static void read_cache_pages_invalidate_pages(struct address_space *mapping,
  * Hides the details of the LRU cache etc from the filesystems.
  */
 int read_cache_pages(struct address_space *mapping, struct list_head *pages,
-			int (*filler)(void *, struct page *), void *data)
+			int (*filler)(struct file *, struct page *), void *data)
 {
 	struct page *page;
 	int ret = 0;
@@ -233,6 +233,8 @@ int force_page_cache_readahead(struct address_space *mapping, struct file *filp,
 
 /*
  * Set the initial window size, round to next power of 2 and square
+ * Small size is not dependent on max value - only a one-page read is regarded
+ * as small.
  * for small size, x 4 for medium, and x 2 for large
  * for 128k (32 page) max ra
  * 1-8 page = 32k initial, > 8 page = 128k initial
@@ -241,7 +243,7 @@ static unsigned long get_init_ra_size(unsigned long size, unsigned long max)
 {
 	unsigned long newsize = roundup_pow_of_two(size);
 
-	if (newsize <= max / 32)
+	if (newsize <= 1)
 		newsize = newsize * 4;
 	else if (newsize <= max / 4)
 		newsize = newsize * 2;
