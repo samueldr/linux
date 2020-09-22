@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2015-2019 The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -193,6 +193,7 @@ static void sde_encoder_phys_cmd_pp_tx_done_irq(void *arg, int irq_idx)
 				phys_enc,
 				SDE_ENCODER_FRAME_EVENT_SIGNAL_RETIRE_FENCE);
 		atomic_add_unless(&phys_enc->pending_ctlstart_cnt, -1, 0);
+		atomic_set(&phys_enc->ctlstart_timeout, 0);
 	}
 
 	/* notify all synchronous clients first, then asynchronous clients */
@@ -292,6 +293,7 @@ static void sde_encoder_phys_cmd_ctl_start_irq(void *arg, int irq_idx)
 
 	ctl = phys_enc->hw_ctl;
 	atomic_add_unless(&phys_enc->pending_ctlstart_cnt, -1, 0);
+	atomic_set(&phys_enc->ctlstart_timeout, 0);
 
 	time_diff_us = ktime_us_delta(ktime_get(), cmd_enc->rd_ptr_timestamp);
 
@@ -348,6 +350,24 @@ static void _sde_encoder_phys_cmd_setup_irq_hw_idx(
 		struct sde_encoder_phys *phys_enc)
 {
 	struct sde_encoder_irq *irq;
+	struct sde_kms *sde_kms = phys_enc->sde_kms;
+	int ret = 0;
+
+	mutex_lock(&sde_kms->vblank_ctl_global_lock);
+
+	if (atomic_read(&phys_enc->vblank_refcount)) {
+		SDE_ERROR(
+		"vblank_refcount mismatch detected, try to reset %d\n",
+				atomic_read(&phys_enc->vblank_refcount));
+		ret = sde_encoder_helper_unregister_irq(phys_enc,
+				INTR_IDX_RDPTR);
+		if (ret)
+			SDE_ERROR(
+			"control vblank irq registration error %d\n",
+				ret);
+
+	}
+	atomic_set(&phys_enc->vblank_refcount, 0);
 
 	irq = &phys_enc->irq[INTR_IDX_CTL_START];
 	irq->hw_idx = phys_enc->hw_ctl->idx;
@@ -368,6 +388,8 @@ static void _sde_encoder_phys_cmd_setup_irq_hw_idx(
 	irq = &phys_enc->irq[INTR_IDX_AUTOREFRESH_DONE];
 	irq->hw_idx = phys_enc->hw_pp->idx;
 	irq->irq_idx = -EINVAL;
+
+	mutex_unlock(&sde_kms->vblank_ctl_global_lock);
 }
 
 static void sde_encoder_phys_cmd_cont_splash_mode_set(
@@ -681,13 +703,15 @@ static int sde_encoder_phys_cmd_control_vblank_irq(
 		to_sde_encoder_phys_cmd(phys_enc);
 	int ret = 0;
 	int refcount;
+	struct sde_kms *sde_kms;
 
 	if (!phys_enc || !phys_enc->hw_pp) {
 		SDE_ERROR("invalid encoder\n");
 		return -EINVAL;
 	}
+	sde_kms = phys_enc->sde_kms;
 
-	mutex_lock(phys_enc->vblank_ctl_lock);
+	mutex_lock(&sde_kms->vblank_ctl_global_lock);
 	refcount = atomic_read(&phys_enc->vblank_refcount);
 
 	/* Slave encoders don't report vblank */
@@ -705,11 +729,17 @@ static int sde_encoder_phys_cmd_control_vblank_irq(
 	SDE_EVT32(DRMID(phys_enc->parent), phys_enc->hw_pp->idx - PINGPONG_0,
 			enable, refcount);
 
-	if (enable && atomic_inc_return(&phys_enc->vblank_refcount) == 1)
+	if (enable && atomic_inc_return(&phys_enc->vblank_refcount) == 1) {
 		ret = sde_encoder_helper_register_irq(phys_enc, INTR_IDX_RDPTR);
-	else if (!enable && atomic_dec_return(&phys_enc->vblank_refcount) == 0)
+		if (ret)
+			atomic_dec_return(&phys_enc->vblank_refcount);
+	} else if (!enable &&
+			atomic_dec_return(&phys_enc->vblank_refcount) == 0) {
 		ret = sde_encoder_helper_unregister_irq(phys_enc,
 				INTR_IDX_RDPTR);
+		if (ret)
+			atomic_inc_return(&phys_enc->vblank_refcount);
+	}
 
 end:
 	if (ret) {
@@ -721,7 +751,7 @@ end:
 				enable, refcount, SDE_EVTLOG_ERROR);
 	}
 
-	mutex_unlock(phys_enc->vblank_ctl_lock);
+	mutex_unlock(&sde_kms->vblank_ctl_global_lock);
 	return ret;
 }
 
@@ -1100,6 +1130,7 @@ static void sde_encoder_phys_cmd_disable(struct sde_encoder_phys *phys_enc)
 		SDE_ERROR("invalid encoder\n");
 		return;
 	}
+	atomic_set(&phys_enc->ctlstart_timeout, 0);
 	SDE_DEBUG_CMDENC(cmd_enc, "pp %d state %d\n",
 			phys_enc->hw_pp->idx - PINGPONG_0,
 			phys_enc->enable_state);
@@ -1248,10 +1279,38 @@ static int _sde_encoder_phys_cmd_wait_for_ctl_start(
 					"ctl start interrupt wait failed\n");
 		else
 			ret = 0;
+
+		if (sde_encoder_phys_cmd_is_master(phys_enc)) {
+			/*
+			 * Signaling the retire fence at ctl start timeout
+			 * to allow the next commit and avoid device freeze.
+			 * As ctl start timeout can occurs due to no read ptr,
+			 * updating pending_rd_ptr_cnt here may not cover all
+			 * cases. Hence signaling the retire fence.
+			 */
+			if (atomic_add_unless(
+			 &phys_enc->pending_retire_fence_cnt, -1, 0))
+				phys_enc->parent_ops.handle_frame_done(
+				 phys_enc->parent,
+				 phys_enc,
+				 SDE_ENCODER_FRAME_EVENT_SIGNAL_RETIRE_FENCE);
+			atomic_add_unless(
+				&phys_enc->pending_ctlstart_cnt, -1, 0);
+			atomic_inc_return(&phys_enc->ctlstart_timeout);
+		}
 	}
 
 	SDE_ATRACE_END("cmd_wait_for_ctl_start");
 	return ret;
+}
+
+static void sde_encoder_phys_cmd_ctl_start_work(struct work_struct *work)
+{
+	struct sde_encoder_phys_cmd *cmd_enc = container_of(work,
+							    typeof(*cmd_enc),
+							    ctl_wait_work);
+
+	_sde_encoder_phys_cmd_wait_for_ctl_start(&cmd_enc->base);
 }
 
 static int sde_encoder_phys_cmd_wait_for_tx_complete(
@@ -1290,9 +1349,9 @@ static int sde_encoder_phys_cmd_wait_for_commit_done(
 
 	/* only required for master controller */
 	if (sde_encoder_phys_cmd_is_master(phys_enc))
-		rc = _sde_encoder_phys_cmd_wait_for_ctl_start(phys_enc);
+		queue_work(system_unbound_wq, &cmd_enc->ctl_wait_work);
 
-	if (!rc && sde_encoder_phys_cmd_is_master(phys_enc) &&
+	if (sde_encoder_phys_cmd_is_master(phys_enc) &&
 			cmd_enc->autorefresh.cfg.enable)
 		rc = _sde_encoder_phys_cmd_wait_for_autorefresh_done(phys_enc);
 
@@ -1377,6 +1436,9 @@ static void sde_encoder_phys_cmd_prepare_commit(
 
 	if (!sde_encoder_phys_cmd_is_master(phys_enc))
 		return;
+
+	/* Wait for ctl_start interrupt for the previous commit if needed */
+	flush_work(&cmd_enc->ctl_wait_work);
 
 	SDE_EVT32(DRMID(phys_enc->parent), phys_enc->intf_idx - INTF_0,
 			cmd_enc->autorefresh.cfg.enable);
@@ -1553,10 +1615,12 @@ struct sde_encoder_phys *sde_encoder_phys_cmd_init(
 	atomic_set(&phys_enc->pending_retire_fence_cnt, 0);
 	atomic_set(&cmd_enc->pending_rd_ptr_cnt, 0);
 	atomic_set(&cmd_enc->pending_vblank_cnt, 0);
+	atomic_set(&phys_enc->ctlstart_timeout, 0);
 	init_waitqueue_head(&phys_enc->pending_kickoff_wq);
 	init_waitqueue_head(&cmd_enc->pending_vblank_wq);
 	atomic_set(&cmd_enc->autorefresh.kickoff_cnt, 0);
 	init_waitqueue_head(&cmd_enc->autorefresh.kickoff_wq);
+	INIT_WORK(&cmd_enc->ctl_wait_work, sde_encoder_phys_cmd_ctl_start_work);
 
 	SDE_DEBUG_CMDENC(cmd_enc, "created\n");
 

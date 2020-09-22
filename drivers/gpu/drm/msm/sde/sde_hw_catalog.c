@@ -1,4 +1,4 @@
-/* Copyright (c) 2015-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2015-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -523,7 +523,7 @@ struct sde_prop_type mixer_blend_prop[] = {
 static struct sde_prop_type mixer_prop[] = {
 	{MIXER_OFF, "qcom,sde-mixer-off", true, PROP_TYPE_U32_ARRAY},
 	{MIXER_LEN, "qcom,sde-mixer-size", false, PROP_TYPE_U32},
-	{MIXER_PAIR_MASK, "qcom,sde-mixer-pair-mask", true,
+	{MIXER_PAIR_MASK, "qcom,sde-mixer-pair-mask", false,
 		PROP_TYPE_U32_ARRAY},
 	{MIXER_BLOCKS, "qcom,sde-mixer-blocks", false, PROP_TYPE_NODE},
 	{MIXER_DISP, "qcom,sde-mixer-display-pref", false,
@@ -1280,6 +1280,7 @@ static int sde_sspp_parse_dt(struct device_node *np,
 			sde_cfg->mdp[j].clk_ctrls[sspp->clk_ctrl].bit_off =
 				PROP_BITVALUE_ACCESS(prop_value,
 						SSPP_CLK_CTRL, i, 1);
+			sde_cfg->mdp[j].clk_ctrls[sspp->clk_ctrl].val = -1;
 		}
 
 		SDE_DEBUG(
@@ -1460,7 +1461,7 @@ static int sde_mixer_parse_dt(struct device_node *np,
 			goto end;
 		}
 		mixer->sblk = sblk;
-
+		mixer->lm_pair_mask = 0xFFFFFFFF;
 		mixer->base = mixer_base;
 		mixer->len = PROP_VALUE_ACCESS(prop_value, MIXER_LEN, 0);
 		mixer->id = LM_0 + i;
@@ -1706,6 +1707,7 @@ static int sde_wb_parse_dt(struct device_node *np, struct sde_mdss_cfg *sde_cfg)
 			sde_cfg->mdp[j].clk_ctrls[wb->clk_ctrl].bit_off =
 				PROP_BITVALUE_ACCESS(prop_value,
 						WB_CLK_CTRL, i, 1);
+			sde_cfg->mdp[j].clk_ctrls[wb->clk_ctrl].val = -1;
 		}
 
 		wb->format_list = sde_cfg->wb_formats;
@@ -1892,6 +1894,7 @@ static void _sde_inline_rot_parse_dt(struct device_node *np,
 			sde_cfg->mdp[j].clk_ctrls[index].bit_off =
 				PROP_BITVALUE_ACCESS(prop_value,
 						INLINE_ROT_CLK_CTRL, i, 1);
+			sde_cfg->mdp[j].clk_ctrls[index].val = -1;
 		}
 
 		SDE_DEBUG("rot- xin:%d, num:%d, rd:%d, clk:%d:0x%x/%d\n",
@@ -3270,6 +3273,8 @@ static int _sde_hardware_pre_caps(struct sde_mdss_cfg *sde_cfg, uint32_t hw_rev)
 		sde_cfg->perf.min_prefill_lines = 24;
 		sde_cfg->vbif_qos_nlvl = 8;
 		sde_cfg->ts_prefill_rev = 2;
+		sde_cfg->sui_misr_supported = true;
+		sde_cfg->sui_block_xin_mask = 0x3F71;
 	} else {
 		SDE_ERROR("unsupported chipset id:%X\n", hw_rev);
 		sde_cfg->perf.min_prefill_lines = 0xffff;

@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2008-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -327,7 +327,7 @@ kgsl_mem_entry_destroy(struct kref *kref)
 			    entry->memdesc.sgt->nents, i) {
 			page = sg_page(sg);
 			for (j = 0; j < (sg->length >> PAGE_SHIFT); j++)
-				set_page_dirty(nth_page(page, j));
+				set_page_dirty_lock(nth_page(page, j));
 		}
 	}
 
@@ -2018,7 +2018,7 @@ static long gpuobj_free_on_fence(struct kgsl_device_private *dev_priv,
 	}
 
 	handle = kgsl_sync_fence_async_wait(event.fd,
-		gpuobj_free_fence_func, entry, NULL, 0);
+		gpuobj_free_fence_func, entry, NULL);
 
 	if (IS_ERR(handle)) {
 		kgsl_mem_entry_unset_pend(entry);
@@ -3338,13 +3338,13 @@ long kgsl_ioctl_sparse_phys_alloc(struct kgsl_device_private *dev_priv,
 {
 	struct kgsl_process_private *process = dev_priv->process_priv;
 	struct kgsl_device *device = dev_priv->device;
-    struct kgsl_sparse_phys_alloc *param = data;
+	struct kgsl_sparse_phys_alloc *param = data;
 	struct kgsl_mem_entry *entry;
 	uint64_t flags;
 	int ret;
 	int id;
 
-    if (!(device->flags & KGSL_FLAG_SPARSE))
+	if (!(device->flags & KGSL_FLAG_SPARSE))
 		return -ENOTSUPP;
 
 	ret = _sparse_alloc_param_sanity_check(param->size, param->pagesize);
@@ -3427,10 +3427,10 @@ long kgsl_ioctl_sparse_phys_free(struct kgsl_device_private *dev_priv,
 {
 	struct kgsl_process_private *process = dev_priv->process_priv;
 	struct kgsl_device *device = dev_priv->device;
-    struct kgsl_sparse_phys_free *param = data;
+	struct kgsl_sparse_phys_free *param = data;
 	struct kgsl_mem_entry *entry;
 
-    if (!(device->flags & KGSL_FLAG_SPARSE))
+	if (!(device->flags & KGSL_FLAG_SPARSE))
 		return -ENOTSUPP;
 
 	entry = kgsl_sharedmem_find_id_flags(process, param->id,
@@ -3463,11 +3463,11 @@ long kgsl_ioctl_sparse_virt_alloc(struct kgsl_device_private *dev_priv,
 {
 	struct kgsl_process_private *private = dev_priv->process_priv;
 	struct kgsl_device *device = dev_priv->device;
-    struct kgsl_sparse_virt_alloc *param = data;
+	struct kgsl_sparse_virt_alloc *param = data;
 	struct kgsl_mem_entry *entry;
 	int ret;
 
-    if (!(device->flags & KGSL_FLAG_SPARSE))
+	if (!(device->flags & KGSL_FLAG_SPARSE))
 		return -ENOTSUPP;
 
 	ret = _sparse_alloc_param_sanity_check(param->size, param->pagesize);
@@ -3511,10 +3511,10 @@ long kgsl_ioctl_sparse_virt_free(struct kgsl_device_private *dev_priv,
 {
 	struct kgsl_process_private *process = dev_priv->process_priv;
 	struct kgsl_device *device = dev_priv->device;
-    struct kgsl_sparse_virt_free *param = data;
+	struct kgsl_sparse_virt_free *param = data;
 	struct kgsl_mem_entry *entry = NULL;
 
-    if (!(device->flags & KGSL_FLAG_SPARSE))
+	if (!(device->flags & KGSL_FLAG_SPARSE))
 		return -ENOTSUPP;
 
 	entry = kgsl_sharedmem_find_id_flags(process, param->id,
@@ -3864,7 +3864,7 @@ long kgsl_ioctl_sparse_bind(struct kgsl_device_private *dev_priv,
 {
 	struct kgsl_process_private *private = dev_priv->process_priv;
 	struct kgsl_device *device = dev_priv->device;
-    struct kgsl_sparse_bind *param = data;
+	struct kgsl_sparse_bind *param = data;
 	struct kgsl_sparse_binding_object obj;
 	struct kgsl_mem_entry *virt_entry;
 	int pg_sz;
@@ -3872,7 +3872,7 @@ long kgsl_ioctl_sparse_bind(struct kgsl_device_private *dev_priv,
 	int ret = 0;
 	int i = 0;
 
-    if (!(device->flags & KGSL_FLAG_SPARSE))
+	if (!(device->flags & KGSL_FLAG_SPARSE))
 		return -ENOTSUPP;
 
 	ptr = (void __user *) (uintptr_t) param->list;
@@ -3930,7 +3930,7 @@ long kgsl_ioctl_gpu_sparse_command(struct kgsl_device_private *dev_priv,
 	long result;
 	unsigned int i = 0;
 
-    if (!(device->flags & KGSL_FLAG_SPARSE))
+	if (!(device->flags & KGSL_FLAG_SPARSE))
 		return -ENOTSUPP;
 
 	/* Make sure sparse and syncpoint count isn't too big */
@@ -4688,7 +4688,7 @@ int kgsl_device_platform_probe(struct kgsl_device *device)
 	/* Initialize logging first, so that failures below actually print. */
 	kgsl_device_debugfs_init(device);
 
-    /* Disable the sparse ioctl invocation as they are not used */
+	/* Disable the sparse ioctl invocation as they are not used */
 	device->flags &= ~KGSL_FLAG_SPARSE;
 
 	status = kgsl_pwrctrl_init(device);
@@ -4898,7 +4898,7 @@ static void kgsl_core_exit(void)
 static int __init kgsl_core_init(void)
 {
 	int result = 0;
-	struct sched_param param = { .sched_priority = 2 };
+	struct sched_param param = { .sched_priority = 6 };
 
 	/* alloc major and minor device numbers */
 	result = alloc_chrdev_region(&kgsl_driver.major, 0, KGSL_DEVICE_MAX,
