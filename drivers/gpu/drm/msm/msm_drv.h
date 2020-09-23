@@ -641,6 +641,10 @@ struct msm_drm_private {
 #define ddev_to_msm_kms(D) ((D) && (D)->dev_private ? \
 		((struct msm_drm_private *)((D)->dev_private))->kms : NULL)
 
+/* get struct msm_gem_address_space * from drm_device * */
+#define ddev_to_gem_aspace(D) ((D) && (D)->dev_private ? \
+		((struct msm_drm_private *)((D)->dev_private))->aspace : NULL)
+
 struct msm_format {
 	uint32_t pixel_format;
 };
