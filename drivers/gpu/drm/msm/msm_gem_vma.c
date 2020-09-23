@@ -285,7 +285,7 @@ int msm_gem_map_vma(struct msm_gem_address_space *aspace,
 		struct msm_gem_vma *vma, struct sg_table *sgt,
 		void *priv, unsigned int flags)
 {
-	if (aspace && aspace->ops->map)
+	if (aspace && aspace->ops && aspace->ops->map)
 		return aspace->ops->map(aspace, vma, sgt, priv, flags);
 
 	return -EINVAL;
