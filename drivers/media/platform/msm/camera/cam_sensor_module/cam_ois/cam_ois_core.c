@@ -47,20 +47,34 @@ int cam_ois_calibration(struct cam_ois_ctrl_t *o_ctrl,
 	return rc;
 }
 
+#if defined(CONFIG_FIH_RC2)
+#define LC898124
+#include "PhoneDownload.h"
+#endif
+
 int32_t cam_ois_construct_default_power_setting(
 	struct cam_sensor_power_ctrl_t *power_info)
 {
 	int rc = 0;
 
+#ifndef LC898124
 	power_info->power_setting_size = 2;
 	power_info->power_setting =
 		(struct cam_sensor_power_setting *)
 		kzalloc(sizeof(struct cam_sensor_power_setting) *
 			power_info->power_setting_size,
 			GFP_KERNEL);
+#else
+	power_info->power_setting_size = 3;
+	power_info->power_setting =
+		(struct cam_sensor_power_setting *)
+		kzalloc(sizeof(struct cam_sensor_power_setting) * power_info->power_setting_size,
+			GFP_KERNEL);
+#endif
 	if (!power_info->power_setting)
 		return -ENOMEM;
 
+#ifndef LC898124
 	power_info->power_setting[0].seq_type = SENSOR_VIO;
 	power_info->power_setting[0].seq_val = CAM_VIO;
 	power_info->power_setting[0].config_val = 1;
@@ -76,6 +90,27 @@ int32_t cam_ois_construct_default_power_setting(
 		kzalloc(sizeof(struct cam_sensor_power_setting) *
 			power_info->power_down_setting_size,
 			GFP_KERNEL);
+#else
+    //temp modify - it can't pass the power setting from user space
+	power_info->power_setting[0].seq_type = SENSOR_VAF;
+	power_info->power_setting[0].seq_val = CAM_VAF;
+	power_info->power_setting[0].config_val = 1;
+	power_info->power_setting[0].delay = 2;
+	power_info->power_setting[1].seq_type = SENSOR_VIO;
+	power_info->power_setting[1].seq_val = CAM_VIO;
+	power_info->power_setting[1].config_val = 1;
+	power_info->power_setting[1].delay = 2;
+	power_info->power_setting[2].seq_type = SENSOR_VANA;
+	power_info->power_setting[2].seq_val = CAM_VANA;
+	power_info->power_setting[2].config_val = 1;
+	power_info->power_setting[2].delay = 200;
+
+	power_info->power_down_setting_size = 3;
+	power_info->power_down_setting =
+		(struct cam_sensor_power_setting *)
+		kzalloc(sizeof(struct cam_sensor_power_setting) * power_info->power_setting_size,
+			GFP_KERNEL);
+#endif
 	if (!power_info->power_down_setting) {
 		rc = -ENOMEM;
 		goto free_power_settings;
@@ -84,6 +119,14 @@ int32_t cam_ois_construct_default_power_setting(
 	power_info->power_down_setting[0].seq_type = SENSOR_VAF;
 	power_info->power_down_setting[0].seq_val = CAM_VAF;
 	power_info->power_down_setting[0].config_val = 0;
+#ifdef LC898124
+	power_info->power_down_setting[1].seq_type = SENSOR_VIO;
+	power_info->power_down_setting[1].seq_val = CAM_VIO;
+	power_info->power_down_setting[1].config_val = 0;
+	power_info->power_down_setting[2].seq_type = SENSOR_VANA;
+	power_info->power_down_setting[2].seq_val = CAM_VANA;
+	power_info->power_down_setting[2].config_val = 0;
+#endif
 
 	return rc;
 
@@ -275,7 +318,12 @@ static int cam_ois_apply_settings(struct cam_ois_ctrl_t *o_ctrl,
 				i2c_list->i2c_settings.reg_setting[i].data_mask,
 				i2c_list->i2c_settings.addr_type,
 				i2c_list->i2c_settings.data_type,
+#ifndef LC898124
+				10);
+                // ^ temp modify - it can't pass the power setting from user space
+#else
 				i2c_list->i2c_settings.reg_setting[i].delay);
+#endif
 				if (rc < 0) {
 					CAM_ERR(CAM_OIS,
 						"i2c poll apply setting Fail");
@@ -927,7 +975,23 @@ static int cam_ois_pkt_parse(struct cam_ois_ctrl_t *o_ctrl, void *arg)
 		}
 
 		if (o_ctrl->ois_fw_flag) {
+#ifdef LC898124
+			uint32_t data = 0,i=0;
+			rc = SelectDownload(o_ctrl,1,1);
+			if( rc )
+				CAM_ERR(CAM_OIS, "[LC898124] OIS FW update fail rc: %d",rc);
+			RemapMain( o_ctrl );
+			for( i = 0 ; i < 10 ; i ++ )
+			{
+				rc = camera_io_dev_read(&(o_ctrl->io_master_info), 0xF100, &data, CAMERA_SENSOR_I2C_TYPE_WORD, CAMERA_SENSOR_I2C_TYPE_DWORD);
+				CAM_ERR(CAM_OIS, "[LC898124] status = 0x%x", data);
+				if( data == 0 )
+					break;
+				usleep_range(10000, 10100);
+			}
+#else
 			rc = cam_ois_fw_download(o_ctrl);
+#endif
 			if (rc) {
 				CAM_ERR(CAM_OIS, "Failed OIS FW Download");
 				goto pwr_dwn;
@@ -1086,7 +1150,11 @@ static int cam_ois_pkt_parse(struct cam_ois_ctrl_t *o_ctrl, void *arg)
 	}
 	return rc;
 pwr_dwn:
+#ifndef LC898124
 	cam_ois_power_down(o_ctrl);
+#else
+	cam_ois_shutdown(o_ctrl);
+#endif
 	return rc;
 }
 
