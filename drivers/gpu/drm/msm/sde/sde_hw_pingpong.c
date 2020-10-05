@@ -66,6 +66,22 @@ static struct sde_pingpong_cfg *_pingpong_offset(enum sde_pingpong pp,
 	return ERR_PTR(-EINVAL);
 }
 
+static void sde_hw_pp_update_te(struct sde_hw_pingpong *pp,
+		struct sde_hw_tear_check *te)
+{
+	struct sde_hw_blk_reg_map *c;
+	int cfg;
+
+	if (!pp || !te)
+		return;
+	c = &pp->hw;
+
+	cfg = SDE_REG_READ(c, PP_SYNC_THRESH);
+	cfg &= ~0xFFFF;
+	cfg |= te->sync_threshold_start;
+	SDE_REG_WRITE(c, PP_SYNC_THRESH, cfg);
+}
+
 static int sde_hw_pp_setup_te_config(struct sde_hw_pingpong *pp,
 		struct sde_hw_tear_check *te)
 {
@@ -94,22 +110,6 @@ static int sde_hw_pp_setup_te_config(struct sde_hw_pingpong *pp,
 			(te->start_pos + te->sync_threshold_start + 1));
 
 	return 0;
-}
-
-static void sde_hw_pp_update_te(struct sde_hw_pingpong *pp,
-		struct sde_hw_tear_check *te)
-{
-	struct sde_hw_blk_reg_map *c;
-	int cfg;
-
-	if (!pp || !te)
-		return;
-	c = &pp->hw;
-
-	cfg = SDE_REG_READ(c, PP_SYNC_THRESH);
-	cfg &= ~0xFFFF;
-	cfg |= te->sync_threshold_start;
-	SDE_REG_WRITE(c, PP_SYNC_THRESH, cfg);
 }
 
 static int sde_hw_pp_setup_autorefresh_config(struct sde_hw_pingpong *pp,
@@ -361,18 +361,12 @@ static void _setup_pingpong_ops(struct sde_hw_pingpong_ops *ops,
 {
 	u32 version = 0;
 
-	if (hw_cap->features & BIT(SDE_PINGPONG_TE)) {
-		ops->setup_tearcheck = sde_hw_pp_setup_te_config;
-		ops->enable_tearcheck = sde_hw_pp_enable_te;
-		ops->update_tearcheck = sde_hw_pp_update_te;
-		ops->connect_external_te = sde_hw_pp_connect_external_te;
-		ops->get_vsync_info = sde_hw_pp_get_vsync_info;
-		ops->setup_autorefresh = sde_hw_pp_setup_autorefresh_config;
-		ops->get_autorefresh = sde_hw_pp_get_autorefresh_config;
-		ops->poll_timeout_wr_ptr = sde_hw_pp_poll_timeout_wr_ptr;
-		ops->get_line_count = sde_hw_pp_get_line_count;
-	}
-
+	ops->update_tearcheck = sde_hw_pp_update_te;
+	ops->setup_tearcheck = sde_hw_pp_setup_te_config;
+	ops->enable_tearcheck = sde_hw_pp_enable_te;
+	ops->connect_external_te = sde_hw_pp_connect_external_te;
+	ops->get_vsync_info = sde_hw_pp_get_vsync_info;
+	ops->setup_autorefresh = sde_hw_pp_setup_autorefresh_config;
 	ops->setup_dsc = sde_hw_pp_setup_dsc;
 	ops->enable_dsc = sde_hw_pp_dsc_enable;
 	ops->disable_dsc = sde_hw_pp_dsc_disable;
