@@ -111,6 +111,21 @@ void dsi_convert_to_drm_mode(const struct dsi_display_mode *dsi_mode,
 	if (dsi_mode->timing.v_sync_polarity)
 		drm_mode->flags |= DRM_MODE_FLAG_PVSYNC;
 
+	if (dsi_mode->timing.dsc_enabled) {
+		drm_mode->flags &= ~DRM_MODE_FLAG_DSC_BPC_MASK;
+		switch (dsi_mode->timing.dsc->bpc) {
+		case 8:
+			drm_mode->flags |= DRM_MODE_FLAG_DSC_BPC8;
+			break;
+		case 10:
+			drm_mode->flags |= DRM_MODE_FLAG_DSC_BPC10;
+			break;
+		default:
+			pr_warn("Unsupported dsc bpc mode: %d\n",
+					dsi_mode->timing.dsc->bpc);
+		}
+	}
+
 	drm_mode_set_name(drm_mode);
 }
 
