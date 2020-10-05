@@ -2365,7 +2365,11 @@ EXPORT_SYMBOL_GPL(clk_list_frequency);
 
 static struct dentry *rootdir;
 static int inited = 0;
+#ifdef CONFIG_FIH_SUSPEND_RESUME_LOG
+static u32 debug_suspend = 0x1; /* Default enable clk debug feature. */
+#else
 static u32 debug_suspend;
+#endif
 static DEFINE_MUTEX(clk_debug_lock);
 static HLIST_HEAD(clk_debug_list);
 
