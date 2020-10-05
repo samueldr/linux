@@ -489,7 +489,33 @@
 		ibb-supply = <&lcdb_ncp_vreg>;
 	};
 
-	ext_dsi_bridge_display: qcom,dsi-display@17 {
+	// FIXME: review for RC2 or dual DSI [?]
+	dsi_hx83112a_truly_video_display: qcom,dsi-display@17 {
+		compatible = "qcom,dsi-display";
+		label = "dsi_hx83112a_truly_video_display";
+		qcom,display-type = "primary";
+
+		qcom,dsi-ctrl = <&mdss_dsi0>;
+		qcom,dsi-phy = <&mdss_dsi_phy0>;
+		clocks = <&mdss_dsi0_pll BYTECLK_MUX_0_CLK>,
+			<&mdss_dsi0_pll PCLK_MUX_0_CLK>;
+		clock-names = "src_byte_clk", "src_pixel_clk";
+
+		pinctrl-names = "panel_active", "panel_suspend";
+		pinctrl-0 = <&sde_dsi_active &sde_te_active>;
+		pinctrl-1 = <&sde_dsi_suspend &sde_te_suspend>;
+		qcom,platform-te-gpio = <&tlmm 10 0>;
+		qcom,platform-reset-gpio = <&tlmm 75 0>;
+
+		qcom,dsi-panel = <&dsi_hx83112a_truly_video>;
+		vddio-supply = <&pm660_l11>;
+		lab-supply = <&lcdb_ldo_vreg>;
+		ibb-supply = <&lcdb_ncp_vreg>;
+	};
+
+	// FIXME: review for RC2 or dual DSI [?]
+	// ext_dsi_bridge_display: qcom,dsi-display@17 {
+	ext_dsi_bridge_display: qcom,dsi-display@18 {
 		compatible = "qcom,dsi-display";
 		label = "ext_dsi_bridge_display";
 		qcom,display-type = "primary";
@@ -869,9 +895,37 @@
 	};
 };
 
+// FIXME: review for RC2 or dual DSI [?]
 &dsi_hx8399_truly_cmd {
 	qcom,mdss-dsi-t-clk-post = <0x0E>;
 	qcom,mdss-dsi-t-clk-pre = <0x30>;
+	qcom,mdss-dsi-min-refresh-rate = <55>;
+	qcom,mdss-dsi-max-refresh-rate = <60>;
+	qcom,mdss-dsi-pan-enable-dynamic-fps;
+	qcom,mdss-dsi-pan-fps-update =
+		"dfps_immediate_porch_mode_vfp";
+	qcom,esd-check-enabled;
+	qcom,mdss-dsi-panel-status-check-mode = "reg_read";
+	qcom,mdss-dsi-panel-status-command = [06 01 00 01 00 00 01 0a];
+	qcom,mdss-dsi-panel-status-command-state = "dsi_hs_mode";
+	qcom,mdss-dsi-panel-status-value = <0x9d 0x9d 0x9d 0x9d>;
+	qcom,mdss-dsi-panel-on-check-value = <0x9d 0x9d 0x9d 0x9d>;
+	qcom,mdss-dsi-panel-status-read-length = <4>;
+	qcom,mdss-dsi-display-timings {
+		timing@0 {
+			qcom,mdss-dsi-panel-phy-timings = [00 1f 08 08 24 22 08
+				08 05 02 04 00];
+			qcom,display-topology = <1 0 1>;
+			qcom,default-topology-index = <0>;
+		};
+	};
+};
+
+// FIXME: review for RC2 or dual DSI [?]
+&dsi_hx83112a_truly_video {
+	qcom,mdss-dsi-t-clk-post = <0x0E>;
+	qcom,mdss-dsi-t-clk-pre = <0x30>;
+
 	qcom,mdss-dsi-min-refresh-rate = <55>;
 	qcom,mdss-dsi-max-refresh-rate = <60>;
 	qcom,mdss-dsi-pan-enable-dynamic-fps;

@@ -1,6 +1,5 @@
-# Do not include QC default DTBs for B1C1 and BONITO builds.
-ifneq ($(CONFIG_BOARD_B1C1),y)
-ifneq ($(CONFIG_BOARD_BONITO),y)
+# FIXME: re-do change to stay compatible with BONITO/B1C1 change
+ifneq ($(CONFIG_FIH_RC2),y)
 
 dtb-$(CONFIG_ARCH_QCOM)	+= apq8016-sbc.dtb msm8916-mtp.dtb
 dtb-$(CONFIG_ARCH_QCOM)	+= msm8996-mtp.dtb
@@ -115,6 +114,8 @@ dtb-$(CONFIG_ARCH_SDM845) += sdm845-sim.dtb \
 	sdm845-interposer-sdm670-mtp.dtb \
 	sdm845-interposer-sdm670-cdp.dtb
 endif
+
+endif # CONFIG_FIH_RC2
 
 ifeq ($(CONFIG_BUILD_ARM64_DT_OVERLAY),y)
 	dtbo-$(CONFIG_ARCH_SDM670) += \
@@ -498,9 +499,6 @@ dtb-$(CONFIG_ARCH_SDM429) += sdm429-mtp.dtb \
 	sda429-cdp.dtb
 
 endif
-
-endif #CONFIG_BOARD_BONITO
-endif #CONFIG_BOARD_B1C1
 
 always		:= $(dtb-y)
 subdir-y	:= $(dts-dirs)
