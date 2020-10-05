@@ -3358,6 +3358,7 @@ static int _sde_crtc_flush_event_thread(struct drm_crtc *crtc)
 		SDE_DEBUG("no frames pending\n");
 		return 0;
 	}
+	SDE_ATRACE_BEGIN("crtc_wait_for_frame_done");
 
 	SDE_EVT32(DRMID(crtc), SDE_EVTLOG_FUNC_ENTRY);
 
@@ -3372,6 +3373,7 @@ static int _sde_crtc_flush_event_thread(struct drm_crtc *crtc)
 
 	SDE_EVT32_VERBOSE(DRMID(crtc), SDE_EVTLOG_FUNC_EXIT);
 
+	SDE_ATRACE_END("crtc_wait_for_frame_done");
 	return 0;
 }
 
