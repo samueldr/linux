@@ -1605,39 +1605,44 @@ static int _sde_encoder_update_rsc_client(
 		return 0;
 	}
 
-	/**
-	 * only primary command mode panel without Qsync can request CMD state.
-	 * all other panels/displays can request for VID state including
-	 * secondary command mode panel.
-	 * Clone mode encoder can request CLK STATE only.
-	 */
 	for (i = 0; i < sde_enc->num_phys_encs; i++) {
 		phys = sde_enc->phys_encs[i];
 
 		if (phys) {
 			qsync_mode = sde_connector_get_property(
-					phys->connector->state,
-					CONNECTOR_PROP_QSYNC_MODE);
+			  phys->connector->state, CONNECTOR_PROP_QSYNC_MODE);
 			break;
 		}
 	}
 
-	rsc_state = enable ?
-		(((disp_info->capabilities & MSM_DISPLAY_CAP_CMD_MODE) &&
-				disp_info->is_primary && !qsync_mode) ?
-				SDE_RSC_CMD_STATE : SDE_RSC_VID_STATE) :
-				SDE_RSC_IDLE_STATE;
+	/**
+	 * only primary command mode panel can request CMD state.
+	 * all other panels/displays can request for VID state including
+	 * secondary command mode panel.
+	 * Clone mode encoder can request CLK STATE only.
+	 */
+	if (sde_encoder_in_clone_mode(drm_enc))
+		rsc_state = enable ? SDE_RSC_CLK_STATE : SDE_RSC_IDLE_STATE;
+	else
+		rsc_state = enable ?
+			(((disp_info->capabilities & MSM_DISPLAY_CAP_CMD_MODE)
+			  && disp_info->is_primary && !qsync_mode) ? SDE_RSC_CMD_STATE :
+			 SDE_RSC_VID_STATE) : SDE_RSC_IDLE_STATE;
+
+	pr_debug("enable=%d rsc_state=%d qsync_mode=%d, is_primary=%d\n",
+			 enable, rsc_state, qsync_mode, disp_info->is_primary);
 
 	SDE_EVT32(rsc_state, qsync_mode);
+
 	prefill_lines = config ? mode_info.prefill_lines +
 		config->inline_rotate_prefill : mode_info.prefill_lines;
 
 	/* compare specific items and reconfigure the rsc */
 	if ((rsc_config->fps != mode_info.frame_rate) ||
-	    (rsc_config->vtotal != mode_info.vtotal) ||
-	    (rsc_config->prefill_lines != prefill_lines) ||
-	    (rsc_config->jitter_numer != mode_info.jitter_numer) ||
-	    (rsc_config->jitter_denom != mode_info.jitter_denom)) {
+		(rsc_config->vtotal != mode_info.vtotal) ||
+		(rsc_config->prefill_lines != prefill_lines) ||
+		(rsc_config->jitter_numer != mode_info.jitter_numer) ||
+		(rsc_config->jitter_denom != mode_info.jitter_denom)) {
 		rsc_config->fps = mode_info.frame_rate;
 		rsc_config->vtotal = mode_info.vtotal;
 		rsc_config->prefill_lines = prefill_lines;
@@ -2045,10 +2050,18 @@ static int sde_encoder_resource_control(struct drm_encoder *drm_enc,
 
 		/* return if the resource control is already in ON state */
 		if (sde_enc->rc_state == SDE_ENC_RC_STATE_ON) {
+			bool update_rsc = false;
 			SDE_DEBUG_ENC(sde_enc, "sw_event:%d, rc in ON state\n",
 					sw_event);
 			SDE_EVT32(DRMID(drm_enc), sw_event, sde_enc->rc_state,
 				SDE_EVTLOG_FUNC_CASE1);
+
+			update_rsc = sde_enc->cur_master &&
+				sde_connector_qsync_updated(sde_enc->cur_master->connector);
+			if (update_rsc) {
+				_sde_encoder_update_rsc_client(drm_enc, NULL, true);
+			}
+
 			mutex_unlock(&sde_enc->rc_lock);
 			return 0;
 		} else if (sde_enc->rc_state != SDE_ENC_RC_STATE_OFF &&
@@ -2510,11 +2523,13 @@ static void sde_encoder_virt_mode_set(struct drm_encoder *drm_enc,
 			return;
 		}
 
-		/*
-		 * Disable dsc before switch the mode and after pre_modeset,
-		 * to guarantee that previous kickoff finished.
-		 */
-		_sde_encoder_dsc_disable(sde_enc);
+		if (msm_is_mode_seamless_panel_dms(adj_mode)) {
+			/*
+			 * Disable dsc before switch the mode and after pre_modeset,
+			 * to guarantee that previous kickoff finished.
+			 */
+			_sde_encoder_dsc_disable(sde_enc);
+		}
 	}
 
 	/* Reserve dynamic resources now. Indicating non-AtomicTest phase */
@@ -3136,18 +3151,16 @@ static void sde_encoder_get_qsync_fps_callback(
 	struct msm_display_info *disp_info;
 	struct sde_encoder_virt *sde_enc;
 
+	sde_enc = to_sde_encoder_virt(drm_enc);
+
 	if (!qsync_fps)
 		return;
-
 	*qsync_fps = 0;
-	if (!drm_enc) {
-		SDE_ERROR("invalid drm encoder\n");
-		return;
-	}
 
-	sde_enc = to_sde_encoder_virt(drm_enc);
-	disp_info = &sde_enc->disp_info;
-	*qsync_fps = disp_info->qsync_min_fps;
+	if (sde_enc) {
+		disp_info = &sde_enc->disp_info;
+		*qsync_fps = disp_info->qsync_min_fps;
+	}
 }
 
 int sde_encoder_idle_request(struct drm_encoder *drm_enc)
@@ -3477,8 +3490,6 @@ static void _sde_encoder_kickoff_phys(struct sde_encoder_virt *sde_enc)
 				pending_flush);
 	}
 
-	_sde_encoder_trigger_start(sde_enc->cur_master);
-
 	spin_unlock_irqrestore(&sde_enc->enc_spinlock, lock_flags);
 
 	if (sde_enc->elevated_ahb_vote) {
@@ -3494,6 +3505,8 @@ static void _sde_encoder_kickoff_phys(struct sde_encoder_virt *sde_enc)
 		}
 		sde_enc->elevated_ahb_vote = false;
 	}
+
+	_sde_encoder_trigger_start(sde_enc->cur_master);
 }
 
 static void _sde_encoder_ppsplit_swap_intf_for_right_only_update(
@@ -3958,12 +3971,12 @@ int sde_encoder_poll_line_counts(struct drm_encoder *drm_enc)
 	return -ETIMEDOUT;
 }
 
-static int _helper_flush_qsync(struct sde_encoder_phys *phys_enc)
+static int _helper_flush_mixer(struct sde_encoder_phys *phys_enc)
 {
 	struct drm_encoder *drm_enc;
-	struct sde_rm_hw_iter rm_iter;
+	struct sde_hw_mixer_cfg mixer;
+	struct sde_rm_hw_iter lm_iter;
 	bool lm_valid = false;
-	bool intf_valid = false;
 
 	if (!phys_enc || !phys_enc->parent) {
 		SDE_ERROR("invalid encoder\n");
@@ -3971,56 +3984,32 @@ static int _helper_flush_qsync(struct sde_encoder_phys *phys_enc)
 	}
 
 	drm_enc = phys_enc->parent;
+	memset(&mixer, 0, sizeof(mixer));
 
-	/* Flush the interfaces for AVR update or Qsync with INTF TE */
-	if (phys_enc->intf_mode == INTF_MODE_VIDEO ||
-			(phys_enc->intf_mode == INTF_MODE_CMD &&
-			phys_enc->has_intf_te)) {
-		sde_rm_init_hw_iter(&rm_iter, drm_enc->base.id,
-				SDE_HW_BLK_INTF);
-		while (sde_rm_get_hw(&phys_enc->sde_kms->rm, &rm_iter)) {
-			struct sde_hw_intf *hw_intf =
-				(struct sde_hw_intf *)rm_iter.hw;
+	sde_rm_init_hw_iter(&lm_iter, drm_enc->base.id, SDE_HW_BLK_LM);
+	while (sde_rm_get_hw(&phys_enc->sde_kms->rm, &lm_iter)) {
+		struct sde_hw_mixer *hw_lm = (struct sde_hw_mixer *)lm_iter.hw;
 
-			if (!hw_intf)
-				continue;
+		if (!hw_lm)
+			continue;
 
-			if (phys_enc->hw_ctl->ops.update_bitmask_intf)
-				phys_enc->hw_ctl->ops.update_bitmask_intf(
-						phys_enc->hw_ctl,
-						hw_intf->idx, 1);
+		/* update LM flush */
+		if (phys_enc->hw_ctl->ops.get_bitmask_mixer &&
+				phys_enc->hw_ctl->ops.update_pending_flush) {
 
-			intf_valid = true;
+			phys_enc->hw_ctl->ops.update_pending_flush(
+					phys_enc->hw_ctl,
+					phys_enc->hw_ctl->ops.get_bitmask_mixer(
+					phys_enc->hw_ctl, hw_lm->idx));
 		}
 
-		if (!intf_valid) {
-			SDE_ERROR_ENC(to_sde_encoder_virt(drm_enc),
-				"intf not found to flush\n");
-			return -EFAULT;
-		}
-	} else {
-		sde_rm_init_hw_iter(&rm_iter, drm_enc->base.id, SDE_HW_BLK_LM);
-		while (sde_rm_get_hw(&phys_enc->sde_kms->rm, &rm_iter)) {
-			struct sde_hw_mixer *hw_lm =
-					(struct sde_hw_mixer *)rm_iter.hw;
+		lm_valid = true;
+	}
 
-			if (!hw_lm)
-				continue;
-
-			/* update LM flush for HW without INTF TE */
-			if (phys_enc->hw_ctl->ops.update_bitmask_mixer)
-				phys_enc->hw_ctl->ops.update_bitmask_mixer(
-						phys_enc->hw_ctl,
-						hw_lm->idx, 1);
-
-			lm_valid = true;
-		}
-
-		if (!lm_valid) {
-			SDE_ERROR_ENC(to_sde_encoder_virt(drm_enc),
-				"lm not found to flush\n");
-			return -EFAULT;
-		}
+	if (!lm_valid) {
+		SDE_ERROR_ENC(to_sde_encoder_virt(drm_enc),
+			"lm not found to flush\n");
+		return -EFAULT;
 	}
 
 	return 0;
@@ -4037,7 +4026,6 @@ int sde_encoder_prepare_for_kickoff(struct drm_encoder *drm_enc,
 	uint32_t ln_cnt1, ln_cnt2;
 	unsigned int i;
 	int rc, ret = 0;
-	struct msm_display_info *disp_info;
 
 	if (!drm_enc || !params || !drm_enc->dev ||
 		!drm_enc->dev->dev_private) {
@@ -4047,7 +4035,6 @@ int sde_encoder_prepare_for_kickoff(struct drm_encoder *drm_enc,
 	sde_enc = to_sde_encoder_virt(drm_enc);
 	priv = drm_enc->dev->dev_private;
 	sde_kms = to_sde_kms(priv->kms);
-	disp_info = &sde_enc->disp_info;
 
 	SDE_DEBUG_ENC(sde_enc, "\n");
 	SDE_EVT32(DRMID(drm_enc));
@@ -4075,10 +4062,10 @@ int sde_encoder_prepare_for_kickoff(struct drm_encoder *drm_enc,
 				needs_hw_reset = true;
 			_sde_encoder_setup_dither(phys);
 
-			/* flush the mixer if qsync is enabled */
+			/* flush the mixer if qsync is enabled*/
 			if (sde_enc->cur_master && sde_connector_qsync_updated(
 					sde_enc->cur_master->connector)) {
-				_helper_flush_qsync(phys);
+				_helper_flush_mixer(phys);
 			}
 		}
 	}

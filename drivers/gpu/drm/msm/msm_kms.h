@@ -38,6 +38,8 @@
 #define MSM_MODE_FLAG_SEAMLESS_DMS			(1<<2)
 /* Request to switch the fps */
 #define MSM_MODE_FLAG_SEAMLESS_VRR			(1<<3)
+/* Request to update panel timings  */
+#define MSM_MODE_FLAG_SEAMLESS_PANEL_DMS		(1<<4)
 
 /* As there are different display controller blocks depending on the
  * snapdragon version, the kms support is split out and the appropriate
@@ -160,6 +162,12 @@ static inline bool msm_is_mode_seamless(const struct drm_display_mode *mode)
 static inline bool msm_is_mode_seamless_dms(const struct drm_display_mode *mode)
 {
 	return mode ? (mode->private_flags & MSM_MODE_FLAG_SEAMLESS_DMS)
+		: false;
+}
+
+static inline bool msm_is_mode_seamless_panel_dms(const struct drm_display_mode *mode)
+{
+	return mode ? (mode->private_flags & MSM_MODE_FLAG_SEAMLESS_PANEL_DMS)
 		: false;
 }
 
