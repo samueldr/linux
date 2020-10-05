@@ -336,8 +336,7 @@ struct sde_connector_evt {
  * @bl_scale_dirty: Flag to indicate PP BL scale value(s) is changed
  * @bl_scale: BL scale value for ABA feature
  * @bl_scale_ad: BL scale value for AD feature
- * @qsync_mode: Qsync mode, where 0: disabled 1: continuous mode
- * @qsync_updated: Qsync settings were updated
+ * @qsync_supported: Connector supports qsync feature
  * last_cmd_tx_sts: status of the last command transfer
  */
 struct sde_connector {

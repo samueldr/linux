@@ -80,7 +80,7 @@ struct sde_encoder_phys;
  *			Note: This is called from IRQ handler context.
  * @handle_frame_done:	Notify virtual encoder that this phys encoder
  *			completes last request frame.
- * @get_qsync_fps:	Returns the min fps for the qsync feature.
+ * @get_qsync_fps Returns the min fps for the qsync feature.
  */
 struct sde_encoder_virt_ops {
 	void (*handle_vblank_virt)(struct drm_encoder *,
