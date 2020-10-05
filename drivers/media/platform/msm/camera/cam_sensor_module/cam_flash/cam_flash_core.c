@@ -98,6 +98,172 @@ static int cam_flash_flush_nrt(struct cam_flash_ctrl *fctrl)
 	return 0;
 }
 
+#if defined(CONFIG_FIH_RC2)
+static int cam_flash_i2c_flush_nrt(struct cam_flash_ctrl *fctrl)
+{
+	int rc = 0;
+
+	if (fctrl->i2c_data.init_settings.is_settings_valid == true) {
+		rc = delete_request(&fctrl->i2c_data.init_settings);
+		if (rc) {
+			CAM_WARN(CAM_FLASH,
+				"Failed to delete Init i2c_setting: %d",
+				rc);
+			return rc;
+		}
+	}
+	if (fctrl->i2c_data.config_settings.is_settings_valid == true) {
+		rc = delete_request(&fctrl->i2c_data.config_settings);
+		if (rc) {
+			CAM_WARN(CAM_FLASH,
+				"Failed to delete NRT i2c_setting: %d",
+				rc);
+			return rc;
+		}
+	}
+
+	return rc;
+}
+
+static int cam_flash_construct_default_power_setting(
+	struct cam_sensor_power_ctrl_t *power_info)
+{
+	int rc = 0;
+
+	power_info->power_setting_size = 1;
+	power_info->power_setting =
+		(struct cam_sensor_power_setting *)
+		kzalloc(sizeof(struct cam_sensor_power_setting),
+			GFP_KERNEL);
+	if (!power_info->power_setting)
+		return -ENOMEM;
+
+	power_info->power_setting[0].seq_type = SENSOR_CUSTOM_REG1;
+	power_info->power_setting[0].seq_val = CAM_V_CUSTOM1;
+	power_info->power_setting[0].config_val = 0;
+	power_info->power_setting[0].delay = 2;
+
+	power_info->power_down_setting_size = 1;
+	power_info->power_down_setting =
+		(struct cam_sensor_power_setting *)
+		kzalloc(sizeof(struct cam_sensor_power_setting),
+			GFP_KERNEL);
+	if (!power_info->power_down_setting) {
+		rc = -ENOMEM;
+		goto free_power_settings;
+	}
+
+	power_info->power_down_setting[0].seq_type = SENSOR_CUSTOM_REG1;
+	power_info->power_down_setting[0].seq_val = CAM_V_CUSTOM1;
+	power_info->power_down_setting[0].config_val = 0;
+
+	return rc;
+
+free_power_settings:
+	kfree(power_info->power_setting);
+	power_info->power_setting = NULL;
+	power_info->power_setting_size = 0;
+	return rc;
+}
+
+int cam_flash_pmic_power_ops(struct cam_flash_ctrl *fctrl,
+	bool regulator_enable)
+{
+	int rc = 0;
+
+	if (!(fctrl->switch_trigger)) {
+		CAM_ERR(CAM_FLASH, "Invalid argument");
+		return -EINVAL;
+	}
+
+	if (regulator_enable) {
+		rc = cam_flash_prepare(fctrl, true);
+		if (rc) {
+			CAM_ERR(CAM_FLASH,
+				"Enable Regulator Failed rc = %d", rc);
+			return rc;
+		}
+	}
+
+	if (!regulator_enable) {
+		rc = cam_flash_prepare(fctrl, false);
+		if (rc)
+			CAM_ERR(CAM_FLASH,
+				"Disable Regulator Failed rc: %d", rc);
+	}
+
+	return rc;
+}
+
+int cam_flash_i2c_power_ops(struct cam_flash_ctrl *fctrl,
+	bool regulator_enable)
+{
+	int rc = 0;
+	struct cam_hw_soc_info *soc_info = &fctrl->soc_info;
+	struct cam_sensor_power_ctrl_t *power_info =
+		&fctrl->power_info;
+
+	if (!power_info || !soc_info) {
+		CAM_ERR(CAM_FLASH, "Power Info is NULL");
+		return -EINVAL;
+	}
+	power_info->dev = soc_info->dev;
+
+	if (regulator_enable && (fctrl->is_regulator_enabled == false)) {
+		if ((power_info->power_setting == NULL) &&
+			(power_info->power_down_setting == NULL)) {
+			CAM_INFO(CAM_FLASH,
+				"Using default power settings");
+			rc = cam_flash_construct_default_power_setting(
+					power_info);
+			if (rc < 0) {
+				CAM_ERR(CAM_FLASH,
+				"Construct default pwr setting failed rc: %d",
+				rc);
+				return rc;
+			}
+		}
+
+		rc = cam_sensor_core_power_up(power_info, soc_info);
+		if (rc) {
+			CAM_ERR(CAM_FLASH, "power up the core is failed:%d",
+				rc);
+			goto free_pwr_settings;
+		}
+
+		rc = camera_io_init(&(fctrl->io_master_info));
+		if (rc) {
+			CAM_ERR(CAM_FLASH, "cci_init failed: rc: %d", rc);
+			cam_sensor_util_power_down(power_info, soc_info);
+			goto free_pwr_settings;
+		}
+		fctrl->is_regulator_enabled = true;
+	} else if ((!regulator_enable) &&
+		(fctrl->is_regulator_enabled == true)) {
+		rc = cam_sensor_util_power_down(power_info, soc_info);
+		if (rc) {
+			CAM_ERR(CAM_FLASH, "power down the core is failed:%d",
+				rc);
+			return rc;
+		}
+		camera_io_release(&(fctrl->io_master_info));
+		fctrl->is_regulator_enabled = false;
+		goto free_pwr_settings;
+	}
+	return rc;
+
+free_pwr_settings:
+	kfree(power_info->power_setting);
+	kfree(power_info->power_down_setting);
+	power_info->power_setting = NULL;
+	power_info->power_down_setting = NULL;
+	power_info->power_setting_size = 0;
+	power_info->power_down_setting_size = 0;
+
+	return rc;
+}
+#endif
+
 int cam_flash_flush_request(struct cam_req_mgr_flush_request *flush)
 {
 	int rc = 0;
