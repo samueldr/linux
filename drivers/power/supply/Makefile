@@ -77,3 +77,4 @@ obj-$(CONFIG_AXP288_CHARGER)	+= axp288_charger.o
 obj-$(CONFIG_NX30P6093)		+= nx30p6093.o
 obj-$(CONFIG_GOOGLE_CHARGER)	+= google_charger.o
 obj-$(CONFIG_USB_OVERHEAT_MITIGATION)	+= overheat_mitigation.o
+obj-$(CONFIG_WIRELESS_CHARGER_P9221)	+= p9221_wl_charger.o
