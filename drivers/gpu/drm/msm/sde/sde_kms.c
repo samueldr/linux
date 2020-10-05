@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2018, Razer Inc. All rights reserved.
  * Copyright (c) 2014-2019, The Linux Foundation. All rights reserved.
  * Copyright (C) 2013 Red Hat
  * Author: Rob Clark <robdclark@gmail.com>
@@ -1286,6 +1287,7 @@ static int _sde_kms_setup_displays(struct drm_device *dev,
 		.cmd_transfer = dsi_display_cmd_transfer,
 		.cont_splash_config = dsi_display_cont_splash_config,
 		.get_panel_vfp = dsi_display_get_panel_vfp,
+		.display_input_boost = dsi_display_set_input_boost,
 	};
 	static const struct sde_connector_ops wb_ops = {
 		.post_init =    sde_wb_connector_post_init,
@@ -1301,6 +1303,7 @@ static int _sde_kms_setup_displays(struct drm_device *dev,
 		.cmd_transfer = NULL,
 		.cont_splash_config = NULL,
 		.get_panel_vfp = NULL,
+		.display_input_boost = NULL,
 	};
 	static const struct sde_connector_ops dp_ops = {
 		.post_init  = dp_connector_post_init,
@@ -1315,6 +1318,7 @@ static int _sde_kms_setup_displays(struct drm_device *dev,
 		.cmd_transfer = NULL,
 		.cont_splash_config = NULL,
 		.get_panel_vfp = NULL,
+		.display_input_boost = NULL,
 	};
 	static const struct sde_connector_ops ext_bridge_ops = {
 		.set_info_blob = dsi_conn_set_info_blob,

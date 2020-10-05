@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2018, Razer Inc. All rights reserved.
  * Copyright (c) 2014-2019, The Linux Foundation. All rights reserved.
  * Copyright (C) 2013 Red Hat
  * Author: Rob Clark <robdclark@gmail.com>
@@ -1901,6 +1902,40 @@ static int _sde_encoder_resource_control_helper(struct drm_encoder *drm_enc,
 	return 0;
 }
 
+static void _sde_panel_input_boost(struct drm_encoder *drm_enc, bool enable_boost)
+{
+	struct msm_drm_private *priv = NULL;
+	struct drm_connector *conn = NULL, *conn_iter;
+	struct list_head *connector_list;
+	struct sde_kms *sde_kms;
+	struct sde_connector *sde_conn = NULL;
+	struct sde_encoder_virt *sde_enc;
+
+	sde_enc = to_sde_encoder_virt(drm_enc);
+	priv = drm_enc->dev->dev_private;
+	sde_kms = to_sde_kms(priv->kms);
+	connector_list = &sde_kms->dev->mode_config.connector_list;
+
+	list_for_each_entry(conn_iter, connector_list, head)
+		if (conn_iter->encoder == drm_enc)
+			conn = conn_iter;
+
+	if (!conn) {
+		SDE_ERROR_ENC(sde_enc, "failed to find attached connector\n");
+		return;
+	} else if (!conn->state) {
+		SDE_ERROR_ENC(sde_enc, "invalid connector state\n");
+		return;
+	}
+
+	sde_conn = to_sde_connector(conn);
+	if (sde_conn && sde_conn->ops.display_input_boost) {
+		int ret = sde_conn->ops.display_input_boost(sde_conn->display, enable_boost);
+		if (ret)
+			SDE_ERROR_ENC(sde_enc, "failed to set the panel input boost\n");
+	}
+}
+
 static void sde_encoder_input_event_handler(struct input_handle *handle,
 	unsigned int type, unsigned int code, int value)
 {
@@ -2306,6 +2341,8 @@ static int sde_encoder_resource_control(struct drm_encoder *drm_enc,
 			return 0;
 		}
 
+		_sde_panel_input_boost(drm_enc, false);
+
 		if (is_vid_mode) {
 			_sde_encoder_irq_control(drm_enc, false);
 		} else {
@@ -2370,6 +2407,8 @@ static int sde_encoder_resource_control(struct drm_encoder *drm_enc,
 					&sde_enc->delayed_off_work,
 					msecs_to_jiffies(
 					IDLE_POWERCOLLAPSE_IN_EARLY_WAKEUP));
+
+			_sde_panel_input_boost(drm_enc, true);
 
 			sde_enc->rc_state = SDE_ENC_RC_STATE_ON;
 		}

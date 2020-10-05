@@ -1727,6 +1727,7 @@ const char *cmd_set_prop_map[DSI_CMD_SET_MAX] = {
 	"qcom,mdss-dsi-post-mode-switch-on-command",
 	"qcom,mdss-dsi-qsync-on-commands",
 	"qcom,mdss-dsi-qsync-off-commands",
+	"razer,input-boost-commands",
 };
 
 const char *cmd_set_state_map[DSI_CMD_SET_MAX] = {
@@ -1753,6 +1754,7 @@ const char *cmd_set_state_map[DSI_CMD_SET_MAX] = {
 	"qcom,mdss-dsi-post-mode-switch-on-command-state",
 	"qcom,mdss-dsi-qsync-on-commands-state",
 	"qcom,mdss-dsi-qsync-off-commands-state",
+	"razer,input-boost-commands-state",
 };
 
 static int dsi_panel_get_cmd_pkt_count(const char *data, u32 length, u32 *cnt)
@@ -4201,6 +4203,77 @@ int dsi_panel_post_unprepare(struct dsi_panel *panel)
 		       panel->name, rc);
 		goto error;
 	}
+error:
+	mutex_unlock(&panel->panel_lock);
+	return rc;
+}
+
+int dsi_panel_set_input_boost(struct dsi_panel *panel, bool enable_boost)
+{
+	int count, rc = 0;
+	struct dsi_cmd_desc *cmds;
+	struct dsi_display_mode *mode;
+	u8 *payload;
+	u32 req_idle_frames;
+
+	if (!panel || !panel->cur_mode) {
+		pr_err("Invalid params\n");
+		return -EINVAL;
+	}
+
+	mutex_lock(&panel->panel_lock);
+
+	if (panel->panel_mode != DSI_OP_CMD_MODE) {
+		pr_err("[%s] setting input boost only supported in command mode\n",
+			panel->name);
+		rc = -ENOTSUPP;
+		goto error;
+	}
+
+	if (!panel->panel_initialized) {
+		pr_err("[%s] cannot set input boost when panel is off\n",
+			panel->name);
+		rc = -EFAULT;
+		goto error;
+	}
+
+	mode = panel->cur_mode;
+	count = mode->priv_info->cmd_sets[DSI_CMD_SET_INPUT_BOOST].count;
+	if (count == 0) {
+		pr_debug("[%s] No commands to be sent for INPUT_BOOST\n",
+			 panel->name);
+		goto error;
+	}
+
+	if (panel->qsync_en) {
+		rc = 0;
+		goto error;
+	}
+
+	req_idle_frames = enable_boost ? 0x00 : panel->num_idle_frames;
+	if (panel->cur_num_idle_frames == req_idle_frames) {
+		pr_debug("[%s] idle frames already set to %u\n", panel->name,
+				req_idle_frames);
+		goto error;
+	}
+
+	cmds = mode->priv_info->cmd_sets[DSI_CMD_SET_INPUT_BOOST].cmds;
+	payload = (u8 *) cmds[2].msg.tx_buf;
+	payload[1] = (u8) (req_idle_frames & 0xff);
+
+	pr_debug("[%s] setting panel input boost (en=%d): framedet=%hhu\n",
+			 panel->name, enable_boost ? 1 : 0, payload[1]);
+
+	rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_INPUT_BOOST);
+	if (rc) {
+		pr_err("[%s] failed to send DSI_CMD_SET_INPUT_BOOST cmds, rc=%d\n",
+		       panel->name, rc);
+		goto error;
+	}
+
+	// Update the current value for number of idle frames
+	panel->cur_num_idle_frames = req_idle_frames;
+
 error:
 	mutex_unlock(&panel->panel_lock);
 	return rc;
