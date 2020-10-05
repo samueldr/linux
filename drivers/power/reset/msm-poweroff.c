@@ -1,3 +1,4 @@
+// FIXME: compare with bluecross stock
 /* Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
@@ -39,6 +40,10 @@
 #include <soc/qcom/watchdog.h>
 #include <soc/qcom/minidump.h>
 
+#ifdef CONFIG_FIH_APR
+#include <fih/fih_rere.h>
+#endif
+
 #define EMERGENCY_DLOAD_MAGIC1    0x322A4F99
 #define EMERGENCY_DLOAD_MAGIC2    0xC67E4350
 #define EMERGENCY_DLOAD_MAGIC3    0x77777777
@@ -72,7 +77,11 @@ static phys_addr_t tcsr_boot_misc_detect;
  * There is no API from TZ to re-enable the registers.
  * So the SDI cannot be re-enabled when it already by-passed.
  */
+#ifdef CONFIG_FIH_APR
+static int download_mode = 0;
+#else
 static int download_mode = 1;
+#endif
 static bool force_warm_reboot_on_thermal;
 static struct kobject dload_kobj;
 static void scm_disable_sdi(void);
@@ -88,7 +97,11 @@ static void scm_disable_sdi(void);
 static int in_panic;
 static int dload_type = SCM_DLOAD_FULLDUMP;
 static void *dload_mode_addr;
+#ifdef CONFIG_FIH_APR
+static bool dload_mode_enabled = false;
+#else
 static bool dload_mode_enabled;
+#endif
 static void *emergency_dload_mode_addr;
 #ifdef CONFIG_RANDOMIZE_BASE
 static void *kaslr_imem_addr;
@@ -216,6 +229,10 @@ static void set_dload_mode(int on)
 {
 	int ret;
 
+	#ifdef CONFIG_FIH_APR
+	pr_err("%s: on = 0x%x\n", __func__, on);
+	#endif
+
 	if (dload_mode_addr) {
 		__raw_writel(on ? 0xE47B337D : 0, dload_mode_addr);
 		__raw_writel(on ? 0xCE14091A : 0,
@@ -242,6 +259,13 @@ static bool get_dload_mode(void)
 static void enable_emergency_dload_mode(void)
 {
 	int ret;
+
+	#ifdef CONFIG_FIH_APR
+	pr_info("%s: invalid by FIH\n", __func__);
+	qpnp_pon_set_restart_reason(PON_RESTART_REASON_UNKNOWN);
+	__raw_writel(0x77665501, restart_reason);
+	return;
+	#endif
 
 	if (emergency_dload_mode_addr) {
 		__raw_writel(EMERGENCY_DLOAD_MAGIC1,
@@ -393,6 +417,10 @@ static void msm_restart_prepare(const char *cmd)
 				PON_RESTART_REASON_BOOTLOADER);
 			__raw_writel(0x77665500, restart_reason);
 		} else if (!strncmp(cmd, "recovery", 8)) {
+#ifdef CONFIG_FIH_APR
+			/*For debug*/
+			need_warm_reset = true;
+#endif
 			qpnp_pon_set_restart_reason(
 				PON_RESTART_REASON_RECOVERY);
 			__raw_writel(0x77665502, restart_reason);
@@ -448,9 +476,59 @@ static void msm_restart_prepare(const char *cmd)
 		} else if (!strncmp(cmd, "edl", 3)) {
 			enable_emergency_dload_mode();
 		} else {
+			#ifdef CONFIG_FIH_APR
+			qpnp_pon_set_restart_reason(PON_RESTART_REASON_UNKNOWN);
+			#endif
 			__raw_writel(0x77665501, restart_reason);
 		}
 	}
+
+	#ifdef CONFIG_FIH_APR
+	if (cmd != NULL) {
+		pr_notice("%s: cmd = (%s)\n", __func__, cmd);
+		if (!strncmp(cmd, "panic", 5)) {
+			need_warm_reset = true;
+			qpnp_pon_set_restart_reason(FIH_RERE_KERNEL_PANIC);
+			__raw_writel(0x520A450A, restart_reason);
+			set_dload_mode(download_mode);
+		} else if (strstr(cmd, "modem crashed")) {
+			need_warm_reset = true;
+			qpnp_pon_set_restart_reason(FIH_RERE_MODEM_FATAL);
+			__raw_writel(0x520B450B, restart_reason);
+			set_dload_mode(download_mode);
+		} else if (strstr(cmd, "exception in system process") ||
+			strstr(cmd, "Watchdog reboot system") ||
+			strstr(cmd, "system crash")) {
+			need_warm_reset = true;
+			qpnp_pon_set_restart_reason(FIH_RERE_SYSTEM_CRASH);
+			__raw_writel(0x520C450C, restart_reason);
+		} else if (!strncmp(cmd, "unknown", 7)) {
+			need_warm_reset = true;
+			qpnp_pon_set_restart_reason(FIH_RERE_UNKNOWN_RESET);
+			__raw_writel(0x520D450D, restart_reason);
+			set_dload_mode(download_mode);
+		} else if (!strncmp(cmd, "memory_test", 11)) {
+			qpnp_pon_set_restart_reason(FIH_RERE_MEMORY_TEST);
+			__raw_writel(0x520D450E, restart_reason);
+		}
+	} else {
+		pr_notice("%s: cmd = NULL\n", __func__);
+		qpnp_pon_set_restart_reason(PON_RESTART_REASON_UNKNOWN);
+		__raw_writel(0x77665501, restart_reason);
+	}
+
+	if (in_panic) {
+		pr_err("%s: in_panic = %d\n", __func__, in_panic);
+		need_warm_reset = true;
+		qpnp_pon_set_restart_reason(FIH_RERE_KERNEL_PANIC);
+		__raw_writel(0x520A450A, restart_reason);
+		set_dload_mode(download_mode);
+	}
+
+	pr_notice("%s: download_mode = %d\n", __func__, download_mode);
+	pr_notice("%s: need_warm_reset = %s\n", __func__, need_warm_reset?"true":"false");
+	pr_notice("%s: dload = (%s)\n", __func__, (get_dload_mode()? "true":"false"));
+	#endif
 
 	/* Hard reset the PMIC unless memory contents must be maintained. */
 	if (need_warm_reset)
