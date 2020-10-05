@@ -6612,6 +6612,29 @@ int dsi_display_update_pps(char *pps_cmd, void *disp)
 	return 0;
 }
 
+int dsi_display_set_input_boost(void *dsi_display, bool enable_boost)
+{
+	int rc = 0;
+	struct dsi_display *display = (struct dsi_display *) dsi_display;
+
+	if (!display) {
+		pr_err("Invalid params\n");
+		return -EINVAL;
+	}
+
+	mutex_lock(&display->display_lock);
+
+	rc = dsi_panel_set_input_boost(display->panel, enable_boost);
+	if (rc) {
+		pr_err("Failed to set the panel's input boot, rc=%d\n", rc);
+		goto error;
+	}
+
+error:
+	mutex_unlock(&display->display_lock);
+	return rc;
+}
+
 int dsi_display_unprepare(struct dsi_display *display)
 {
 	int rc = 0;

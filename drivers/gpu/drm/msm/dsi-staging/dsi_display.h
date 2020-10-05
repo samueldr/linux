@@ -678,4 +678,11 @@ int dsi_display_get_panel_vfp(void *display,
  */
 int dsi_display_get_esd_mode(void *display);
 
+/**
+ * dsi_display_set_input_boot() - sets the input boost for the panel
+ *
+ * Return: error code.
+ */
+int dsi_display_set_input_boost(void *display, bool enable_boost);
+
 #endif /* _DSI_DISPLAY_H_ */

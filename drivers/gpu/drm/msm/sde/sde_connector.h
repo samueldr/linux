@@ -1,4 +1,6 @@
-/* Copyright (c) 2016-2018, The Linux Foundation. All rights reserved.
+/*
+ * Copyright (c) 2018, Razer Inc. All rights reserved.
+ * Copyright (c) 2016-2018, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -272,6 +274,11 @@ struct sde_connector_ops {
 	 * Returns: Positive value for ESD mode, negetive for failure
 	 */
 	int (*get_esd_mode)(void *display);
+
+	/**
+	 * display_input_boost
+	 */
+	int (*display_input_boost)(void *display, bool enable_boost);
 };
 
 /**
