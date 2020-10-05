@@ -65,3 +65,5 @@ obj-$(CONFIG_USBIP_CORE)	+= usbip/
 obj-$(CONFIG_USB_PD)            += pd/
 
 obj-$(CONFIG_TYPEC)		+= typec/
+
+obj-$(CONFIG_USB_TUSB544)	+= tusb544/
