@@ -20,7 +20,11 @@
 #include <linux/pmic-voter.h>
 #include "step-chg-jeita.h"
 
+#if defined(CONFIG_FIH_BATTERY)
+#define MAX_STEP_CHG_ENTRIES	4
+#else
 #define MAX_STEP_CHG_ENTRIES	8
+#endif /* CONFIG_FIH_BATTERY */
 #define STEP_CHG_VOTER		"STEP_CHG_VOTER"
 #define JEITA_VOTER		"JEITA_VOTER"
 
@@ -72,6 +76,9 @@ struct step_chg_info {
 	int			jeita_fv_index;
 	int			step_index;
 	int			get_config_retry_count;
+#if defined(CONFIG_FIH_BATTERY)
+	int			last_jeita_status; //Only use hysteresis when JEITA change from noraml to cool or warm
+#endif
 
 	struct step_chg_cfg	*step_chg_config;
 	struct jeita_fcc_cfg	*jeita_fcc_config;
@@ -272,6 +279,15 @@ static int get_step_chg_jeita_setting_from_profile(struct step_chg_info *chip)
 		chip->step_chg_cfg_valid = false;
 	}
 
+#if defined(CONFIG_FIH_BATTERY)
+	rc = of_property_read_u32(profile_node, "fih,step-chg-hysteresis",
+					&chip->step_chg_config->hysteresis);
+	if (rc < 0) {
+		pr_err("Read fih,step-chg-hysteresis failed, rc=%d\n", rc);
+		chip->step_chg_cfg_valid = false;
+	}
+#endif /* CONFIG_FIH_BATTERY */
+
 	chip->sw_jeita_cfg_valid = true;
 	rc = read_range_data_from_node(profile_node,
 			"qcom,jeita-fcc-ranges",
@@ -283,6 +299,15 @@ static int get_step_chg_jeita_setting_from_profile(struct step_chg_info *chip)
 		chip->sw_jeita_cfg_valid = false;
 	}
 
+#if defined(CONFIG_FIH_BATTERY)
+	rc = of_property_read_u32(profile_node, "fih,jeita-hysteresis",
+					&chip->jeita_fcc_config->hysteresis);
+	if (rc < 0) {
+		pr_err("Read fih,jeita-hysteresis failed, rc=%d\n", rc);
+		chip->sw_jeita_cfg_valid = false;
+	}
+#endif /* CONFIG_FIH_BATTERY */
+
 	rc = read_range_data_from_node(profile_node,
 			"qcom,jeita-fv-ranges",
 			chip->jeita_fv_config->fv_cfg,
@@ -292,6 +317,15 @@ static int get_step_chg_jeita_setting_from_profile(struct step_chg_info *chip)
 					rc);
 		chip->sw_jeita_cfg_valid = false;
 	}
+
+#if defined(CONFIG_FIH_BATTERY)
+	rc = of_property_read_u32(profile_node, "fih,jeita-hysteresis",
+					&chip->jeita_fv_config->hysteresis);
+	if (rc < 0) {
+		pr_err("Read fih,jeita-hysteresis failed, rc=%d\n", rc);
+		chip->sw_jeita_cfg_valid = false;
+	}
+#endif /* CONFIG_FIH_BATTERY */
 
 	return rc;
 }
@@ -344,7 +378,8 @@ reschedule:
 
 static int get_val(struct range_data *range, int hysteresis, int current_index,
 		int threshold,
-		int *new_index, int *val)
+		int *new_index, int *val,
+		int last_jeita_status, int current_jeita_status) //Only use hysteresis when JEITA change from noraml to cool or warm
 {
 	int i;
 
@@ -399,6 +434,9 @@ static int handle_step_chg_config(struct step_chg_info *chip)
 	union power_supply_propval pval = {0, };
 	int rc = 0, fcc_ua = 0;
 	u64 elapsed_us;
+#if defined(CONFIG_FIH_BATTERY)
+	int current_step_index = chip->step_index;
+#endif /* CONFIG_FIH_BATTERY */
 
 	elapsed_us = ktime_us_delta(ktime_get(), chip->step_last_update_time);
 	if (elapsed_us < STEP_CHG_HYSTERISIS_DELAY_US)
@@ -425,12 +463,16 @@ static int handle_step_chg_config(struct step_chg_info *chip)
 		return rc;
 	}
 
+	//{Only use hysteresis when JEITA change from noraml to cool or warm
 	rc = get_val(chip->step_chg_config->fcc_cfg,
 			chip->step_chg_config->hysteresis,
 			chip->step_index,
 			pval.intval,
 			&chip->step_index,
-			&fcc_ua);
+			&fcc_ua,
+			POWER_SUPPLY_HEALTH_GOOD,
+			POWER_SUPPLY_HEALTH_GOOD);
+	//}Only use hysteresis when JEITA change from noraml to cool or warm
 	if (rc < 0) {
 		/* remove the vote if no step-based fcc is found */
 		if (chip->fcc_votable)
@@ -446,6 +488,9 @@ static int handle_step_chg_config(struct step_chg_info *chip)
 	vote(chip->fcc_votable, STEP_CHG_VOTER, true, fcc_ua);
 
 	pr_debug("%s = %d Step-FCC = %duA\n",
+#if defined(CONFIG_FIH_BATTERY)
+	if (current_step_index != chip->step_index)
+#endif /* CONFIG_FIH_BATTERY */
 		chip->step_chg_config->prop_name, pval.intval, fcc_ua);
 
 update_time:
@@ -459,9 +504,14 @@ reschedule:
 
 static int handle_jeita(struct step_chg_info *chip)
 {
+	union power_supply_propval jeita_pval = {0, }; //Only use hysteresis when JEITA change from noraml to cool or warm
 	union power_supply_propval pval = {0, };
 	int rc = 0, fcc_ua = 0, fv_uv = 0;
 	u64 elapsed_us;
+#if defined(CONFIG_FIH_BATTERY)
+	int current_jeita_fcc_index = chip->jeita_fcc_index;
+	int current_jeita_fv_index = chip->jeita_fv_index;
+#endif /* CONFIG_FIH_BATTERY */
 
 	rc = power_supply_get_property(chip->batt_psy,
 		POWER_SUPPLY_PROP_SW_JEITA_ENABLED, &pval);
@@ -490,6 +540,29 @@ static int handle_jeita(struct step_chg_info *chip)
 		return rc;
 	}
 
+#if defined(CONFIG_FIH_BATTERY)
+	//{Only use hysteresis when JEITA change from noraml to cool or warm
+	rc = power_supply_get_property(chip->batt_psy,
+				POWER_SUPPLY_PROP_HEALTH, &jeita_pval);
+
+	if(rc < 0) {
+		pr_err("Could not get battery health in handle_jeita\n");
+		return rc;
+	}
+
+	rc = get_val(chip->jeita_fcc_config->fcc_cfg,
+			chip->jeita_fcc_config->hysteresis,
+			chip->jeita_fcc_index,
+			pval.intval,
+			&chip->jeita_fcc_index,
+			&fcc_ua,
+			chip->last_jeita_status,
+			jeita_pval.intval);
+	//}Only use hysteresis when JEITA change from noraml to cool or warm
+
+	if (rc < 0)
+		fcc_ua = 0;
+#else
 	rc = get_val(chip->jeita_fcc_config->fcc_cfg,
 			chip->jeita_fcc_config->hysteresis,
 			chip->jeita_fcc_index,
@@ -502,6 +575,7 @@ static int handle_jeita(struct step_chg_info *chip)
 			vote(chip->fcc_votable, JEITA_VOTER, false, 0);
 		goto update_time;
 	}
+#endif
 
 	if (!chip->fcc_votable)
 		chip->fcc_votable = find_votable("FCC");
@@ -511,6 +585,24 @@ static int handle_jeita(struct step_chg_info *chip)
 
 	vote(chip->fcc_votable, JEITA_VOTER, true, fcc_ua);
 
+#if defined(CONFIG_FIH_BATTERY)
+	//{Only use hysteresis when JEITA change from noraml to cool or warm
+	rc = power_supply_get_property(chip->batt_psy,
+				POWER_SUPPLY_PROP_HEALTH, &jeita_pval);
+
+	rc = get_val(chip->jeita_fv_config->fv_cfg,
+			chip->jeita_fv_config->hysteresis,
+			chip->jeita_fv_index,
+			pval.intval,
+			&chip->jeita_fv_index,
+			&fv_uv,
+			chip->last_jeita_status,
+			jeita_pval.intval);
+	//}Only use hysteresis when JEITA change from noraml to cool or warm
+
+	if (rc < 0)
+		fv_uv = 0;
+#else
 	rc = get_val(chip->jeita_fv_config->fv_cfg,
 			chip->jeita_fv_config->hysteresis,
 			chip->jeita_fv_index,
@@ -523,6 +615,7 @@ static int handle_jeita(struct step_chg_info *chip)
 			vote(chip->fv_votable, JEITA_VOTER, false, 0);
 		goto update_time;
 	}
+#endif
 
 	chip->fv_votable = find_votable("FV");
 	if (!chip->fv_votable)
@@ -533,7 +626,15 @@ static int handle_jeita(struct step_chg_info *chip)
 	pr_debug("%s = %d FCC = %duA FV = %duV\n",
 		chip->jeita_fcc_config->prop_name, pval.intval, fcc_ua, fv_uv);
 
+#if defined(CONFIG_FIH_BATTERY)
+	if (current_jeita_fcc_index != chip->jeita_fcc_index ||
+	    current_jeita_fv_index != chip->jeita_fv_index)
+#endif /* CONFIG_FIH_BATTERY */
+	pr_err("%s = %d FCC = %duA FV = %duV\n",
+		chip->jeita_fcc_config->prop_name, pval.intval, fcc_ua, fv_uv);
+
 update_time:
+	chip->last_jeita_status = jeita_pval.intval; //Only use hysteresis when JEITA change from noraml to cool or warm
 	chip->jeita_last_update_time = ktime_get();
 
 	if (!chip->main_psy)

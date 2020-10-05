@@ -1,3 +1,4 @@
+// FIXME: review this whole file compared to bluecross
 /* Copyright (c) 2016-2018, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
@@ -23,6 +24,9 @@
 #include <linux/qpnp/qpnp-revid.h>
 #include "fg-core.h"
 #include "fg-reg.h"
+#if defined(CONFIG_FIH_BATTERY)
+#include "fih-battery-bbs.h"
+#endif /* CONFIG_FIH_BATTERY */
 
 #define FG_GEN3_DEV_NAME	"qcom,fg-gen3"
 
@@ -163,6 +167,7 @@ static void fg_encode_current(struct fg_sram_param *sp,
 	enum fg_sram_param_id id, int val_ma, u8 *buf);
 static void fg_encode_default(struct fg_sram_param *sp,
 	enum fg_sram_param_id id, int val, u8 *buf);
+static const char *fg_get_cycle_count(struct fg_chip *chip);
 
 static struct fg_irq_info fg_irqs[FG_IRQ_MAX];
 
@@ -1011,6 +1016,10 @@ static int fg_get_batt_profile(struct fg_chip *chip)
 		return -ENXIO;
 	}
 
+#if defined(CONFIG_FIH_BATTERY) && defined(BBS_LOG)
+	BBS_BATTERY_ID(chip->batt_id_ohms);
+#endif /* CONFIG_FIH_BATTERY */
+
 	profile_node = of_batterydata_get_best_profile(batt_node,
 				chip->batt_id_ohms / 1000, NULL);
 	if (IS_ERR(profile_node))
@@ -1018,6 +1027,9 @@ static int fg_get_batt_profile(struct fg_chip *chip)
 
 	if (!profile_node) {
 		pr_err("couldn't find profile handle\n");
+#if defined(CONFIG_FIH_BATTERY) && defined(BBS_LOG)
+		BBS_BATTERY_ID_MISS();
+#endif /* CONFIG_FIH_BATTERY */
 		return -ENODATA;
 	}
 
@@ -1397,6 +1409,13 @@ static int fg_load_learned_cap_from_sram(struct fg_chip *chip)
 
 	fg_dbg(chip, FG_CAP_LEARN, "learned_cc_uah:%lld nom_cap_uah: %lld\n",
 		chip->cl.learned_cc_uah, chip->cl.nom_cap_uah);
+#if defined(CONFIG_FIH_BATTERY) && defined(BBS_LOG)
+	BBS_BATTERY_FCC_MAX(div64_s64(chip->cl.nom_cap_uah, 1000));
+	if (div64_s64(chip->cl.learned_cc_uah * 100, chip->cl.nom_cap_uah) < 70) {
+		BBS_BATTERY_AGING();
+		//BBS_BATTERY_FCC(fg_get_cycle_count(chip), div64_s64(chip->cl.learned_cc_uah, 1000));
+	}
+#endif /* CONFIG_FIH_BATTERY */
 	return 0;
 }
 
@@ -2801,7 +2820,7 @@ out:
 	mutex_unlock(&chip->cyc_ctr.lock);
 }
 
-static int fg_get_cycle_count(struct fg_chip *chip)
+static const char *fg_get_cycle_count(struct fg_chip *chip)
 {
 	int count;
 
@@ -2826,8 +2845,161 @@ static int fg_get_cycle_count(struct fg_chip *chip)
 		count = DIV_ROUND_CLOSEST(count, 8);
 	}
 	mutex_unlock(&chip->cyc_ctr.lock);
-#endif
-	return count;
+
+	buf[len] = '\0';
+	return buf;
+}
+
+static int fg_get_cycle_count_avg(struct fg_chip *chip)
+{
+	int i, temp = 0;
+
+	if (!chip->cyc_ctr.en)
+		return 0;
+
+	mutex_lock(&chip->cyc_ctr.lock);
+	for (i = 0; i < BUCKET_COUNT; i++) {
+		temp += chip->cyc_ctr.count[i];
+	}
+	mutex_unlock(&chip->cyc_ctr.lock);
+
+	return temp / BUCKET_COUNT;
+}
+
+#define ESR_SW_FCC_UA				100000	/* 100mA */
+#define ESR_EXTRACTION_ENABLE_MASK		BIT(0)
+static void fg_esr_sw_work(struct work_struct *work)
+{
+	struct fg_chip *chip = container_of(work,
+			struct fg_chip, esr_sw_work);
+	union power_supply_propval pval = {0, };
+	int rc, esr_uohms = 0;
+
+	vote(chip->awake_votable, FG_ESR_VOTER, true, 0);
+	/*
+	 * Enable ESR extraction just before we reduce the FCC
+	 * to make sure that FG extracts the ESR. Disable ESR
+	 * extraction after FCC reduction is complete to prevent
+	 * any further HW pulses.
+	 */
+	rc = fg_sram_masked_write(chip, ESR_EXTRACTION_ENABLE_WORD,
+			ESR_EXTRACTION_ENABLE_OFFSET,
+			ESR_EXTRACTION_ENABLE_MASK, 0x1, FG_IMA_DEFAULT);
+	if (rc < 0) {
+		pr_err("Failed to enable ESR extraction rc=%d\n", rc);
+		goto done;
+	}
+
+	/* delay for 1 FG cycle to complete */
+	msleep(1500);
+
+	/* for FCC to 100mA */
+	pval.intval = ESR_SW_FCC_UA;
+	rc = power_supply_set_property(chip->batt_psy,
+			POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT,
+			&pval);
+	if (rc < 0) {
+		pr_err("Failed to set FCC to 100mA rc=%d\n", rc);
+		goto done;
+	}
+
+	/* delay for ESR readings */
+	msleep(3000);
+
+	/* FCC to 0 (removes vote) */
+	pval.intval = 0;
+	rc = power_supply_set_property(chip->batt_psy,
+			POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT,
+			&pval);
+	if (rc < 0) {
+		pr_err("Failed to remove FCC vote rc=%d\n", rc);
+		goto done;
+	}
+
+	fg_get_sram_prop(chip, FG_SRAM_ESR, &esr_uohms);
+	fg_dbg(chip, FG_STATUS, "SW ESR done ESR=%d\n", esr_uohms);
+
+	/* restart the alarm timer */
+	alarm_start_relative(&chip->esr_sw_timer,
+		ms_to_ktime(chip->esr_wakeup_ms));
+done:
+	rc = fg_sram_masked_write(chip, ESR_EXTRACTION_ENABLE_WORD,
+			ESR_EXTRACTION_ENABLE_OFFSET,
+			ESR_EXTRACTION_ENABLE_MASK, 0x0, FG_IMA_DEFAULT);
+	if (rc < 0)
+		pr_err("Failed to disable ESR extraction rc=%d\n", rc);
+
+
+	vote(chip->awake_votable, FG_ESR_VOTER, false, 0);
+	fg_relax(chip, FG_SW_ESR_WAKE);
+}
+
+static enum alarmtimer_restart
+	fg_esr_sw_timer(struct alarm *alarm, ktime_t now)
+{
+	struct fg_chip *chip = container_of(alarm,
+			struct fg_chip, esr_sw_timer);
+
+	if (!chip->usb_present)
+		return ALARMTIMER_NORESTART;
+
+	fg_stay_awake(chip, FG_SW_ESR_WAKE);
+	schedule_work(&chip->esr_sw_work);
+
+	return ALARMTIMER_NORESTART;
+}
+
+static int fg_config_esr_sw(struct fg_chip *chip)
+{
+	int rc;
+	union power_supply_propval prop = {0, };
+
+	if (!chip->dt.use_esr_sw)
+		return 0;
+
+	if (!usb_psy_initialized(chip))
+		return 0;
+
+	rc = power_supply_get_property(chip->usb_psy,
+			POWER_SUPPLY_PROP_PRESENT, &prop);
+	if (rc < 0) {
+		pr_err("Error in reading usb-status rc = %d\n", rc);
+		return rc;
+	}
+
+	if (chip->usb_present != prop.intval) {
+		chip->usb_present = prop.intval;
+		fg_dbg(chip, FG_STATUS, "USB status changed=%d\n",
+						chip->usb_present);
+		/* cancel any pending work */
+		alarm_cancel(&chip->esr_sw_timer);
+		cancel_work_sync(&chip->esr_sw_work);
+
+		if (chip->usb_present) {
+			/* disable ESR extraction across the charging cycle */
+			rc = fg_sram_masked_write(chip,
+					ESR_EXTRACTION_ENABLE_WORD,
+					ESR_EXTRACTION_ENABLE_OFFSET,
+					ESR_EXTRACTION_ENABLE_MASK,
+					0x0, FG_IMA_DEFAULT);
+			if (rc < 0)
+				return rc;
+			/* wake up early for the first ESR on insertion */
+			alarm_start_relative(&chip->esr_sw_timer,
+				ms_to_ktime(chip->esr_wakeup_ms / 2));
+		} else {
+			/* enable ESR extraction on removal */
+			rc = fg_sram_masked_write(chip,
+					ESR_EXTRACTION_ENABLE_WORD,
+					ESR_EXTRACTION_ENABLE_OFFSET,
+					ESR_EXTRACTION_ENABLE_MASK,
+					0x1, FG_IMA_DEFAULT);
+			if (rc < 0)
+				return rc;
+		}
+	}
+
+	return 0;
 }
 
 static void status_change_work(struct work_struct *work)
@@ -3111,6 +3283,9 @@ wait:
 			BATT_SOC_RESTART(chip), rc);
 		goto out;
 	}
+#if defined(CONFIG_FIH_BATTERY) && defined(BBS_LOG)
+	BBS_FG_RESET();
+#endif /* CONFIG_FIH_BATTERY */
 out:
 	chip->fg_restarting = false;
 	return rc;
@@ -3132,7 +3307,7 @@ static void profile_load_work(struct work_struct *work)
 				struct fg_chip,
 				profile_load_work.work);
 	u8 buf[2], val;
-	int rc;
+	int rc, msoc = -1, volt_uv = -1, batt_temp = -1;
 
 	vote(chip->awake_votable, PROFILE_LOAD, true, 0);
 
@@ -3227,6 +3402,7 @@ done:
 		chip->profile_loaded = true;
 
 	fg_dbg(chip, FG_STATUS, "profile loaded successfully");
+	pr_info("profile loaded successfully\n");
 out:
 	chip->soc_reporting_ready = true;
 	vote(chip->awake_votable, ESR_FCC_VOTER, true, 0);
@@ -3236,6 +3412,16 @@ out:
 		pm_stay_awake(chip->dev);
 		schedule_work(&chip->status_change_work);
 	}
+
+	rc = fg_get_battery_voltage(chip, &volt_uv);
+	if (!rc)
+		rc = fg_get_prop_capacity(chip, &msoc);
+
+	if (!rc)
+		rc = fg_get_battery_temp(chip, &batt_temp);
+	pr_info("Battery SOC:%d voltage: %duV temp: %d id: %dKOhms\n",
+				msoc, volt_uv, batt_temp, chip->batt_id_ohms / 1000);
+
 }
 
 static void sram_dump_work(struct work_struct *work)
@@ -4648,6 +4834,9 @@ static irqreturn_t fg_vbatt_low_irq_handler(int irq, void *data)
 	struct fg_chip *chip = data;
 
 	fg_dbg(chip, FG_IRQ, "irq %d triggered\n", irq);
+#if defined(CONFIG_FIH_BATTERY) && defined(BBS_LOG)
+	BBS_BATTERY_VOLTAGE_LOW();
+#endif /* CONFIG_FIH_BATTERY */
 	return IRQ_HANDLED;
 }
 
@@ -4733,6 +4922,10 @@ static irqreturn_t fg_delta_batt_temp_irq_handler(int irq, void *data)
 
 		chip->last_batt_temp = batt_temp;
 		power_supply_changed(chip->batt_psy);
+#if defined(CONFIG_FIH_BATTERY) && defined(BBS_LOG)
+		if (batt_temp >= 600)
+			BBS_BATTERY_REACH_SHUTDOWN_TEMPERATURE();
+#endif /* CONFIG_FIH_BATTERY */
 	}
 
 	if (abs(chip->last_batt_temp - batt_temp) > 30)
