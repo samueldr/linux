@@ -665,4 +665,11 @@ int dsi_display_cont_splash_config(void *display);
 int dsi_display_get_panel_vfp(void *display,
 	int h_active, int v_active);
 
+/**
+ * dsi_display_set_input_boot() - sets the input boost for the panel
+ *
+ * Return: error code.
+ */
+int dsi_display_set_input_boost(void *display, bool enable_boost);
+
 #endif /* _DSI_DISPLAY_H_ */
