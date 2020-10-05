@@ -184,13 +184,10 @@ int cam_flash_pmic_power_ops(struct cam_flash_ctrl *fctrl,
 	}
 
 	if (!regulator_enable) {
-		if ((fctrl->flash_state == CAM_FLASH_STATE_START) &&
-			(fctrl->is_regulator_enabled == true)) {
-			rc = cam_flash_prepare(fctrl, false);
-			if (rc)
-				CAM_ERR(CAM_FLASH,
-					"Disable Regulator Failed rc: %d", rc);
-		}
+		rc = cam_flash_prepare(fctrl, false);
+		if (rc)
+			CAM_ERR(CAM_FLASH,
+				"Disable Regulator Failed rc: %d", rc);
 	}
 
 	return rc;
