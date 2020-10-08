@@ -1,4 +1,4 @@
-/* Copyright (c) 2015-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2015-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -35,8 +35,6 @@ struct nqx_platform_data {
 	unsigned int clkreq_gpio;
 	unsigned int firm_gpio;
 	unsigned int ese_gpio;
-	int i2c_postinit_cmd_len;
-	u8 *i2c_postinit_cmd;
 	const char *clk_src_name;
 	/* NFC_CLK pin voting state */
 	bool clk_pin_voting;
@@ -52,25 +50,20 @@ MODULE_DEVICE_TABLE(of, msm_match_table);
 #define MAX_BUFFER_SIZE			(320)
 #define WAKEUP_SRC_TIMEOUT		(2000)
 #define MAX_RETRY_COUNT			3
-
-// FIXME: to stay compatible with BONITO / B1C1, change to a config
-#define FIH_FTM_CUSTOMIZED
-
 /* For creating "/sys/devices/platform/pn547_attr/nfc_irq" for
    get_irq_status() needed in nfc.c in FTM implementation */
+#define FIH_FTM_CUSTOMIZED
 /* For FIH MultiNFC solution */
 /* #define FIH_MULTI_NFC */
-
-// FIXME: to stay compatible with BONITO / B1C1, change to a config
 #define BBSLOG
 #ifdef BBSLOG
 #define NFC_READ_ERROR do {printk("BBox;%s: NCI cmd transfer failure\n", __func__); printk("BBox::UEC;16::0");} while(0)
 #endif
 
+
 struct nqx_dev {
 	wait_queue_head_t	read_wq;
 	struct	mutex		read_mutex;
-	struct	mutex		ese_status_mutex;
 	struct	i2c_client	*client;
 	struct	miscdevice	nqx_device;
 	union  nqx_uinfo	nqx_info;
@@ -80,9 +73,6 @@ struct nqx_dev {
 	unsigned int		firm_gpio;
 	unsigned int		clkreq_gpio;
 	unsigned int		ese_gpio;
-	/* ese usage and gpio information */
-	unsigned int            ese_gpio_stored;
-	bool                    ese_in_use; /* protected by ese_status_mutex */
 	/* NFC VEN pin state powered by Nfc */
 	bool			nfc_ven_enabled;
 	/* NFC_IRQ state */
@@ -119,7 +109,6 @@ unsigned int	disable_ctrl;
 static void nqx_init_stat(struct nqx_dev *nqx_dev)
 {
 	nqx_dev->count_irq = 0;
-	nqx_dev->ese_gpio_stored = 0;
 }
 
 #ifdef FIH_FTM_CUSTOMIZED
@@ -195,6 +184,15 @@ static irqreturn_t nqx_dev_irq_handler(int irq, void *dev_id)
 	wake_up(&nqx_dev->read_wq);
 
 	return IRQ_HANDLED;
+}
+
+static int is_data_available_for_read(struct nqx_dev *nqx_dev)
+{
+	int ret;
+
+	nqx_enable_irq(nqx_dev);
+	ret = wait_event_interruptible(nqx_dev->read_wq, !nqx_dev->irq_enabled);
+	return ret;
 }
 
 static ssize_t nfc_read(struct file *filp, char __user *buf,
@@ -320,7 +318,7 @@ static ssize_t nfc_write(struct file *filp, const char __user *buf,
 
 	ret = i2c_master_send(nqx_dev->client, tmp, count);
 	if (ret != count) {
-		dev_dbg(&nqx_dev->client->dev,
+		dev_err(&nqx_dev->client->dev,
 		"%s: failed to write %d\n", __func__, ret);
 		ret = -EIO;
 		goto out_free;
@@ -338,34 +336,33 @@ out:
 	return ret;
 }
 
-/* Callback to indicate if secure element is in use.
- * @claim: true/false indicating claim/release
+/**
+ * nqx_standby_write()
+ * @buf:       pointer to data buffer
+ * @len:       # of bytes need to transfer
  *
- * returns 0 in case request was successful, otherwise -1 if ese was forced low
- * due to firmware download mode.
+ * write data buffer over I2C and retry
+ * if NFCC is in stand by mode
+ *
+ * Return: # of bytes written or -ve value in case of error
  */
-int nqx_claim_ese(struct nqx_dev *nqx_dev, bool claim)
+static int nqx_standby_write(struct nqx_dev *nqx_dev,
+				const unsigned char *buf, size_t len)
 {
-	mutex_lock(&nqx_dev->ese_status_mutex);
-	if (claim) {
-		/* currently in download mode,
-		 * we cannot start an ese transactionx
-		 */
-		if (gpio_is_valid(nqx_dev->firm_gpio) &&
-				gpio_get_value(nqx_dev->firm_gpio)) {
-			dev_err(&nqx_dev->client->dev, "%s: claim ese failed\n",
-					__func__);
-			mutex_unlock(&nqx_dev->ese_status_mutex);
-			return -EBUSY;
-		}
-		dev_dbg(&nqx_dev->client->dev, "%s: ese claimed\n", __func__);
-		nqx_dev->ese_in_use = true;
-	} else {
-		dev_dbg(&nqx_dev->client->dev, "%s: ese released\n", __func__);
-		nqx_dev->ese_in_use = false;
+	int ret = -EINVAL;
+	int retry_cnt;
+
+	for (retry_cnt = 1; retry_cnt <= MAX_RETRY_COUNT; retry_cnt++) {
+		ret = i2c_master_send(nqx_dev->client, buf, len);
+		if (ret < 0) {
+			dev_err(&nqx_dev->client->dev,
+				"%s: write failed, Maybe in Standby Mode - Retry(%d)\n",
+				 __func__, retry_cnt);
+			usleep_range(1000, 1100);
+		} else if (ret == len)
+			break;
 	}
-	mutex_unlock(&nqx_dev->ese_status_mutex);
-	return 0;
+	return ret;
 }
 
 /*
@@ -374,11 +371,12 @@ int nqx_claim_ese(struct nqx_dev *nqx_dev, bool claim)
  * NFC OFF & eSE ON : NFC_EN high and eSE_pwr_req high.
  * NFC OFF & eSE OFF : NFC_EN low and eSE_pwr_req low.
  */
-int nqx_ese_pwr(struct nqx_dev *nqx_dev, unsigned long int arg)
+static int nqx_ese_pwr(struct nqx_dev *nqx_dev, unsigned long int arg)
 {
 	int r = -1;
+	const unsigned char svdd_off_cmd_warn[] =  {0x2F, 0x31, 0x01, 0x01};
+	const unsigned char svdd_off_cmd_done[] =  {0x2F, 0x31, 0x01, 0x00};
 
-	dev_dbg(&nqx_dev->client->dev, "%s: %lu\n", __func__, arg);
 	if (!gpio_is_valid(nqx_dev->ese_gpio)) {
 		dev_err(&nqx_dev->client->dev,
 			"%s: ese_gpio is not valid\n", __func__);
@@ -401,30 +399,66 @@ int nqx_ese_pwr(struct nqx_dev *nqx_dev, unsigned long int arg)
 			nqx_dev->nfc_ven_enabled =
 					gpio_get_value(nqx_dev->en_gpio);
 			if (!nqx_dev->nfc_ven_enabled) {
-				dev_dbg(&nqx_dev->client->dev, "setting NFC VEN high\n");
 				gpio_set_value(nqx_dev->en_gpio, 1);
 				/* hardware dependent delay */
 				usleep_range(1000, 1100);
-				if (gpio_get_value(nqx_dev->en_gpio) == 0)
-					dev_dbg(&nqx_dev->client->dev, "NFC VEN still low\n");
 			}
-			dev_err(&nqx_dev->client->dev, "setting ese_gpio high\n");
 			gpio_set_value(nqx_dev->ese_gpio, 1);
-			/* hardware dependent delay */
-			usleep_range(5000, 5100);
+			usleep_range(1000, 1100);
 			if (gpio_get_value(nqx_dev->ese_gpio)) {
 				dev_dbg(&nqx_dev->client->dev, "ese_gpio is enabled\n");
 				r = 0;
 			}
 		}
 	} else if (arg == 1) {
-		r = 0;
-		/**
-		 * In case the NFC is off,
-		 * there's no need to send the i2c commands
-		 */
-		gpio_set_value(nqx_dev->ese_gpio, 0);
-		dev_dbg(&nqx_dev->client->dev, "ese_gpio is disabled\n");
+		if (nqx_dev->nfc_ven_enabled &&
+			((nqx_dev->nqx_info.info.chip_type == NFCC_NQ_220) ||
+			(nqx_dev->nqx_info.info.chip_type == NFCC_PN66T))) {
+			/**
+			 * Let's inform the CLF we're
+			 * powering off the eSE
+			 */
+			r = nqx_standby_write(nqx_dev, svdd_off_cmd_warn,
+						sizeof(svdd_off_cmd_warn));
+			if (r < 0) {
+				dev_err(&nqx_dev->client->dev,
+					"%s: write failed after max retry\n",
+					 __func__);
+				return -ENXIO;
+			}
+			dev_dbg(&nqx_dev->client->dev,
+				"%s: svdd_off_cmd_warn sent\n", __func__);
+
+			/* let's power down the eSE */
+			gpio_set_value(nqx_dev->ese_gpio, 0);
+			dev_dbg(&nqx_dev->client->dev,
+				"%s: nqx_dev->ese_gpio set to 0\n", __func__);
+
+			/**
+			 * Time needed for the SVDD capacitor
+			 * to get discharged
+			 */
+			usleep_range(8000, 8100);
+
+			/* Let's inform the CLF the eSE is now off */
+			r = nqx_standby_write(nqx_dev, svdd_off_cmd_done,
+						sizeof(svdd_off_cmd_done));
+			if (r < 0) {
+				dev_err(&nqx_dev->client->dev,
+					"%s: write failed after max retry\n",
+					 __func__);
+				return -ENXIO;
+			}
+			dev_dbg(&nqx_dev->client->dev,
+				"%s: svdd_off_cmd_done sent\n", __func__);
+		} else {
+			/**
+			 * In case the NFC is off,
+			 * there's no need to send the i2c commands
+			 */
+			gpio_set_value(nqx_dev->ese_gpio, 0);
+			usleep_range(1000, 1100);
+		}
 
 		if (!gpio_get_value(nqx_dev->ese_gpio)) {
 			dev_dbg(&nqx_dev->client->dev, "ese_gpio is disabled\n");
@@ -475,7 +509,6 @@ int nfc_ioctl_power_states(struct file *filp, unsigned long arg)
 	int r = 0;
 	struct nqx_dev *nqx_dev = filp->private_data;
 
-	dev_dbg(&nqx_dev->client->dev, "%s: %lu\n", __func__, arg);
 	if (arg == 0) {
 		/*
 		 * We are attempting a hardware reset so let us disable
@@ -486,23 +519,10 @@ int nfc_ioctl_power_states(struct file *filp, unsigned long arg)
 		dev_dbg(&nqx_dev->client->dev,
 			"gpio_set_value disable: %s: info: %p\n",
 			__func__, nqx_dev);
-		mutex_lock(&nqx_dev->ese_status_mutex);
-		if (gpio_is_valid(nqx_dev->firm_gpio) &&
-				gpio_get_value(nqx_dev->firm_gpio)) {
-			if (gpio_is_valid(nqx_dev->ese_gpio) &&
-					gpio_get_value(nqx_dev->ese_gpio) !=
-					nqx_dev->ese_gpio_stored) {
-				dev_dbg(&nqx_dev->client->dev,
-						"%s: Restoring ese state %d\n",
-						__func__,
-						nqx_dev->ese_gpio_stored);
-				gpio_set_value(nqx_dev->ese_gpio,
-						nqx_dev->ese_gpio_stored);
-			}
+		if (gpio_is_valid(nqx_dev->firm_gpio)) {
 			gpio_set_value(nqx_dev->firm_gpio, 0);
 			usleep_range(10000, 10100);
 		}
-		mutex_unlock(&nqx_dev->ese_status_mutex);
 
 		if (gpio_is_valid(nqx_dev->ese_gpio)) {
 			if (!gpio_get_value(nqx_dev->ese_gpio)) {
@@ -522,15 +542,9 @@ int nfc_ioctl_power_states(struct file *filp, unsigned long arg)
 			if (r < 0)
 				dev_err(&nqx_dev->client->dev, "unable to disable clock\n");
 		}
-		if (gpio_is_valid(nqx_dev->clkreq_gpio)) {
-			r = nqx_clock_deselect(nqx_dev);
-			if (r < 0)
-				dev_err(&nqx_dev->client->dev, "unable to disable clock\n");
-		}
 		nqx_dev->nfc_ven_enabled = false;
 	} else if (arg == 1) {
 		nqx_enable_irq(nqx_dev);
-
 		dev_dbg(&nqx_dev->client->dev,
 			"gpio_set_value enable: %s: info: %p\n",
 			__func__, nqx_dev);
@@ -551,24 +565,13 @@ int nfc_ioctl_power_states(struct file *filp, unsigned long arg)
 		 * We are switching to Dowload Mode, toggle the enable pin
 		 * in order to set the NFCC in the new mode
 		 */
-		mutex_lock(&nqx_dev->ese_status_mutex);
 		if (gpio_is_valid(nqx_dev->ese_gpio)) {
-			if (nqx_dev->ese_in_use) {
+			if (gpio_get_value(nqx_dev->ese_gpio)) {
 				dev_err(&nqx_dev->client->dev,
-						"FW download forbidden while ese is in use\n");
-				mutex_unlock(&nqx_dev->ese_status_mutex);
+				"FW download forbidden while ese is on\n");
 				return -EBUSY; /* Device or resource busy */
 			}
-			nqx_dev->ese_gpio_stored =
-				gpio_get_value(nqx_dev->ese_gpio);
-			dev_err(&nqx_dev->client->dev,
-					"FW download backing up se state: %d\n",
-					nqx_dev->ese_gpio_stored);
-			if (nqx_dev->ese_gpio_stored == 1)
-				gpio_set_value(nqx_dev->ese_gpio, 0);
 		}
-		mutex_unlock(&nqx_dev->ese_status_mutex);
-
 		gpio_set_value(nqx_dev->en_gpio, 1);
 		usleep_range(10000, 10100);
 		if (gpio_is_valid(nqx_dev->firm_gpio)) {
@@ -693,7 +696,6 @@ static const struct file_operations nfc_dev_fops = {
 #endif
 };
 
-#ifdef FIH_FTM_CUSTOMIZED
 /* Check for availability of NQ_ NFC controller hardware */
 static int nfcc_hw_check(struct i2c_client *client, struct nqx_dev *nqx_dev)
 {
@@ -887,7 +889,6 @@ err_nfcc_hw_check:
 done:
 	return ret;
 }
-#endif
 
 /*
  * Routine to enable clock.
@@ -961,31 +962,6 @@ static int nfc_parse_dt(struct device *dev, struct nqx_platform_data *pdata)
 		dev_warn(dev,
 			"ese GPIO <OPTIONAL> error getting from OF node\n");
 		pdata->ese_gpio = -EINVAL;
-	}
-
-	/* First byte is the expected response length. */
-	/* E.g., to send a swp_svdd_cfg command to a pn5xx:
-	 * qcom,nq-postinit-cmd = /bits/ 8
-	 *   <0x5 0x20 0x02 0x05 0x01 0xA0 0xF2 0x01 0x01>;
-	 */
-	pdata->i2c_postinit_cmd_len = of_property_count_elems_of_size(np,
-						"qcom,nq-postinit-cmd",
-						sizeof(u8));
-	if (pdata->i2c_postinit_cmd_len > 1) {
-		pdata->i2c_postinit_cmd = devm_kzalloc(dev,
-				pdata->i2c_postinit_cmd_len, GFP_KERNEL);
-		if (!pdata->i2c_postinit_cmd)
-			pdata->i2c_postinit_cmd_len = 0;
-	}
-
-	if (pdata->i2c_postinit_cmd) {
-		r = of_property_read_u8_array(np, "qcom,nq-postinit-cmd",
-			pdata->i2c_postinit_cmd, pdata->i2c_postinit_cmd_len);
-		if (r) {
-			dev_warn(dev, "nq-postinit-cmd <OPTIONAL> error ");
-			dev_warn(dev, " getting from OF node\n");
-			devm_kfree(dev, pdata->i2c_postinit_cmd);
-		}
 	}
 
 	if (of_property_read_string(np, "qcom,clk-src", &pdata->clk_src_name))
@@ -1185,6 +1161,7 @@ static int nqx_probe(struct i2c_client *client,
 	} else {
 		dev_err(&client->dev,
 			"%s: clkreq gpio not provided\n", __func__);
+		goto err_ese_gpio;
 	}
 
 	nqx_dev->en_gpio = platform_data->en_gpio;
@@ -1210,7 +1187,6 @@ static int nqx_probe(struct i2c_client *client,
 	/* init mutex and queues */
 	init_waitqueue_head(&nqx_dev->read_wq);
 	mutex_init(&nqx_dev->read_mutex);
-	mutex_init(&nqx_dev->ese_status_mutex);
 	spin_lock_init(&nqx_dev->irq_enabled_lock);
 
 	nqx_dev->nqx_device.minor = MISC_DYNAMIC_MINOR;
@@ -1233,7 +1209,6 @@ static int nqx_probe(struct i2c_client *client,
 	}
 	nqx_disable_irq(nqx_dev);
 
-#ifdef FIH_FTM_CUSTOMIZED
 	/*
 	 * To be efficient we need to test whether nfcc hardware is physically
 	 * present before attempting further hardware initialisation.
@@ -1250,7 +1225,6 @@ static int nqx_probe(struct i2c_client *client,
 		//goto err_request_hw_check_failed;
 	}
 //Avoid probe fail while in fw download mode end	
-#endif
 	/* Register reboot notifier here */
 	r = register_reboot_notifier(&nfcc_notifier);
 	if (r) {
@@ -1293,7 +1267,6 @@ err_request_irq_failed:
 	misc_deregister(&nqx_dev->nqx_device);
 err_misc_register:
 	mutex_destroy(&nqx_dev->read_mutex);
-	mutex_destroy(&nqx_dev->ese_status_mutex);
 #ifdef FIH_FTM_CUSTOMIZED
 err_create_link:
 	sysfs_remove_group(&client->dev.kobj, &pn547_attribute_group);
@@ -1315,12 +1288,8 @@ err_mem:
 err_free_dev:
 	kfree(nqx_dev);
 err_free_data:
-	if (client->dev.of_node) {
-		if (platform_data->i2c_postinit_cmd)
-			devm_kfree(&client->dev,
-				platform_data->i2c_postinit_cmd);
+	if (client->dev.of_node)
 		devm_kfree(&client->dev, platform_data);
-	}
 err_platform_data:
 	dev_err(&client->dev,
 	"%s: probing nqxx failed, check hardware\n",
@@ -1345,7 +1314,6 @@ static int nqx_remove(struct i2c_client *client)
 	free_irq(client->irq, nqx_dev);
 	misc_deregister(&nqx_dev->nqx_device);
 	mutex_destroy(&nqx_dev->read_mutex);
-	mutex_destroy(&nqx_dev->ese_status_mutex);
 	gpio_free(nqx_dev->clkreq_gpio);
 	/* optional gpio, not sure was configured in probe */
 	if (nqx_dev->ese_gpio > 0)
@@ -1354,9 +1322,6 @@ static int nqx_remove(struct i2c_client *client)
 	gpio_free(nqx_dev->irq_gpio);
 	gpio_free(nqx_dev->en_gpio);
 	kfree(nqx_dev->kbuf);
-	if (nqx_dev->pdata->i2c_postinit_cmd)
-		devm_kfree(&client->dev,
-			nqx_dev->pdata->i2c_postinit_cmd);
 	if (client->dev.of_node)
 		devm_kfree(&client->dev, nqx_dev->pdata);
 
