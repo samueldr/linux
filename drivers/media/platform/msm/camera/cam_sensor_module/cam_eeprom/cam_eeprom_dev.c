@@ -15,7 +15,6 @@
 #include "cam_eeprom_soc.h"
 #include "cam_eeprom_core.h"
 #include "cam_debug_util.h"
-#include "cam_sensor_util_fatp.h"
 
 static long cam_eeprom_subdev_ioctl(struct v4l2_subdev *sd,
 	unsigned int cmd, void *arg)
@@ -262,9 +261,10 @@ static int cam_eeprom_i2c_driver_remove(struct i2c_client *client)
 	for (i = 0; i < soc_info->num_clk; i++)
 		devm_clk_put(soc_info->dev, soc_info->clk[i]);
 
-	if (soc_private)
-		kfree(soc_private);
-
+	mutex_destroy(&(e_ctrl->eeprom_mutex));
+	kfree(soc_private);
+	kfree(e_ctrl->io_master_info.cci_client);
+	v4l2_set_subdevdata(&e_ctrl->v4l2_dev_str.sd, NULL);
 	kfree(e_ctrl);
 
 	return 0;
@@ -395,12 +395,13 @@ static int cam_eeprom_spi_driver_remove(struct spi_device *sdev)
 		kfree(soc_private->power_info.gpio_num_info);
 		kfree(soc_private);
 	}
+	mutex_destroy(&(e_ctrl->eeprom_mutex));
+	v4l2_set_subdevdata(&e_ctrl->v4l2_dev_str.sd, NULL);
 	kfree(e_ctrl);
 
 	return 0;
 }
 
-static bool attr_created;
 static int32_t cam_eeprom_platform_driver_probe(
 	struct platform_device *pdev)
 {
@@ -464,11 +465,6 @@ static int32_t cam_eeprom_platform_driver_probe(
 
 	e_ctrl->cam_eeprom_state = CAM_EEPROM_INIT;
 
-	if (attr_created == false) {
-		attr_created = true;
-		create_file(ATTR_EEPROM_DATA, pdev->dev.kobj.parent);
-	}
-
 	return rc;
 free_soc:
 	kfree(soc_private);
@@ -496,10 +492,12 @@ static int cam_eeprom_platform_driver_remove(struct platform_device *pdev)
 	for (i = 0; i < soc_info->num_clk; i++)
 		devm_clk_put(soc_info->dev, soc_info->clk[i]);
 
+	mutex_destroy(&(e_ctrl->eeprom_mutex));
 	kfree(soc_info->soc_private);
 	kfree(e_ctrl->io_master_info.cci_client);
+	platform_set_drvdata(pdev, NULL);
+	v4l2_set_subdevdata(&e_ctrl->v4l2_dev_str.sd, NULL);
 	kfree(e_ctrl);
-	remove_file(ATTR_EEPROM_DATA, pdev->dev.kobj.parent);
 	return 0;
 }
 
@@ -516,6 +514,7 @@ static struct platform_driver cam_eeprom_platform_driver = {
 		.name = "qcom,eeprom",
 		.owner = THIS_MODULE,
 		.of_match_table = cam_eeprom_dt_match,
+		.suppress_bind_attrs = true,
 	},
 	.probe = cam_eeprom_platform_driver_probe,
 	.remove = cam_eeprom_platform_driver_remove,

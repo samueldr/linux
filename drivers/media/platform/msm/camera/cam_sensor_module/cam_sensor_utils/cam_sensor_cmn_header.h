@@ -165,8 +165,7 @@ enum cam_sensor_packet_opcodes {
 enum cam_actuator_packet_opcodes {
 	CAM_ACTUATOR_PACKET_OPCODE_INIT,
 	CAM_ACTUATOR_PACKET_AUTO_MOVE_LENS,
-	CAM_ACTUATOR_PACKET_MANUAL_MOVE_LENS,
-	CAM_ACTUATOR_PACKET_REG_READ
+	CAM_ACTUATOR_PACKET_MANUAL_MOVE_LENS
 };
 
 enum cam_eeprom_packet_opcodes {
@@ -175,12 +174,7 @@ enum cam_eeprom_packet_opcodes {
 
 enum cam_ois_packet_opcodes {
 	CAM_OIS_PACKET_OPCODE_INIT,
-	CAM_OIS_PACKET_OPCODE_OIS_CONTROL,
-	CAM_OIS_PACKET_OPCODE_SHIFT_READER_START,
-	CAM_OIS_PACKET_OPCODE_SHIFT_READER_STOP,
-	CAM_OIS_PACKET_OPCODE_SHIFT_GET,
-	CAM_OIS_PACKET_OPCODE_READ,
-	CAM_OIS_PACKET_OPCODE_CALIBRATION
+	CAM_OIS_PACKET_OPCODE_OIS_CONTROL
 };
 
 enum msm_bus_perf_setting {
@@ -275,7 +269,6 @@ struct cam_sensor_i2c_reg_setting {
 	enum camera_sensor_i2c_type addr_type;
 	enum camera_sensor_i2c_type data_type;
 	unsigned short delay;
-	unsigned short slave_addr;
 };
 
 struct i2c_settings_list {

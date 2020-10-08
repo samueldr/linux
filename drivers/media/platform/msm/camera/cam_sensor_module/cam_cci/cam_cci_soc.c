@@ -146,6 +146,10 @@ int cam_cci_init(struct v4l2_subdev *sd,
 		base + CCI_IRQ_MASK_0_ADDR);
 	cam_io_w_mb(CCI_IRQ_MASK_0_RMSK,
 		base + CCI_IRQ_CLEAR_0_ADDR);
+	cam_io_w_mb(CCI_IRQ_MASK_1_RMSK,
+		base + CCI_IRQ_MASK_1_ADDR);
+	cam_io_w_mb(CCI_IRQ_MASK_1_RMSK,
+		base + CCI_IRQ_CLEAR_1_ADDR);
 	cam_io_w_mb(0x1, base + CCI_IRQ_GLOBAL_CLEAR_CMD_ADDR);
 
 	for (i = 0; i < MASTER_MAX; i++) {
@@ -157,6 +161,13 @@ int cam_cci_init(struct v4l2_subdev *sd,
 			flush_workqueue(cci_dev->write_wq[i]);
 		}
 	}
+
+	/* Set RD FIFO threshold for M0 & M1 */
+	cam_io_w_mb(CCI_I2C_RD_THRESHOLD_VALUE,
+		base + CCI_I2C_M0_RD_THRESHOLD_ADDR);
+	cam_io_w_mb(CCI_I2C_RD_THRESHOLD_VALUE,
+		base + CCI_I2C_M1_RD_THRESHOLD_ADDR);
+
 	cci_dev->cci_state = CCI_STATE_ENABLED;
 
 	return 0;
@@ -188,6 +199,8 @@ static void cam_cci_init_cci_params(struct cci_device *new_cci_dev)
 		mutex_init(&new_cci_dev->cci_master_info[i].mutex);
 		init_completion(
 			&new_cci_dev->cci_master_info[i].reset_complete);
+		init_completion(
+			&new_cci_dev->cci_master_info[i].th_complete);
 
 		for (j = 0; j < NUM_QUEUES; j++) {
 			mutex_init(&new_cci_dev->cci_master_info[i].mutex_q[j]);
@@ -197,6 +210,7 @@ static void cam_cci_init_cci_params(struct cci_device *new_cci_dev)
 				&new_cci_dev->cci_master_info[i].lock_q[j]);
 		}
 	}
+	spin_lock_init(&new_cci_dev->lock_status);
 }
 
 static void cam_cci_init_default_clk_params(struct cci_device *cci_dev,

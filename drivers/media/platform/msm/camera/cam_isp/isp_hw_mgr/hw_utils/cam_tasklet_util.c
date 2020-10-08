@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2017-2018, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -93,14 +93,14 @@ int cam_tasklet_get_cmd(
 	}
 
 	if (!atomic_read(&tasklet->tasklet_active)) {
-		CAM_ERR_RATE_LIMIT(CAM_ISP, "Tasklet is not active!\n");
+		CAM_ERR_RATE_LIMIT(CAM_ISP, "Tasklet is not active");
 		rc = -EPIPE;
 		return rc;
 	}
 
 	spin_lock_irqsave(&tasklet->tasklet_lock, flags);
 	if (list_empty(&tasklet->free_cmd_list)) {
-		CAM_ERR_RATE_LIMIT(CAM_ISP, "No more free tasklet cmd!\n");
+		CAM_ERR_RATE_LIMIT(CAM_ISP, "No more free tasklet cmd");
 		rc = -ENODEV;
 		goto spin_unlock;
 	} else {
@@ -198,7 +198,7 @@ void cam_tasklet_enqueue_cmd(
 	}
 
 	if (!bh_cmd) {
-		CAM_ERR(CAM_ISP, "NULL bh cmd");
+		CAM_ERR_RATE_LIMIT(CAM_ISP, "NULL bh cmd");
 		return;
 	}
 
@@ -206,18 +206,15 @@ void cam_tasklet_enqueue_cmd(
 		CAM_ERR_RATE_LIMIT(CAM_ISP, "Tasklet is not active\n");
 		return;
 	}
-	if (tasklet_cmd) {
-		CAM_DBG(CAM_ISP, "Enqueue tasklet cmd");
-		tasklet_cmd->bottom_half_handler = bottom_half_handler;
-		tasklet_cmd->payload = evt_payload_priv;
-		spin_lock_irqsave(&tasklet->tasklet_lock, flags);
-		list_add_tail(&tasklet_cmd->list,
-			&tasklet->used_cmd_list);
-		spin_unlock_irqrestore(&tasklet->tasklet_lock, flags);
-		tasklet_schedule(&tasklet->tasklet);
-	} else {
-		CAM_ERR(CAM_ISP, "tasklet cmd is NULL!");
-	}
+
+	CAM_DBG(CAM_ISP, "Enqueue tasklet cmd");
+	tasklet_cmd->bottom_half_handler = bottom_half_handler;
+	tasklet_cmd->payload = evt_payload_priv;
+	spin_lock_irqsave(&tasklet->tasklet_lock, flags);
+	list_add_tail(&tasklet_cmd->list,
+		&tasklet->used_cmd_list);
+	spin_unlock_irqrestore(&tasklet->tasklet_lock, flags);
+	tasklet_schedule(&tasklet->tasklet);
 }
 
 int cam_tasklet_init(
@@ -271,13 +268,13 @@ void cam_tasklet_deinit(void    **tasklet_info)
 
 static inline void cam_tasklet_flush(struct cam_tasklet_info *tasklet_info)
 {
-	cam_tasklet_action((unsigned long)tasklet_info);
+	cam_tasklet_action((unsigned long) tasklet_info);
 }
 
 int cam_tasklet_start(void  *tasklet_info)
 {
 	struct cam_tasklet_info       *tasklet = tasklet_info;
-	int i;
+	int i = 0;
 
 	if (atomic_read(&tasklet->tasklet_active)) {
 		CAM_ERR(CAM_ISP, "Tasklet already active. idx = %d",

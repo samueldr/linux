@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -27,27 +27,16 @@
 #include <cam_mem_mgr.h>
 #include <cam_subdev.h>
 #include "cam_soc_util.h"
+#include "cam_context.h"
 
 #define DEFINE_MSM_MUTEX(mutexname) \
 	static struct mutex mutexname = __MUTEX_INITIALIZER(mutexname)
-#define	READ_OUT_TIME                   5000000 /*5ms*/
-#define CAM_OIS_SHIFT_DATA_BUFFER_SIZE  15
-#define MAX_FAIL_CNT                    3
-
-struct cam_ois_ctrl_t;
 
 enum cam_ois_state {
 	CAM_OIS_INIT,
 	CAM_OIS_ACQUIRE,
 	CAM_OIS_CONFIG,
 	CAM_OIS_START,
-};
-
-enum cam_ois_timer_state_t {
-	CAM_OIS_TIME_INIT,
-	CAM_OIS_TIME_ACTIVE,
-	CAM_OIS_TIME_INACTIVE,
-	CAM_OIS_TIME_ERROR,
 };
 
 /**
@@ -101,40 +90,8 @@ struct cam_ois_intf_params {
 };
 
 /**
- * struct cam_ois_shift_buffer - OIS shift data ring buffer
- * @buffer			:	array of shift data readout
- * @write_pos       :   next position to write
- * @is_full         :   flag of full buffer
- */
-struct cam_ois_shift_buffer {
-	struct cam_ois_shift buffer[CAM_OIS_SHIFT_DATA_BUFFER_SIZE];
-	int32_t write_pos;
-	bool is_full;
-};
-
-/**
- * struct cam_ois_timer_t - OIS shift reader timer
- * @hr_timer        :   timer
- * @ois_wq          :   worker queue of actual worker procedure
- * @g_work          :   actual worker
- * @ois_timer_state :   state of timer
- * @o_ctrl          :   ois control structure
- * @i2c_fail_count  :   number of i2c fails
- */
-struct cam_ois_timer_t {
-	struct hrtimer hr_timer;
-	struct workqueue_struct *ois_wq;
-	struct work_struct g_work;
-	enum cam_ois_timer_state_t ois_timer_state;
-	struct cam_ois_ctrl_t *o_ctrl;
-	int i2c_fail_count;
-#ifdef CONFIG_BOARD_BONITO
-	uint8_t ois_factory_read;
-#endif
-};
-
-/**
  * struct cam_ois_ctrl_t - OIS ctrl private data
+ * @device_name     :   ois device_name
  * @pdev            :   platform device
  * @ois_mutex       :   ois mutex
  * @soc_info        :   ois soc related info
@@ -152,9 +109,10 @@ struct cam_ois_timer_t {
  * @is_ois_calib    :   flag for Calibration data
  * @opcode          :   ois opcode
  * @device_name     :   Device name
- * @buf             :   ois shift data buffer
+ *
  */
 struct cam_ois_ctrl_t {
+	char device_name[CAM_CTX_DEV_NAME_MAX_LENGTH];
 	struct platform_device *pdev;
 	struct mutex ois_mutex;
 	struct cam_hw_soc_info soc_info;
@@ -167,12 +125,10 @@ struct cam_ois_ctrl_t {
 	struct i2c_settings_array i2c_mode_data;
 	enum msm_camera_device_type_t ois_device_type;
 	enum cam_ois_state cam_ois_state;
-	char device_name[20];
 	char ois_name[32];
 	uint8_t ois_fw_flag;
 	uint8_t is_ois_calib;
 	struct cam_ois_opcode opcode;
-	struct cam_ois_shift_buffer buf;
 };
 
 #endif /*_CAM_OIS_DEV_H_ */
