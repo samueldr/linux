@@ -43,7 +43,9 @@
 #include <linux/regulator/consumer.h>
 #include <linux/input/synaptics_3708.h>
 #include "synaptics_dsx_core.h"
+#if defined(CONFIG_FB) && defined(CONFIG_DRM)
 #include <linux/msm_drm_notify.h>
+#endif
 
 #ifdef KERNEL_ABOVE_2_6_38
 #include <linux/input/mt.h>
@@ -158,13 +160,13 @@ static int synaptics_rmi4_resume_reset_device(struct synaptics_rmi4_data *rmi4_d
 #endif
 
 
-#ifdef CONFIG_FB
+#if defined(CONFIG_FB) && defined(CONFIG_DRM)
 static int synaptics_rmi4_dsi_panel_notifier_cb(struct notifier_block *self,
         unsigned long event, void *data);
 #endif
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
-#ifndef CONFIG_FB
+#if defined(CONFIG_FB) && defined(CONFIG_DRM)
 #define USE_EARLYSUSPEND
 #endif
 #endif
@@ -4712,7 +4714,7 @@ static int synaptics_rmi4_probe(struct platform_device *pdev)
 
     IsTouchPowerOn = true;
 
-#ifdef CONFIG_FB
+#if defined(CONFIG_FB) && defined(CONFIG_DRM)
     rmi4_data->dsi_panel_notif.notifier_call = synaptics_rmi4_dsi_panel_notifier_cb;
     retval = msm_drm_register_client(&rmi4_data->dsi_panel_notif);
     if (retval < 0)
@@ -4839,7 +4841,7 @@ err_virtual_buttons:
     synaptics_rmi4_irq_enable(rmi4_data, false, false);
 
 err_enable_irq:
-#ifdef CONFIG_FB
+#if defined(CONFIG_FB) && defined(CONFIG_DRM)
     msm_drm_unregister_client(&rmi4_data->dsi_panel_notif);
 #endif
 
@@ -4933,7 +4935,7 @@ static int synaptics_rmi4_remove(struct platform_device *pdev)
 
     synaptics_rmi4_irq_enable(rmi4_data, false, false);
 
-#ifdef CONFIG_FB
+#if defined(CONFIG_FB) && defined(CONFIG_DRM)
     msm_drm_unregister_client(&rmi4_data->dsi_panel_notif);
 #endif
 
@@ -5112,7 +5114,7 @@ static void synaptics_rmi4_wakeup_gesture(struct synaptics_rmi4_data *rmi4_data,
     return;
 }
 
-#ifdef CONFIG_FB
+#if defined(CONFIG_FB) && defined(CONFIG_DRM)
 // alex.naidis@paranoidandroid.co Advanced scheduling and wakeup tuning - start
 static inline void synaptics_pm_prepare_queuing(struct synaptics_rmi4_data *rmi4_data) {
     /* While this could add significant delay in theory

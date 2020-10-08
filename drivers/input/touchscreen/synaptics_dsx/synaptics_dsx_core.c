@@ -45,7 +45,9 @@
 #include <linux/input/mt.h>
 #endif
 
+#ifdef CONFIG_DRM
 #include <linux/msm_drm_notify.h>
+#endif
 
 #define INPUT_PHYS_NAME "synaptics_dsx/touch_input"
 #define STYLUS_PHYS_NAME "synaptics_dsx/stylus"
@@ -125,13 +127,13 @@ static int synaptics_rmi4_free_fingers(struct synaptics_rmi4_data *rmi4_data);
 static int synaptics_rmi4_reinit_device(struct synaptics_rmi4_data *rmi4_data);
 static int synaptics_rmi4_reset_device(struct synaptics_rmi4_data *rmi4_data,
 		bool rebuild);
-#ifdef CONFIG_FB
+#if defined(CONFIG_FB) && defined(CONFIG_DRM)
 static int synaptics_rmi4_dsi_panel_notifier_cb(struct notifier_block *self,
 		unsigned long event, void *data);
 #endif
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
-#ifndef CONFIG_FB
+#if defined(CONFIG_FB) && defined(CONFIG_DRM)
 #define USE_EARLYSUSPEND
 #endif
 #endif
@@ -4334,7 +4336,7 @@ static int synaptics_rmi4_probe(struct platform_device *pdev)
 		goto err_set_input_dev;
 	}
 
-#ifdef CONFIG_FB
+#if defined(CONFIG_FB) && defined(CONFIG_DRM)
 	rmi4_data->fb_notifier.notifier_call = synaptics_rmi4_dsi_panel_notifier_cb;
 	retval = msm_drm_register_client(&rmi4_data->fb_notifier);
 	if (retval < 0) {
@@ -4443,7 +4445,7 @@ err_virtual_buttons:
 	synaptics_rmi4_irq_enable(rmi4_data, false, false);
 
 err_enable_irq:
-#ifdef CONFIG_FB
+#if defined(CONFIG_FB) && defined(CONFIG_DRM)
 	msm_drm_unregister_client(&rmi4_data->fb_notifier);
 #endif
 
@@ -4530,7 +4532,7 @@ static int synaptics_rmi4_remove(struct platform_device *pdev)
 
 	synaptics_rmi4_irq_enable(rmi4_data, false, false);
 
-#ifdef CONFIG_FB
+#if defined(CONFIG_FB) && defined(CONFIG_DRM)
 	msm_drm_unregister_client(&rmi4_data->fb_notifier);
 #endif
 
@@ -4573,7 +4575,7 @@ static int synaptics_rmi4_remove(struct platform_device *pdev)
 	return 0;
 }
 
-#ifdef CONFIG_FB
+#if defined(CONFIG_FB) && defined(CONFIG_DRM)
 static int synaptics_rmi4_dsi_panel_notifier_cb(struct notifier_block *self,
 		unsigned long event, void *data)
 {
@@ -4843,7 +4845,7 @@ exit:
 
 #ifdef CONFIG_PM
 static const struct dev_pm_ops synaptics_rmi4_dev_pm_ops = {
-#ifndef CONFIG_FB
+#if defined(CONFIG_FB) && defined(CONFIG_DRM)
 	.suspend = synaptics_rmi4_suspend,
 	.resume = synaptics_rmi4_resume,
 #endif
