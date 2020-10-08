@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -259,10 +259,10 @@ static ssize_t dp_debug_read_dpcd(struct file *file,
 
 	len += snprintf(buf, SZ_8, "0x%x\n", debug->aux->reg);
 
+	len = min_t(size_t, count, len);
 	if (copy_to_user(user_buff, buf, len))
 		return -EFAULT;
 
-	len = min_t(size_t, count, len);
 	*ppos += len;
 	return len;
 }
@@ -425,6 +425,7 @@ static ssize_t dp_debug_write_exe_mode(struct file *file,
 
 	if (*ppos)
 		return 0;
+
 	/* Leave room for termination char */
 	len = min_t(size_t, count, SZ_32 - 1);
 	if (copy_from_user(buf, user_buff, len))
@@ -688,7 +689,7 @@ static ssize_t dp_debug_write_hdr(struct file *file,
 	struct sde_connector *c_conn;
 	struct sde_connector_state *c_state;
 	struct dp_debug_private *debug = file->private_data;
-	char buf[SZ_1K];
+	char buf[SZ_512];
 	size_t len = 0;
 
 	if (!debug)
@@ -702,7 +703,7 @@ static ssize_t dp_debug_write_hdr(struct file *file,
 	c_state = to_sde_connector_state(connector->state);
 
 	/* Leave room for termination char */
-	len = min_t(size_t, count, SZ_1K - 1);
+	len = min_t(size_t, count, SZ_512 - 1);
 	if (copy_from_user(buf, user_buff, len))
 		goto end;
 

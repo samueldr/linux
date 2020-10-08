@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2016-2017 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014, 2016-2018 The Linux Foundation. All rights reserved.
  * Copyright (C) 2013 Red Hat
  * Author: Rob Clark <robdclark@gmail.com>
  *
@@ -773,8 +773,7 @@ static int mdp5_init(struct platform_device *pdev, struct drm_device *dev)
 
 	return 0;
 fail:
-	if (mdp5_kms)
-		mdp5_destroy(pdev);
+	mdp5_destroy(pdev);
 	return ret;
 }
 
@@ -828,6 +827,7 @@ static struct platform_driver mdp5_driver = {
 	.driver = {
 		.name = "msm_mdp",
 		.of_match_table = mdp5_dt_match,
+		.suppress_bind_attrs = true,
 	},
 };
 

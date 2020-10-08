@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2018, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2015-2019, The Linux Foundation. All rights reserved.
  * Copyright (C) 2013 Red Hat
  * Author: Rob Clark <robdclark@gmail.com>
  *
@@ -265,9 +265,10 @@ int sde_encoder_in_clone_mode(struct drm_encoder *enc);
 void sde_encoder_control_idle_pc(struct drm_encoder *enc, bool enable);
 
 /**
- * sde_encoder_trigger_early_wakeup - trigger early wake up
+ * sde_encoder_get_ctlstart_timeout_state - checks if ctl start timeout happened
  * @drm_enc:    Pointer to drm encoder structure
+ * @Return:     non zero value if ctl start timeout occurred
  */
-void sde_encoder_trigger_early_wakeup(struct drm_encoder *drm_enc,
-				struct msm_drm_private *priv);
+int sde_encoder_get_ctlstart_timeout_state(struct drm_encoder *enc);
+
 #endif /* __SDE_ENCODER_H__ */

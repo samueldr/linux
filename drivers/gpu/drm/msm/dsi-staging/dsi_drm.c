@@ -158,8 +158,12 @@ static void dsi_bridge_pre_enable(struct drm_bridge *bridge)
 		return;
 	}
 
-	if (!c_bridge || !c_bridge->display)
+	if (!c_bridge || !c_bridge->display || !c_bridge->display->panel) {
 		pr_err("Incorrect bridge details\n");
+		return;
+	}
+
+	atomic_set(&c_bridge->display->panel->esd_recovery_pending, 0);
 
 	/* By this point mode should have been validated through mode_fixup */
 	rc = dsi_display_set_mode(c_bridge->display,
@@ -199,9 +203,6 @@ static void dsi_bridge_pre_enable(struct drm_bridge *bridge)
 	if (rc)
 		pr_err("Continuous splash pipeline cleanup failed, rc=%d\n",
 									rc);
-
-	if (c_bridge->display && c_bridge->display->drm_conn)
-		sde_connector_helper_bridge_enable(c_bridge->display->drm_conn);
 }
 
 static void dsi_bridge_enable(struct drm_bridge *bridge)
@@ -226,6 +227,9 @@ static void dsi_bridge_enable(struct drm_bridge *bridge)
 	if (rc)
 		pr_err("[%d] DSI display post enabled failed, rc=%d\n",
 		       c_bridge->id, rc);
+
+	if (display && display->drm_conn)
+		sde_connector_helper_bridge_enable(display->drm_conn);
 }
 
 static void dsi_bridge_disable(struct drm_bridge *bridge)
@@ -628,14 +632,20 @@ void dsi_connector_put_modes(struct drm_connector *connector,
 {
 	struct drm_display_mode *drm_mode;
 	struct dsi_display_mode dsi_mode;
+	struct dsi_display *dsi_display;
 
 	if (!connector || !display)
 		return;
 
-	 list_for_each_entry(drm_mode, &connector->modes, head) {
+	list_for_each_entry(drm_mode, &connector->modes, head) {
 		convert_to_dsi_mode(drm_mode, &dsi_mode);
 		dsi_display_put_mode(display, &dsi_mode);
 	}
+
+	/* free the display structure modes also */
+	dsi_display = display;
+	kfree(dsi_display->modes);
+	dsi_display->modes = NULL;
 }
 
 int dsi_connector_get_modes(struct drm_connector *connector,

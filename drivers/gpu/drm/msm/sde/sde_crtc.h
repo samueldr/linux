@@ -148,6 +148,12 @@ struct sde_crtc_event {
 	void *usr;
 };
 
+struct sde_crtc_fps_info {
+	u32 frame_count;
+	ktime_t last_sampled_time_us;
+	u32 measured_fps;
+};
+
 /*
  * Maximum number of free event structures to cache
  */
@@ -211,7 +217,6 @@ struct sde_crtc_event {
  * @sbuf_flush_mask_all: inline rotator flush mask for all attached planes
  * @sbuf_flush_mask_delta: inline rotator flush mask for current delta state
  * @idle_notify_work: delayed worker to notify idle timeout to user space
- * @early_wakeup_work: work to trigger early wakeup
  * @power_event   : registered power event handle
  * @cur_perf      : current performance committed to clock/bandwidth driver
  * @rp_lock       : serialization lock for resource pool
@@ -244,6 +249,7 @@ struct sde_crtc {
 	u64 play_count;
 	ktime_t vblank_cb_time;
 	ktime_t vblank_last_cb_time;
+	struct sde_crtc_fps_info fps_info;
 	struct device *sysfs_dev;
 	struct kernfs_node *vsync_event_sf;
 	bool vblank_requested;
@@ -283,7 +289,6 @@ struct sde_crtc {
 	u32 sbuf_flush_mask_all;
 	u32 sbuf_flush_mask_delta;
 	struct kthread_delayed_work idle_notify_work;
-	struct kthread_work early_wakeup_work;
 
 	struct sde_power_event *power_event;
 
@@ -425,7 +430,7 @@ struct sde_crtc_state {
 };
 
 enum sde_crtc_irq_state {
-	IRQ_NOINIT,
+	IRQ_ENABLING,
 	IRQ_ENABLED,
 	IRQ_DISABLING,
 	IRQ_DISABLED,

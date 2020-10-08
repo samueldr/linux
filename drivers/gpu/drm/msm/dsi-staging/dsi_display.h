@@ -167,7 +167,6 @@ struct dsi_display_clk_info {
  * @misr_enable       Frame MISR enable/disable
  * @misr_frame_count  Number of frames to accumulate the MISR value
  * @esd_trigger       field indicating ESD trigger through debugfs
- * @esd_irq_work:     work object to perform panel recovery for ESD IRQ mode
  */
 struct dsi_display {
 	struct platform_device *pdev;
@@ -192,7 +191,6 @@ struct dsi_display {
 	/* panel info */
 	struct dsi_panel *panel;
 	struct device_node *panel_of;
-	struct device *panel_info_dev;
 
 	struct dsi_display_mode *modes;
 
@@ -243,9 +241,6 @@ struct dsi_display {
 	struct work_struct fifo_underflow_work;
 	struct work_struct fifo_overflow_work;
 	struct work_struct lp_rx_timeout_work;
-
-	/* panel recovery */
-	struct work_struct esd_irq_work;
 };
 
 /**
@@ -681,14 +676,6 @@ int dsi_display_cont_splash_config(void *display);
  */
 int dsi_display_get_panel_vfp(void *display,
 	int h_active, int v_active);
-
-/**
- * dsi_display_get_esd_mode() - get ESD mode from DSI display
- * @display: Handle to display
- *
- * Return: ESD mode or error code
- */
-int dsi_display_get_esd_mode(void *display);
 
 /**
  * dsi_display_set_input_boot() - sets the input boost for the panel

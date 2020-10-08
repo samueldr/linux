@@ -39,7 +39,6 @@
 
 #include <linux/of_address.h>
 #include <linux/kthread.h>
-#include <linux/workqueue.h>
 #include "msm_drv.h"
 #include "msm_debugfs.h"
 #include "msm_fence.h"
@@ -202,62 +201,46 @@ u32 msm_readl(const void __iomem *addr)
 	return val;
 }
 
-struct vblank_event {
-	struct list_head node;
+struct vblank_work {
+	struct kthread_work work;
 	int crtc_id;
 	bool enable;
+	struct msm_drm_private *priv;
 };
 
 static void vblank_ctrl_worker(struct kthread_work *work)
 {
-	struct msm_vblank_ctrl *vbl_ctrl = container_of(work,
-						struct msm_vblank_ctrl, work);
-	struct msm_drm_private *priv = container_of(vbl_ctrl,
-					struct msm_drm_private, vblank_ctrl);
+	struct vblank_work *cur_work = container_of(work,
+					struct vblank_work, work);
+	struct msm_drm_private *priv = cur_work->priv;
 	struct msm_kms *kms = priv->kms;
-	struct vblank_event *vbl_ev, *tmp;
-	unsigned long flags;
-	LIST_HEAD(tmp_head);
 
-	spin_lock_irqsave(&vbl_ctrl->lock, flags);
-	list_for_each_entry_safe(vbl_ev, tmp, &vbl_ctrl->event_list, node) {
-		list_del(&vbl_ev->node);
-		list_add_tail(&vbl_ev->node, &tmp_head);
-	}
-	spin_unlock_irqrestore(&vbl_ctrl->lock, flags);
+	if (cur_work->enable)
+		kms->funcs->enable_vblank(kms, priv->crtcs[cur_work->crtc_id]);
+	else
+		kms->funcs->disable_vblank(kms, priv->crtcs[cur_work->crtc_id]);
 
-	list_for_each_entry_safe(vbl_ev, tmp, &tmp_head, node) {
-		if (vbl_ev->enable)
-			kms->funcs->enable_vblank(kms,
-						priv->crtcs[vbl_ev->crtc_id]);
-		else
-			kms->funcs->disable_vblank(kms,
-						priv->crtcs[vbl_ev->crtc_id]);
-
-		kfree(vbl_ev);
-	}
+	kfree(cur_work);
 }
 
 static int vblank_ctrl_queue_work(struct msm_drm_private *priv,
 					int crtc_id, bool enable)
 {
-	struct msm_vblank_ctrl *vbl_ctrl = &priv->vblank_ctrl;
-	struct vblank_event *vbl_ev;
-	unsigned long flags;
+	struct vblank_work *cur_work;
 
-	vbl_ev = kzalloc(sizeof(*vbl_ev), GFP_ATOMIC);
-	if (!vbl_ev)
+	if (!priv || crtc_id >= priv->num_crtcs)
+		return -EINVAL;
+
+	cur_work = kzalloc(sizeof(*cur_work), GFP_ATOMIC);
+	if (!cur_work)
 		return -ENOMEM;
 
-	vbl_ev->crtc_id = crtc_id;
-	vbl_ev->enable = enable;
+	kthread_init_work(&cur_work->work, vblank_ctrl_worker);
+	cur_work->crtc_id = crtc_id;
+	cur_work->enable = enable;
+	cur_work->priv = priv;
 
-	spin_lock_irqsave(&vbl_ctrl->lock, flags);
-	list_add_tail(&vbl_ev->node, &vbl_ctrl->event_list);
-	spin_unlock_irqrestore(&vbl_ctrl->lock, flags);
-
-	kthread_queue_work(&priv->disp_thread[crtc_id].worker,
-			&vbl_ctrl->work);
+	kthread_queue_work(&priv->disp_thread[crtc_id].worker, &cur_work->work);
 
 	return 0;
 }
@@ -269,19 +252,7 @@ static int msm_drm_uninit(struct device *dev)
 	struct msm_drm_private *priv = ddev->dev_private;
 	struct msm_kms *kms = priv->kms;
 	struct msm_gpu *gpu = priv->gpu;
-	struct msm_vblank_ctrl *vbl_ctrl = &priv->vblank_ctrl;
-	struct vblank_event *vbl_ev, *tmp;
 	int i;
-
-	/* We must cancel and cleanup any pending vblank enable/disable
-	 * work before drm_irq_uninstall() to avoid work re-enabling an
-	 * irq after uninstall has disabled it.
-	 */
-	kthread_flush_work(&vbl_ctrl->work);
-	list_for_each_entry_safe(vbl_ev, tmp, &vbl_ctrl->event_list, node) {
-		list_del(&vbl_ev->node);
-		kfree(vbl_ev);
-	}
 
 	/* clean up display commit/event worker threads */
 	for (i = 0; i < priv->num_crtcs; i++) {
@@ -485,156 +456,6 @@ static int msm_power_enable_wrapper(void *handle, void *client, bool enable)
 	return sde_power_resource_enable(handle, client, enable);
 }
 
-static ssize_t idle_encoder_mask_store(struct device *device,
-			       struct device_attribute *attr,
-			       const char *buf, size_t count)
-{
-	struct drm_device *ddev = dev_get_drvdata(device);
-	struct msm_drm_private *priv = ddev->dev_private;
-	struct msm_idle *idle = &priv->idle;
-	u32 encoder_mask = 0;
-	int rc;
-	unsigned long flags;
-
-	rc = kstrtouint(buf, 10, &encoder_mask);
-	if (rc)
-		return rc;
-
-	spin_lock_irqsave(&idle->lock, flags);
-	idle->encoder_mask = encoder_mask;
-	idle->active_mask &= encoder_mask;
-	spin_unlock_irqrestore(&idle->lock, flags);
-
-	return count;
-}
-
-static ssize_t idle_encoder_mask_show(struct device *device,
-			      struct device_attribute *attr,
-			      char *buf)
-{
-	struct drm_device *ddev = dev_get_drvdata(device);
-	struct msm_drm_private *priv = ddev->dev_private;
-	struct msm_idle *idle = &priv->idle;
-
-	return snprintf(buf, PAGE_SIZE, "0x%x\n", idle->encoder_mask);
-}
-
-static ssize_t idle_timeout_ms_store(struct device *device,
-			       struct device_attribute *attr,
-			       const char *buf, size_t count)
-{
-	struct drm_device *ddev = dev_get_drvdata(device);
-	struct msm_drm_private *priv = ddev->dev_private;
-	struct msm_idle *idle = &priv->idle;
-	u32 timeout_ms = 0;
-	int rc;
-	unsigned long flags;
-
-	rc = kstrtouint(buf, 10, &timeout_ms);
-	if (rc)
-		return rc;
-
-	spin_lock_irqsave(&idle->lock, flags);
-	idle->timeout_ms = timeout_ms;
-	spin_unlock_irqrestore(&idle->lock, flags);
-
-	return count;
-}
-
-static ssize_t idle_timeout_ms_show(struct device *device,
-			      struct device_attribute *attr,
-			      char *buf)
-{
-	struct drm_device *ddev = dev_get_drvdata(device);
-	struct msm_drm_private *priv = ddev->dev_private;
-	struct msm_idle *idle = &priv->idle;
-
-	return scnprintf(buf, PAGE_SIZE, "%d\n", idle->timeout_ms);
-}
-
-static ssize_t idle_state_show(struct device *device,
-			      struct device_attribute *attr,
-			      char *buf)
-{
-	struct drm_device *ddev = dev_get_drvdata(device);
-	struct msm_drm_private *priv = ddev->dev_private;
-	struct msm_idle *idle = &priv->idle;
-	const char *state;
-	unsigned long flags;
-
-	spin_lock_irqsave(&idle->lock, flags);
-	if (idle->active_mask) {
-		state = "active";
-		spin_unlock_irqrestore(&idle->lock, flags);
-		return scnprintf(buf, PAGE_SIZE, "%s (0x%x)\n",
-				 state, idle->active_mask);
-	} else if (delayed_work_pending(&idle->work))
-		state = "pending";
-	else
-		state = "idle";
-	spin_unlock_irqrestore(&idle->lock, flags);
-
-	return scnprintf(buf, PAGE_SIZE, "%s\n", state);
-}
-
-static DEVICE_ATTR_RW(idle_encoder_mask);
-static DEVICE_ATTR_RW(idle_timeout_ms);
-static DEVICE_ATTR_RO(idle_state);
-
-static const struct attribute *msm_idle_attrs[] = {
-	&dev_attr_idle_encoder_mask.attr,
-	&dev_attr_idle_timeout_ms.attr,
-	&dev_attr_idle_state.attr,
-	NULL
-};
-
-static void msm_idle_work(struct work_struct *work)
-{
-	struct delayed_work *dw = to_delayed_work(work);
-	struct msm_idle *idle = container_of(dw, struct msm_idle, work);
-	struct msm_drm_private *priv = container_of(idle,
-					struct msm_drm_private, idle);
-
-	if (!idle->active_mask)
-		sysfs_notify(&priv->dev->dev->kobj, NULL, "idle_state");
-}
-
-void msm_idle_set_state(struct drm_encoder *encoder, bool active)
-{
-	struct drm_device *ddev = encoder->dev;
-	struct msm_drm_private *priv = ddev->dev_private;
-	struct msm_idle *idle = &priv->idle;
-	unsigned int mask = 1 << drm_encoder_index(encoder);
-	unsigned long flags;
-
-	spin_lock_irqsave(&idle->lock, flags);
-	if (mask & idle->encoder_mask) {
-		if (active)
-			idle->active_mask |= mask;
-		else
-			idle->active_mask &= ~mask;
-
-		if (idle->timeout_ms && !idle->active_mask)
-			mod_delayed_work(system_wq, &idle->work,
-					 msecs_to_jiffies(idle->timeout_ms));
-		else
-			cancel_delayed_work(&idle->work);
-	}
-	spin_unlock_irqrestore(&idle->lock, flags);
-}
-
-static void msm_idle_init(struct drm_device *ddev)
-{
-	struct msm_drm_private *priv = ddev->dev_private;
-	struct msm_idle *idle = &priv->idle;
-
-	if (sysfs_create_files(&ddev->dev->kobj, msm_idle_attrs) < 0)
-		pr_warn("failed to create idle state file");
-
-	INIT_DELAYED_WORK(&idle->work, msm_idle_work);
-	spin_lock_init(&idle->lock);
-}
-
 static int msm_drm_init(struct device *dev, struct drm_driver *drv)
 {
 	struct platform_device *pdev = to_platform_device(dev);
@@ -673,9 +494,6 @@ static int msm_drm_init(struct device *dev, struct drm_driver *drv)
 
 	INIT_LIST_HEAD(&priv->client_event_list);
 	INIT_LIST_HEAD(&priv->inactive_list);
-	INIT_LIST_HEAD(&priv->vblank_ctrl.event_list);
-	kthread_init_work(&priv->vblank_ctrl.work, vblank_ctrl_worker);
-	spin_lock_init(&priv->vblank_ctrl.lock);
 
 	ret = sde_power_resource_init(pdev, &priv->phandle);
 	if (ret) {
@@ -699,8 +517,6 @@ static int msm_drm_init(struct device *dev, struct drm_driver *drv)
 		goto dbg_init_fail;
 	}
 
-	msm_idle_init(ddev);
-
 	/* Bind all our sub-components: */
 	ret = msm_component_bind_all(dev, ddev);
 	if (ret)
@@ -709,14 +525,6 @@ static int msm_drm_init(struct device *dev, struct drm_driver *drv)
 	ret = msm_init_vram(ddev);
 	if (ret)
 		goto fail;
-
-	if (!dev->dma_parms) {
-		dev->dma_parms = devm_kzalloc(dev, sizeof(*dev->dma_parms),
-					      GFP_KERNEL);
-		if (!dev->dma_parms)
-			return -ENOMEM;
-	}
-	dma_set_max_seg_size(dev, DMA_BIT_MASK(32));
 
 	switch (get_mdp_ver(pdev)) {
 	case KMS_MDP4:
@@ -2155,7 +1963,7 @@ static struct platform_driver msm_platform_driver = {
 		.name   = "msm_drm",
 		.of_match_table = dt_match,
 		.pm     = &msm_pm_ops,
-		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
+		.suppress_bind_attrs = true,
 	},
 };
 

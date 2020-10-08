@@ -241,8 +241,6 @@ enum dsi_dfps_type {
  * @DSI_CMD_SET_LP1:                       Low power mode 1
  * @DSI_CMD_SET_LP2:                       Low power mode 2
  * @DSI_CMD_SET_NOLP:                      Low power mode disable
- * @DSI_CMD_SET_VR:                        VR mode (low persistence)
- * @DSI_CMD_SET_NOVR:                      VR mode disable
  * @DSI_CMD_SET_PPS:                       DSC PPS command
  * @DSI_CMD_SET_ROI:			   Panel ROI update
  * @DSI_CMD_SET_TIMING_SWITCH:             Timing switch
@@ -268,8 +266,6 @@ enum dsi_cmd_set_type {
 	DSI_CMD_SET_LP1,
 	DSI_CMD_SET_LP2,
 	DSI_CMD_SET_NOLP,
-	DSI_CMD_SET_VR,
-	DSI_CMD_SET_NOVR,
 	DSI_CMD_SET_PPS,
 	DSI_CMD_SET_ROI,
 	DSI_CMD_SET_TIMING_SWITCH,
@@ -416,6 +412,7 @@ struct dsi_mode_info {
  * @ignore_rx_eot:       Ignore Rx EOT packets if set to true.
  * @append_tx_eot:       Append EOT packets for forward transmissions if set to
  *                       true.
+ * @force_hs_clk_lane:   Send continuous clock to the panel.
  */
 struct dsi_host_common_cfg {
 	enum dsi_pixel_format dst_format;
@@ -434,6 +431,7 @@ struct dsi_host_common_cfg {
 	u32 t_clk_pre;
 	bool ignore_rx_eot;
 	bool append_tx_eot;
+	bool force_hs_clk_lane;
 };
 
 /**

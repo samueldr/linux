@@ -288,6 +288,7 @@ struct sde_kms {
 	atomic_t detach_sec_cb;
 	atomic_t detach_all_cb;
 	struct mutex secure_transition_lock;
+	struct mutex vblank_ctl_global_lock;
 
 	bool first_kickoff;
 };
@@ -377,8 +378,7 @@ static inline bool sde_kms_is_secure_session_inprogress(struct sde_kms *sde_kms)
 
 	mutex_lock(&sde_kms->secure_transition_lock);
 	if ((sde_kms->smmu_state.state == DETACHED)
-		|| (sde_kms->smmu_state.state == DETACH_ALL_REQ)
-		|| (sde_kms->smmu_state.state == ATTACH_ALL_REQ))
+		|| (sde_kms->smmu_state.state == DETACH_ALL_REQ))
 		ret = true;
 	mutex_unlock(&sde_kms->secure_transition_lock);
 
@@ -694,13 +694,5 @@ void sde_kms_timeline_status(struct drm_device *dev);
  * return: 0 on success; error code otherwise
  */
 int sde_kms_handle_recovery(struct drm_encoder *encoder);
-
-/**
- * sde_kms_trigger_early_wakeup - trigger early wake up
- * @sde_kms: pointer to sde_kms structure
- * @crtc: pointer to drm_crtc structure
- */
-void sde_kms_trigger_early_wakeup(struct sde_kms *sde_kms,
-		struct drm_crtc *crtc);
 
 #endif /* __sde_kms_H__ */

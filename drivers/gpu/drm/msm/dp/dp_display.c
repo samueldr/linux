@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2018, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -140,8 +140,17 @@ static void dp_display_hdcp_cb_work(struct work_struct *work)
 	struct sde_hdcp_ops *ops;
 	int rc = 0;
 	u32 hdcp_auth_state;
+	u8 sink_status = 0;
 
 	dp = container_of(dw, struct dp_display_private, hdcp_cb_work);
+
+	drm_dp_dpcd_readb(dp->aux->drm_aux, DP_SINK_STATUS, &sink_status);
+	sink_status &= (DP_RECEIVE_PORT_0_STATUS | DP_RECEIVE_PORT_1_STATUS);
+	if (sink_status < 1) {
+		pr_debug("Sink not synchronized. Queuing again then exiting\n");
+		queue_delayed_work(dp->wq, &dp->hdcp_cb_work, HZ);
+		return;
+	}
 
 	rc = dp->catalog->ctrl.read_hdcp_status(&dp->catalog->ctrl);
 	if (rc >= 0) {
@@ -1182,7 +1191,8 @@ static int dp_display_pre_disable(struct dp_display *dp_display)
 			dp->hdcp.ops->off(dp->hdcp.data);
 	}
 
-	if (dp->usbpd->hpd_high && dp->usbpd->alt_mode_cfg_done) {
+	if (dp->usbpd->hpd_high && !dp_display_is_sink_count_zero(dp) &&
+		dp->usbpd->alt_mode_cfg_done) {
 		if (dp->audio_supported)
 			dp->audio->off(dp->audio);
 
@@ -1235,7 +1245,8 @@ static int dp_display_disable(struct dp_display *dp_display)
 	 * any notification from driver. Initialize post_open callback to notify
 	 * DP connection once framework restarts.
 	 */
-	if (dp->usbpd->hpd_high && dp->usbpd->alt_mode_cfg_done)
+	if (dp->usbpd->hpd_high && !dp_display_is_sink_count_zero(dp) &&
+		dp->usbpd->alt_mode_cfg_done)
 		dp_display->post_open = dp_display_post_open;
 
 	dp->power_on = false;
@@ -1460,6 +1471,9 @@ int dp_display_get_displays(void **displays, int count)
 
 int dp_display_get_num_of_displays(void)
 {
+	if (!g_dp_display)
+		return 0;
+
 	return 1;
 }
 
@@ -1486,6 +1500,7 @@ static struct platform_driver dp_display_driver = {
 	.driver = {
 		.name = "msm-dp-display",
 		.of_match_table = dp_dt_match,
+		.suppress_bind_attrs = true,
 	},
 };
 
