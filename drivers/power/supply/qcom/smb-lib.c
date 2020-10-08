@@ -46,8 +46,10 @@
 #define RAZER_CHARGE_LIMIT_MAX_DEFAULT 70
 #define RAZER_CHARGE_LIMIT_DROPDOWN_DEFAULT 65
 
+#if defined(CONFIG_FB) && defined(CONFIG_DRM)
 static int smblib_dsi_panel_notifier_cb(struct notifier_block *self,
         unsigned long event, void *data);
+#endif
 
 #if defined(CONFIG_FIH_BATTERY)
 static void info_update_work_delay(struct smb_charger *chg, int delay_ms)
@@ -5167,6 +5169,7 @@ static void razer_charge_limit_update_work(struct work_struct *work)
 		razer_charge_limit_update(chg);
 }
 
+#if defined(CONFIG_FB) && defined(CONFIG_DRM)
 static int smblib_dsi_panel_notifier_cb(struct notifier_block *self,
 		unsigned long event, void *data)
 {
@@ -5195,6 +5198,7 @@ static int smblib_dsi_panel_notifier_cb(struct notifier_block *self,
 
 	return 0;
 }
+#endif
 
 static void smblib_otg_oc_exit(struct smb_charger *chg, bool success)
 {
@@ -6225,6 +6229,7 @@ int smblib_init(struct smb_charger *chg)
 			return rc;
 		}
 
+#if defined(CONFIG_FB) && defined(CONFIG_DRM)
 		chg->dsi_panel_notif.notifier_call = smblib_dsi_panel_notifier_cb;
 		rc = msm_drm_register_client(&chg->dsi_panel_notif);
 		if (rc < 0) {
@@ -6232,6 +6237,7 @@ int smblib_init(struct smb_charger *chg)
 				"Couldn't register drm notifier rc=%d\n", rc);
 			return rc;
 		}
+#endif
 
 		chg->bms_psy = power_supply_get_by_name("bms");
 		chg->pl.psy = power_supply_get_by_name("parallel");
@@ -6285,7 +6291,9 @@ int smblib_deinit(struct smb_charger *chg)
 		}
 #endif /* CONFIG_FIH_BATTERY */
 		power_supply_unreg_notifier(&chg->nb);
+#if defined(CONFIG_FB) && defined(CONFIG_DRM)
 		msm_drm_unregister_client(&chg->dsi_panel_notif);
+#endif
 		smblib_destroy_votables(chg);
 		qcom_step_chg_deinit();
 		qcom_batt_deinit();
