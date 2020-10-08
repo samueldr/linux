@@ -20,4 +20,37 @@
 	compatible = "qcom,sdm845";
 	qcom,board-id = <0 0>;
 	fih,hw-id = <0 0 0>;
+
+	aliases {
+		display0 = &framebuffer0;
+	};
+
+	chosen {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+		stdout-path = "display0";
+
+		/*
+		 * HACK: Use framebuffer setup by the bootloader for simplefb.
+		 * https://wiki.postmarketos.org/wiki/SDM845_Mainlining#Creating_a_framebuffer
+		 */
+		framebuffer0: framebuffer@9d400000 {
+			compatible = "simple-framebuffer";
+			reg = <0 0x9d400000 0 (1440 * 2560 * 4)>;
+			width = <1440>;
+			height = <2560>;
+			stride = <(1440 * 4)>;
+			format = "a8r8g8b8";
+			status = "okay";
+		};
+	};
+
+	reserved-memory {
+		fb_mem: memory@a1a10000 {
+			compatible = "removed-dma-pool";
+			no-map;
+			reg = <0 0x9d400000 0 (1440 * 2560 * 4)>;
+		};
+	};
 };
