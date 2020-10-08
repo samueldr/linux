@@ -38,7 +38,9 @@
 #include <linux/of_gpio.h>
 #include <linux/platform_device.h>
 #include <linux/wakelock.h>
+#if defined(CONFIG_FB) && defined(CONFIG_DRM)
 #include <linux/msm_drm_notify.h>
+#endif
 
 #define FPC_TTW_HOLD_TIME 1000
 
@@ -262,6 +264,7 @@ static const struct attribute_group attribute_group = {
 	.attrs = attributes,
 };
 
+#if defined(CONFIG_FB) && defined(CONFIG_DRM)
 // alex.naidis@paranoidandroid.co Manage IRQ activity based on screen state - start
 /**
  * Method to handle changes in FPC IRQ activity
@@ -327,6 +330,7 @@ static int fb_notifier_callback(struct notifier_block *self, unsigned long event
 	return rc;
 }
 // alex.naidis@paranoidandroid.co Manage IRQ activity based on screen state - end
+#endif
 
 static irqreturn_t fpc1020_irq_handler(int irq, void *handle)
 {
@@ -453,6 +457,7 @@ static int fpc1020_probe(struct platform_device *pdev)
 		goto exit;
 	}
 
+#if defined(CONFIG_FB) && defined(CONFIG_DRM)
 	// alex.naidis@paranoidandroid.co Manage IRQ activity based on screen state - start
 	spin_lock_init(&fpc1020->irq_activity_lock);
 	fpc1020->fpc_irq_active = true;
@@ -467,6 +472,7 @@ static int fpc1020_probe(struct platform_device *pdev)
 		goto exit;
 	}
 	// alex.naidis@paranoidandroid.co Manage IRQ activity based on screen state - end
+#endif
 
 	dev_dbg(dev, "requested irq %d\n", gpio_to_irq(fpc1020->irq_gpio));
 
@@ -493,9 +499,11 @@ static int fpc1020_remove(struct platform_device *pdev)
 {
 	struct fpc1020_data *fpc1020 = platform_get_drvdata(pdev);
 
+#if defined(CONFIG_FB) && defined(CONFIG_DRM)
 	// alex.naidis@paranoidandroid.co Manage IRQ activity based on screen state - start
 	msm_drm_unregister_client(&fpc1020->fb_notif);
 	// alex.naidis@paranoidandroid.co Manage IRQ activity based on screen state - end
+#endif
 	sysfs_remove_group(&pdev->dev.kobj, &attribute_group);
 	mutex_destroy(&fpc1020->lock);
 	wake_lock_destroy(&fpc1020->ttw_wl);
