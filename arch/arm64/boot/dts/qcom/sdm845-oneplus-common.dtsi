@@ -477,6 +477,9 @@
 	dai@2 {
 		reg = <2>;
 	};
+
+&pmi8998_fg {
+	status = "okay";
 };
 
 &qupv3_id_1 {
