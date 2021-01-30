@@ -614,3 +614,9 @@ camera: &i2c7 {
 		rockchip,pins = <1 RK_PA3 RK_FUNC_GPIO &pcfg_pull_up>;
 	};
 };
+
+&usbdrd_dwc3_0 {
+	dr_mode = "otg";
+	usb-role-switch;
+	role-switch-default-mode = "host";
+};
