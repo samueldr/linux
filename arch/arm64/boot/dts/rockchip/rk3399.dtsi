@@ -404,6 +404,8 @@
 			      "aclk_usb3", "grf_clk";
 		resets = <&cru SRST_A_USB3_OTG0>;
 		reset-names = "usb3-otg";
+		rockchip,grf = <&grf>;
+		B_sessionvalid = <0x4498>;
 		status = "disabled";
 
 		usbdrd_dwc3_0: usb@fe800000 {
@@ -440,6 +442,8 @@
 			      "aclk_usb3", "grf_clk";
 		resets = <&cru SRST_A_USB3_OTG1>;
 		reset-names = "usb3-otg";
+		rockchip,grf = <&grf>;
+		B_sessionvalid = <0x4518>;
 		status = "disabled";
 
 		usbdrd_dwc3_1: usb@fe900000 {

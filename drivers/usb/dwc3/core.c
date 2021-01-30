@@ -8,6 +8,8 @@
  *	    Sebastian Andrzej Siewior <bigeasy@linutronix.de>
  */
 
+#define DEBUG
+
 #include <linux/clk.h>
 #include <linux/version.h>
 #include <linux/module.h>
@@ -26,6 +28,8 @@
 #include <linux/acpi.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/reset.h>
+#include <linux/regmap.h>
+#include <linux/mfd/syscon.h>
 
 #include <linux/usb/ch9.h>
 #include <linux/usb/gadget.h>
@@ -112,6 +116,59 @@ void dwc3_set_prtcap(struct dwc3 *dwc, u32 mode)
 	dwc3_writel(dwc->regs, DWC3_GCTL, reg);
 
 	dwc->current_dr_role = mode;
+
+	// ---
+	// From here, to the end of the function is basically a platform-specific
+	// hack. A better suited location needs to be figured out.
+	// 
+	// It needs to happen whenever the controller mode is set, either to host
+	// or device.
+	// ---
+
+	// This implementation assume heavily it _will_ be ran on an RK3398 GRU
+	// board, which is why it is noisy when the properties are not found, for
+	// easier debugging.
+	//
+	// In a normal scenario, the lack of B_sessionvalid would be a signal to
+	// not even try.
+	{
+		// For some RK3399 platforms, namely GRU boards, the vbus detect pin is not
+		// connected to the type-c interface. We need to force the output B_sessionvalid
+		// to be asserted for device mode to work.
+
+		int ret;
+		struct regmap *grf;
+		// Register to write to for the port (TO BE VALIDATED)
+		u32 B_sessionvalid;
+
+		// In the DT, the controller is configured with two nodes.
+		// usbdrd3_X -> usbdrd_dwc3_X
+		// We're on usbdrd_dwc3_X, the property if on usbdrd3_X.
+		grf = syscon_regmap_lookup_by_phandle(dwc->dev->of_node->parent, "rockchip,grf");
+
+		if (IS_ERR(grf)) {
+			dev_err(dwc->dev,
+					"'grf' could not be found on this device... (%ld)\n", PTR_ERR(grf));
+			return;
+		}
+
+		ret = device_property_read_u32(dwc->dev->parent, "B_sessionvalid", &B_sessionvalid);
+
+		if (ret) {
+			dev_err(dwc->dev->parent,
+					"'B_sessionvalid' could not be found on this device... (%ld)\n", PTR_ERR(ret));
+			return;
+		}
+
+		if (mode == DWC3_GCTL_PRTCAP_DEVICE) {
+			dev_info(dwc->dev, "(workaround) Asserting B_sessionvalid.\n");
+			regmap_write(grf, B_sessionvalid, 0x00100010);
+		}
+		else {
+			dev_info(dwc->dev, "(workaround) Un-asserting B_sessionvalid.\n");
+			regmap_write(grf, B_sessionvalid, 0x00100000);
+		}
+	}
 }
 
 static void __dwc3_set_mode(struct work_struct *work)
