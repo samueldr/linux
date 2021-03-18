@@ -342,6 +342,9 @@ static int fw_get_filesystem_firmware(struct device *device,
 
 		len = snprintf(path, PATH_MAX, "%s/%s",
 			       fw_path[i], buf->fw_id);
+
+		printk("[TRACE] fw_get_filesystem_firmware(); // %s\n", path);
+
 		if (len >= PATH_MAX) {
 			rc = -ENAMETOOLONG;
 			break;
@@ -1130,6 +1133,8 @@ _request_firmware(const struct firmware **firmware_p, const char *name,
 		ret = -EINVAL;
 		goto out;
 	}
+
+	printk("[TRACE] _request_firmware(); // %s\n", name);
 
 	ret = _request_firmware_prepare(&fw, name, device);
 	if (ret <= 0) /* error or already assigned */

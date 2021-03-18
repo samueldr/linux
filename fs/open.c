@@ -1011,6 +1011,8 @@ struct file *filp_open(const char *filename, int flags, umode_t mode)
 {
 	struct filename *name = getname_kernel(filename);
 	struct file *file = ERR_CAST(name);
+
+	printk("[TRACE] filp_open(); // %s\n", filename);
 	
 	if (!IS_ERR(name)) {
 		file = file_open_name(name, flags, mode);
