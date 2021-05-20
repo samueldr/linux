@@ -491,7 +491,7 @@ struct drm_dsc_picture_parameter_set {
 	 * PPS43[3:0] - Lower end of the variability range around the target
 	 * bits per group that is allowed by short term RC.
 	 * PPS43[7:4]- Upper end of the variability range around the target
-	 * bits per group that i allowed by short term rc.
+	 * bits per group that is allowed by short term rc.
 	 */
 	u8 rc_tgt_offset;
 	/**
