@@ -1700,6 +1700,7 @@ static int dsi_host_attach(struct mipi_dsi_host *host,
 					struct mipi_dsi_device *dsi)
 {
 	struct msm_dsi_host *msm_host = to_msm_dsi_host(host);
+	struct drm_panel *panel;
 	int ret;
 
 	if (dsi->lanes > msm_host->num_data_lanes)
@@ -1718,6 +1719,10 @@ static int dsi_host_attach(struct mipi_dsi_host *host,
 	DBG("id=%d", msm_host->id);
 	if (msm_host->dev)
 		queue_work(msm_host->workqueue, &msm_host->hpd_work);
+
+	panel = msm_dsi_host_get_panel(host);
+	if (panel)
+		panel->dsc = &msm_host->dsc->drm;
 
 	return 0;
 }
