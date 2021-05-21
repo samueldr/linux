@@ -48,6 +48,13 @@ Optional properties:
 - pinctrl-n: the "sleep" pinctrl state
 - ports: contains DSI controller input and output ports as children, each
   containing one endpoint subnode.
+- qcom,mdss-dsc-enabled: Display Stream Compression (DSC) is enabled
+- qcom,mdss-slice-height: DSC slice height in pixels
+- qcom,mdss-slice-width: DSC slice width in pixels
+- qcom,mdss-slice-per-pkt: DSC slices per packet
+- qcom,mdss-bit-per-component: DSC bits per component
+- qcom,mdss-bit-per-pixel: DSC bits per pixel
+- qcom,mdss-block-prediction-enable: Block prediction mode of DSC enabled
 
   DSI Endpoint properties:
   - remote-endpoint: For port@0, set to phandle of the connected panel/bridge's
@@ -187,6 +194,14 @@ Example:
 		qcom,dual-dsi-mode;
 		qcom,master-dsi;
 		qcom,sync-dual-dsi;
+
+		qcom,mdss-dsc-enabled;
+		qcom,mdss-slice-height = <16>;
+		qcom,mdss-slice-width = <540>;
+		qcom,mdss-slice-per-pkt = <1>;
+		qcom,mdss-bit-per-component = <8>;
+		qcom,mdss-bit-per-pixel = <8>;
+		qcom,mdss-block-prediction-enable;
 
 		qcom,mdss-mdp-transfer-time-us = <12000>;
 
