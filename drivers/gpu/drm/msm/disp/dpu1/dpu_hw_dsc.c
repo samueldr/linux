@@ -77,35 +77,43 @@ static void dpu_hw_dsc_config(struct dpu_hw_dsc *hw_dsc,
 
 	data = DIV_ROUND_UP(dsc->drm.slice_width * dsc->drm.bits_per_pixel, 8) << 16;
 
+	data = 0x021C0000; // XXX
 	DPU_REG_WRITE(c, DSC_CHUNK_SIZE, data);
 
 	data = dsc->drm.initial_dec_delay << 16;
 	data |= dsc->drm.initial_xmit_delay;
+	data = 0x020E0200; // XXX
 	DPU_REG_WRITE(c, DSC_DELAY, data);
 
 	data = dsc->drm.initial_scale_value;
+	data = 0x00000020; // XXX
 	DPU_REG_WRITE(c, DSC_SCALE_INITIAL, data);
 
 	data = dsc->drm.scale_decrement_interval;
+	data = 0x00000007; // XXX
 	DPU_REG_WRITE(c, DSC_SCALE_DEC_INTERVAL, data);
 
 	data = 0x00000184; /* only this value works */
 	DPU_REG_WRITE(c, DSC_SCALE_INC_INTERVAL, data);
 
 	data = dsc->drm.first_line_bpg_offset;
+	data = 0x0000000C; // XXX
 	DPU_REG_WRITE(c, DSC_FIRST_LINE_BPG_OFFSET, data);
 
 	data = dsc->drm.nfl_bpg_offset << 16;
 	data |= dsc->drm.slice_bpg_offset;
+	data = 0x0667065c; // XXX
 	DPU_REG_WRITE(c, DSC_BPG_OFFSET, data);
 
 	data = dsc->drm.initial_offset << 16;
 	data |= dsc->drm.final_offset;
+	data = 0x180010F0; // XXX
 	DPU_REG_WRITE(c, DSC_DSC_OFFSET, data);
 
 	data = dsc->det_thresh_flatness << 10;
 	data |= dsc->drm.flatness_max_qp << 5;
 	data |= dsc->drm.flatness_min_qp;
+	data = 0x00001d83;
 	DPU_REG_WRITE(c, DSC_FLATNESS, data);
 
 	data = dsc->drm.rc_model_size;
