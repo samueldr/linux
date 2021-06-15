@@ -38,6 +38,7 @@
 #include <linux/fs_struct.h>
 #include <linux/posix_acl.h>
 #include <linux/hash.h>
+#include <linux/gobohide.h>
 #include <linux/bitops.h>
 #include <linux/init_task.h>
 #include <linux/uaccess.h>
@@ -4177,6 +4178,8 @@ SYSCALL_DEFINE2(mkdir, const char __user *, pathname, umode_t, mode)
 int vfs_rmdir(struct mnt_idmap *idmap, struct inode *dir,
 		     struct dentry *dentry)
 {
+	ino_t ino;
+	struct hide *hidden = NULL;
 	int error = may_delete(idmap, dir, dentry, 1);
 
 	if (error)
@@ -4201,6 +4204,10 @@ int vfs_rmdir(struct mnt_idmap *idmap, struct inode *dir,
 	if (error)
 		goto out;
 
+	ino = d_inode(dentry)->i_ino;
+	hidden = gobohide_get(ino, dentry->d_name.name,
+			dentry->d_name.len, dentry->d_parent);
+
 	shrink_dcache_parent(dentry);
 	dentry->d_inode->i_flags |= S_DEAD;
 	dont_mount(dentry);
@@ -4209,8 +4216,13 @@ int vfs_rmdir(struct mnt_idmap *idmap, struct inode *dir,
 out:
 	inode_unlock(dentry->d_inode);
 	dput(dentry);
-	if (!error)
+	if (!error) {
+		if (hidden)
+			gobohide_remove(hidden);
 		d_delete_notify(dir, dentry);
+	}
+	if (hidden)
+		gobohide_put(hidden);
 	return error;
 }
 EXPORT_SYMBOL(vfs_rmdir);
@@ -4306,6 +4318,7 @@ SYSCALL_DEFINE1(rmdir, const char __user *, pathname)
 int vfs_unlink(struct mnt_idmap *idmap, struct inode *dir,
 	       struct dentry *dentry, struct inode **delegated_inode)
 {
+	struct hide *hidden = NULL;
 	struct inode *target = dentry->d_inode;
 	int error = may_delete(idmap, dir, dentry, 0);
 
@@ -4314,6 +4327,13 @@ int vfs_unlink(struct mnt_idmap *idmap, struct inode *dir,
 
 	if (!dir->i_op->unlink)
 		return -EPERM;
+
+	if (dentry->d_inode) {
+		ino_t ino = d_inode(dentry)->i_ino;
+		if (ino)
+			hidden = gobohide_get(ino, dentry->d_name.name,
+				dentry->d_name.len, dentry->d_parent);
+	}
 
 	inode_lock(target);
 	if (IS_SWAPFILE(target))
@@ -4338,12 +4358,16 @@ out:
 
 	/* We don't d_delete() NFS sillyrenamed files--they still exist. */
 	if (!error && dentry->d_flags & DCACHE_NFSFS_RENAMED) {
+		if (hidden)
+			gobohide_remove(hidden);
 		fsnotify_unlink(dir, dentry);
 	} else if (!error) {
 		fsnotify_link_count(target);
 		d_delete_notify(dir, dentry);
 	}
 
+	if (hidden)
+		gobohide_put(hidden);
 	return error;
 }
 EXPORT_SYMBOL(vfs_unlink);
@@ -4461,6 +4485,7 @@ SYSCALL_DEFINE1(unlink, const char __user *, pathname)
 int vfs_symlink(struct mnt_idmap *idmap, struct inode *dir,
 		struct dentry *dentry, const char *oldname)
 {
+	struct hide *hidden = NULL;
 	int error;
 
 	error = may_create(idmap, dir, dentry);
@@ -4469,6 +4494,13 @@ int vfs_symlink(struct mnt_idmap *idmap, struct inode *dir,
 
 	if (!dir->i_op->symlink)
 		return -EPERM;
+
+	if (dentry->d_inode) {
+		ino_t ino = d_inode(dentry)->i_ino;
+		if (ino)
+			hidden = gobohide_get(ino, dentry->d_name.name,
+				dentry->d_name.len, dentry->d_parent);
+	}
 
 	error = security_inode_symlink(dir, dentry, oldname);
 	if (error)
