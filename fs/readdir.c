@@ -21,6 +21,7 @@
 #include <linux/unistd.h>
 #include <linux/compat.h>
 #include <linux/uaccess.h>
+#include <linux/gobohide.h>
 
 #define dirent_size(dirent, len) offsetof(typeof(*(dirent)), d_name[len])
 
@@ -178,6 +179,7 @@ struct readdir_callback {
 	struct dir_context ctx;
 	struct old_linux_dirent __user * dirent;
 	int result;
+	struct dentry *dentry;
 };
 
 static bool fillonedir(struct dir_context *ctx, const char *name, int namlen,
@@ -226,6 +228,7 @@ SYSCALL_DEFINE3(old_readdir, unsigned int, fd,
 	if (fd_empty(f))
 		return -EBADF;
 
+	buf.dentry = file_dentry(fd_file(f));
 	error = iterate_dir(fd_file(f), &buf.ctx);
 	if (buf.result)
 		error = buf.result;
@@ -251,6 +254,7 @@ struct getdents_callback {
 	struct linux_dirent __user * current_dir;
 	int prev_reclen;
 	int error;
+	struct dentry *dentry;
 };
 
 static bool filldir(struct dir_context *ctx, const char *name, int namlen,
@@ -260,6 +264,7 @@ static bool filldir(struct dir_context *ctx, const char *name, int namlen,
 	struct getdents_callback *buf =
 		container_of(ctx, struct getdents_callback, ctx);
 	unsigned long d_ino;
+	struct hide *hidden;
 	int reclen = ALIGN(dirent_size(dirent, namlen + 2), sizeof(long));
 	int prev_reclen;
 	unsigned int flags = d_type;
@@ -283,6 +288,11 @@ static bool filldir(struct dir_context *ctx, const char *name, int namlen,
 		return false;
 	dirent = buf->current_dir;
 	prev = (void __user *) dirent - prev_reclen;
+	hidden = gobohide_get(d_ino, name, namlen, buf->dentry);
+	if (hidden) {
+		gobohide_put(hidden);
+		return true;
+	}
 	scoped_user_write_access_size(prev, reclen + prev_reclen, efault) {
 		/* This might be 'dirent->d_off', but if so it will get overwritten */
 		unsafe_put_user(offset, &prev->d_off, efault);
@@ -316,6 +326,7 @@ SYSCALL_DEFINE3(getdents, unsigned int, fd,
 	if (fd_empty(f))
 		return -EBADF;
 
+	buf.dentry = file_dentry(fd_file(f));
 	error = iterate_dir(fd_file(f), &buf.ctx);
 	if (error >= 0)
 		error = buf.error;
@@ -336,12 +347,14 @@ struct getdents_callback64 {
 	struct linux_dirent64 __user * current_dir;
 	int prev_reclen;
 	int error;
+	struct dentry *dentry;
 };
 
 static bool filldir64(struct dir_context *ctx, const char *name, int namlen,
 		     loff_t offset, u64 ino, unsigned int d_type)
 {
 	struct linux_dirent64 __user *dirent, *prev;
+	struct hide *hidden;
 	struct getdents_callback64 *buf =
 		container_of(ctx, struct getdents_callback64, ctx);
 	int reclen = ALIGN(dirent_size(dirent, namlen + 1), sizeof(u64));
@@ -362,6 +375,11 @@ static bool filldir64(struct dir_context *ctx, const char *name, int namlen,
 		return false;
 	dirent = buf->current_dir;
 	prev = (void __user *)dirent - prev_reclen;
+	hidden = gobohide_get(ino, name, namlen, buf->dentry);
+	if (hidden) {
+		gobohide_put(hidden);
+		return true;
+	}
 	scoped_user_write_access_size(prev, reclen + prev_reclen, efault) {
 		/* This might be 'dirent->d_off', but if so it will get overwritten */
 		unsafe_put_user(offset, &prev->d_off, efault);
@@ -396,6 +414,7 @@ SYSCALL_DEFINE3(getdents64, unsigned int, fd,
 	if (fd_empty(f))
 		return -EBADF;
 
+	buf.dentry = file_dentry(fd_file(f));
 	error = iterate_dir(fd_file(f), &buf.ctx);
 	if (error >= 0)
 		error = buf.error;
@@ -424,6 +443,7 @@ struct compat_readdir_callback {
 	struct dir_context ctx;
 	struct compat_old_linux_dirent __user *dirent;
 	int result;
+	struct dentry *dentry;
 };
 
 static bool compat_fillonedir(struct dir_context *ctx, const char *name,
@@ -473,6 +493,7 @@ COMPAT_SYSCALL_DEFINE3(old_readdir, unsigned int, fd,
 	if (fd_empty(f))
 		return -EBADF;
 
+	buf.dentry = file_dentry(fd_file(f));
 	error = iterate_dir(fd_file(f), &buf.ctx);
 	if (buf.result)
 		error = buf.result;
@@ -492,6 +513,7 @@ struct compat_getdents_callback {
 	struct compat_linux_dirent __user *current_dir;
 	int prev_reclen;
 	int error;
+	struct dentry *dentry;
 };
 
 static bool compat_filldir(struct dir_context *ctx, const char *name, int namlen,
@@ -501,6 +523,7 @@ static bool compat_filldir(struct dir_context *ctx, const char *name, int namlen
 	struct compat_getdents_callback *buf =
 		container_of(ctx, struct compat_getdents_callback, ctx);
 	compat_ulong_t d_ino;
+	struct hide *hidden;
 	int reclen = ALIGN(dirent_size(dirent, namlen + 2), sizeof(compat_long_t));
 	int prev_reclen;
 	unsigned int flags = d_type;
@@ -522,6 +545,11 @@ static bool compat_filldir(struct dir_context *ctx, const char *name, int namlen
 	prev_reclen = buf->prev_reclen;
 	if (!(flags & FILLDIR_FLAG_NOINTR) && prev_reclen && signal_pending(current))
 		return false;
+	hidden = gobohide_get(d_ino, name, namlen, buf->dentry);
+	if (hidden) {
+		gobohide_put(hidden);
+		return true;
+	}
 	dirent = buf->current_dir;
 	prev = (void __user *) dirent - prev_reclen;
 	scoped_user_write_access_size(prev, reclen + prev_reclen, efault) {
@@ -556,6 +584,7 @@ COMPAT_SYSCALL_DEFINE3(getdents, unsigned int, fd,
 	if (fd_empty(f))
 		return -EBADF;
 
+	buf.dentry = file_dentry(fd_file(f));
 	error = iterate_dir(fd_file(f), &buf.ctx);
 	if (error >= 0)
 		error = buf.error;
