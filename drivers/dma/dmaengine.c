@@ -105,8 +105,9 @@ static int dmaengine_summary_show(struct seq_file *s, void *data)
 
 	mutex_lock(&dma_list_mutex);
 	list_for_each_entry(dma_dev, &dma_device_list, global_node) {
-		seq_printf(s, "dma%d (%s): number of channels: %u\n",
+		seq_printf(s, "dma%d (%s:%s): number of channels: %u\n",
 			   dma_dev->dev_id, dev_name(dma_dev->dev),
+			   dma_dev->dev->driver->name,
 			   dma_dev->chancnt);
 
 		if (dma_dev->dbg_summary_show)
