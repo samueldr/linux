@@ -40,6 +40,7 @@
 #define AUDDRV_GET_UL_REMAINDATA_TIME   _IOWR(AUD_DRV_IOC_MAGIC, 0x0B, int)
 // used audio get time stamp
 #define AUDDRV_AUDIO_REMAINING    _IOWR(AUD_DRV_IOC_MAGIC, 0x0C, struct Data_Remaining*)
+#define AUDDRV_AUDIO_CAPTURE_REMAINING    _IOWR(AUD_DRV_IOC_MAGIC, 0x0D, struct Data_Remaining*)
 
 // Allocate mean allocate buffer and set stream into ready state.
 #define ALLOCATE_MEMIF_DL1           _IOWR(AUD_DRV_IOC_MAGIC, 0x10,unsigned int)

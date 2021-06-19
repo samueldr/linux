@@ -88,6 +88,7 @@
 #define PROC_DBG_LEVEL_NAME			"dbgLevel"
 #define PROC_ANTENNA_SELECT			"antenna_select"
 /*#define PROC_ANTENNA_RSSI		"antenna_query" */
+#define PROC_DTIM "dtim_skip_count"
 #define PROC_ROOT_NAME					"wlan"
 
 #define PROC_MCR_ACCESS_MAX_USER_INPUT_LEN      20
@@ -756,6 +757,85 @@ static const struct file_operations ChipID_fops = {
 	.read = procChipIDRead,
 };
 
+static ssize_t dtim_skip_count_read(struct file *filp,
+				   char __user *buf,
+				   size_t count, loff_t *f_pos)
+{
+	UINT_32 u4CopySize;
+	P_ADAPTER_T prAdapter;
+	int pos = 0;
+	unsigned char dtim_skip_count = 0;
+
+	if (g_prGlueInfo_proc != NULL)
+		prAdapter = g_prGlueInfo_proc->prAdapter;
+	else
+		return -EFAULT;
+	/* if *f_pos > 0, it means has read successed last time,
+	 *  don't try again
+	 */
+	if (*f_pos > 0)
+		return 0;
+
+	dtim_skip_count = prAdapter->dtim_skip_count;
+	pos += snprintf(aucProcBuf, sizeof(aucProcBuf),
+			"DTIM Skip Count:%hhu\n",
+			dtim_skip_count);
+
+	u4CopySize = kalStrLen(aucProcBuf);
+	if (copy_to_user(buf, aucProcBuf, u4CopySize)) {
+		pr_err("copy to user failed\n");
+		return -EFAULT;
+	}
+	*f_pos += u4CopySize;
+
+	return (INT_32)u4CopySize;
+}
+
+static ssize_t dtim_skip_count_write(struct file *file,
+				     const char __user *buffer,
+				     size_t count, loff_t *data)
+{
+	P_ADAPTER_T prAdapter;
+	unsigned char dtim_skip_count = 0;
+	UINT_32 u4CopySize = sizeof(aucProcBuf);
+
+	if (g_prGlueInfo_proc != NULL)
+		prAdapter = g_prGlueInfo_proc->prAdapter;
+	else
+		return -EFAULT;
+
+	kalMemSet(aucProcBuf, 0, u4CopySize);
+
+	if (u4CopySize > count)
+		u4CopySize = count;
+	else
+		u4CopySize = u4CopySize - 1;
+
+	if (copy_from_user(aucProcBuf, buffer, u4CopySize)) {
+		pr_err("error of copy from user\n");
+		return -EFAULT;
+	}
+
+	aucProcBuf[u4CopySize] = '\0';
+
+	if (sscanf(aucProcBuf, "%hhu", &dtim_skip_count) == 1) {
+		if (dtim_skip_count > 6)
+			return -EINVAL;
+		prAdapter->dtim_skip_count = dtim_skip_count;
+	} else {
+		return -EINVAL;
+	}
+
+	return count;
+}
+
+
+static const struct file_operations dtim_ops = {
+	.owner = THIS_MODULE,
+	.read = dtim_skip_count_read,
+	.write = dtim_skip_count_write,
+};
+
 INT_32 procInitFs(VOID)
 {
 	struct proc_dir_entry *prEntry;
@@ -815,6 +895,7 @@ INT_32 procRemoveProcfs(VOID)
 	remove_proc_entry(PROC_VERSION, gprProcRoot);
 	//remove_proc_entry(PROC_RX_BA_WIN, gprProcRoot);
 	remove_proc_entry(PROC_WLAN_CHIP_ID, gprProcRoot);
+	remove_proc_entry(PROC_DTIM, gprProcRoot);
 #if CFG_SUPPORT_THERMO_THROTTLING
 	g_prGlueInfo_proc = NULL;
 #endif
@@ -894,6 +975,12 @@ INT_32 procCreateFsEntry(P_GLUE_INFO_T prGlueInfo)
 	}
 #endif
 #endif
+	prEntry = proc_create(PROC_DTIM, 0664, gprProcRoot, &dtim_ops);
+	if (prEntry == NULL) {
+		DBGLOG(INIT, ERROR, ("Unable to create /proc entry\n\r"));
+		return -1;
+	}
+
 	proc_set_user(prEntry, KUIDT_INIT(PROC_UID_SHELL), KGIDT_INIT(PROC_GID_WIFI));
 	return 0;
 }

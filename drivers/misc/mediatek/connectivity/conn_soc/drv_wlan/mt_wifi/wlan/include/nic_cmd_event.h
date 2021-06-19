@@ -1291,7 +1291,8 @@ typedef struct _IPV4_NETWORK_ADDRESS {
 typedef struct _CMD_SET_NETWORK_ADDRESS_LIST {
     UINT_8  ucNetTypeIndex;
     UINT_8  ucAddressCount;
-    UINT_8  ucReserved[2];
+	UINT_8 ucDtimSkipCount;
+	UINT_8 ucReserved[1];
     IPV4_NETWORK_ADDRESS arNetAddress[1];
 } CMD_SET_NETWORK_ADDRESS_LIST, *P_CMD_SET_NETWORK_ADDRESS_LIST;
 

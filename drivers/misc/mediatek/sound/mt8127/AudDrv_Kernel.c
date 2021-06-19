@@ -854,7 +854,7 @@ void Auddrv_Handle_Mem_context(AFE_MEM_CONTROL_T *Mem_Block)
       Hw_Get_bytes,HW_Cur_ReadIdx,mBlock->u4DMAReadIdx,mBlock->u4WriteIdx,mBlock->pucPhysBufAddr,Mem_Block->MemIfNum);*/
 
     spin_lock_irqsave(&auddrv_ULInCtl_lock, flags);
-    
+
     mBlock->u4WriteIdx  += Hw_Get_bytes;
     mBlock->u4WriteIdx  %= mBlock->u4BufferSize;
     mBlock->u4DataRemained += Hw_Get_bytes;
@@ -3154,6 +3154,115 @@ void AudDrv_AUDIO_REMAINING(struct file *fp, Data_Remaining *time)
 }
 
 /*****************************************************************************
+ * FUNCTION
+ *  AudDrv_AUDIO_CAPTURE_REMAINING
+ *
+ * DESCRIPTION
+ *  Get UL buffer remaining size and time stamp
+ *
+ ******************************************************************************/
+
+void AudDrv_AUDIO_CAPTURE_REMAINING(struct file *fp, Data_Remaining *time)
+{
+    //PRINTK_AUDDRV("+AUDDRV_AUDIO_CAPTURE_REMAINING ");
+
+    //get time
+    do_posix_clock_monotonic_gettime(&(time->time));
+
+    //get remain size
+    AFE_MEM_CONTROL_T *pAfe_MEM_ConTrol = NULL;
+    AFE_BLOCK_T  *Afe_Block = NULL;
+    unsigned long flags;
+    unsigned long flagsUL;
+    kal_uint32 samplerate = 0;
+    kal_uint32 HW_Cur_ReadIdx = 0;
+    kal_int32 Hw_Get_bytes = 0;
+    kal_uint32 HW_Remain_Size = 0;
+    int ret = 0;
+
+    // check which memif need to be read
+    pAfe_MEM_ConTrol = Auddrv_Find_MemIF_Fp(fp);
+    Afe_Block = &(pAfe_MEM_ConTrol->rBlock);
+    if (pAfe_MEM_ConTrol == NULL)
+    {
+        PRINTK_AUDDRV("AUDDRV_AUDIO_CAPTURE_REMAINING cannot find MEM control !!!!!!!");
+        return -1;
+    }
+    if (!Auddrv_CheckRead_MemIF_Fp(pAfe_MEM_ConTrol->MemIfNum))
+    {
+        PRINTK_AUDDRV("AUDDRV_AUDIO_CAPTURE_REMAINING cannot find matcg MemIfNum!!!");
+        return -1;
+    }
+
+    if (Afe_Block->u4BufferSize <= 0)
+    {
+        PRINTK_AUDDRV("AUDDRV_AUDIO_CAPTURE_REMAINING wrong buffer size!!!");
+        return -1;
+    }
+
+    samplerate = Afe_Get_Reg(AFE_DAC_CON1);
+
+    switch (pAfe_MEM_ConTrol->MemIfNum)
+    {
+        case MEM_VUL:
+            HW_Cur_ReadIdx = Afe_Get_Reg(AFE_VUL_CUR);
+            samplerate = (samplerate >> 16) & 0x0000000f;
+            samplerate = AudDrv_SampleRateIndexConvert(samplerate);
+            break;
+        case MEM_AWB:
+            HW_Cur_ReadIdx = Afe_Get_Reg(AFE_AWB_CUR);
+            samplerate = (samplerate >> 12) & 0x0000000f;
+            samplerate = AudDrv_SampleRateIndexConvert(samplerate);
+            break;
+        case MEM_MOD_DAI:
+            HW_Cur_ReadIdx = Afe_Get_Reg(AFE_MOD_PCM_CUR);
+            samplerate = (samplerate >> 30) & 0x00000001;
+            if (samplerate == 0)
+            {
+                samplerate = 8000;
+            }
+            else
+            {
+                samplerate = 16000;
+            }
+            break;
+    }
+
+	if (CheckSize(HW_Cur_ReadIdx))
+	{
+        return -1;
+	}
+	if (Afe_Block->pucVirtBufAddr  == NULL)
+	{
+        return -1;
+	}
+
+	spin_lock_irqsave(&auddrv_irqstatus_lock, flags);
+	spin_lock_irqsave(&auddrv_ULInCtl_lock, flagsUL);
+	// HW already fill in
+	Hw_Get_bytes = (HW_Cur_ReadIdx - Afe_Block->pucPhysBufAddr) - Afe_Block->u4WriteIdx;
+	if (Hw_Get_bytes < 0)
+	{
+        Hw_Get_bytes += Afe_Block->u4BufferSize;
+	}
+
+	HW_Remain_Size = Afe_Block->u4DataRemained + Hw_Get_bytes;
+	spin_unlock_irqrestore(&auddrv_ULInCtl_lock, flagsUL);
+	spin_unlock_irqrestore(&auddrv_irqstatus_lock, flags);
+
+	// buffer overflow
+	if (HW_Remain_Size > Afe_Block->u4BufferSize)
+	{
+        HW_Remain_Size = Afe_Block->u4BufferSize;
+	}
+
+	time->bytes_remaining = HW_Remain_Size;
+	//ret = (((HW_Remain_Size * 1000) / 4) / samplerate);
+	//PRINTK_AUDDRV("-AUDDRV_AUDIO_CAPTURE_REMAINING HW_Remain_Size=%d, samplerate=%d",HW_Remain_Size, samplerate);
+}
+
+
+/*****************************************************************************
  * FILE OPERATION FUNCTION
  *  AudDrv_ioctl
  *
@@ -3997,6 +4106,17 @@ static long AudDrv_ioctl(struct file *fp, unsigned int cmd, unsigned long arg)
         {
             Data_Remaining data;
             AudDrv_AUDIO_REMAINING(fp, &data);
+            if (copy_to_user((void __user *)(arg), (void *)(&data), sizeof(Data_Remaining)))
+            {
+                return -EFAULT;
+            }
+
+            break;
+        }
+        case AUDDRV_AUDIO_CAPTURE_REMAINING:
+        {
+            Data_Remaining data;
+            AudDrv_AUDIO_CAPTURE_REMAINING(fp, &data);
             if (copy_to_user((void __user *)(arg), (void *)(&data), sizeof(Data_Remaining)))
             {
                 return -EFAULT;

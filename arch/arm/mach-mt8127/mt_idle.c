@@ -735,7 +735,7 @@ static ssize_t soidle_state_store(struct kobject *kobj,
 	char cmd[32];
 	int param;
 
-	if (sscanf(buf, "%s %d", cmd, &param) == 2) {
+	if (sscanf(buf, "%31s %d", cmd, &param) == 2) {
 		if (!strcmp(cmd, "soidle"))
 			idle_switch[IDLE_TYPE_SO] = param;
 		else if (!strcmp(cmd, "enable"))
@@ -799,7 +799,7 @@ static ssize_t dpidle_state_store(struct kobject *kobj,
 	char cmd[32];
 	int param;
 
-	if (sscanf(buf, "%s %d", cmd, &param) == 2) {
+	if (sscanf(buf, "%31s %d", cmd, &param) == 2) {
 		if (!strcmp(cmd, "dpidle"))
 			idle_switch[IDLE_TYPE_DP] = param;
 		else if (!strcmp(cmd, "enable"))
@@ -858,7 +858,7 @@ static ssize_t slidle_state_store(struct kobject *kobj,
 	char cmd[32];
 	int param;
 
-	if (sscanf(buf, "%s %d", cmd, &param) == 2) {
+	if (sscanf(buf, "%31s %d", cmd, &param) == 2) {
 		if (!strcmp(cmd, "slidle"))
 			idle_switch[IDLE_TYPE_SL] = param;
 		else if (!strcmp(cmd, "enable"))
@@ -898,7 +898,7 @@ static ssize_t rgidle_state_store(struct kobject *kobj,
 	int param;
 
 	if (n <= 32) {
-		if (sscanf(buf, "%s %d", cmd, &param) == 2) {
+		if (sscanf(buf, "%31s %d", cmd, &param) == 2) {
 			if (!strcmp(cmd, "rgidle"))
 				idle_switch[IDLE_TYPE_RG] = param;
 
@@ -964,7 +964,7 @@ static ssize_t idle_state_store(struct kobject *kobj,
 	int idx;
 	int param;
 
-	if (sscanf(buf, "%s %x", cmd, &param) == 2) {
+	if (sscanf(buf, "%31s %x", cmd, &param) == 2) {
 		if (!strcmp(cmd, "switch")) {
 			for (idx = 0; idx < NR_TYPES; idx++) {
 #ifndef SPM_SODI_ENABLED

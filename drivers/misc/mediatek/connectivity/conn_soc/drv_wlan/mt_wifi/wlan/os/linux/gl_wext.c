@@ -545,6 +545,10 @@ static const struct iw_priv_args rIwPrivTable[] = {
 	/* handle any command with many input parameters */
 	{PRIV_CMD_OTHER,			IW_PRIV_TYPE_CHAR | 256, 0,   "set_str_cmd"},
 	
+	{PRIV_CMD_DTIM_SKIP_COUNT, IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1, 0,
+		"set_dtim_skip"},
+	{PRIV_CMD_DTIM_SKIP_COUNT, 0, IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
+		"get_dtim_skip"},
 };
 
 static const iw_handler rIwPrivHandler[] = {

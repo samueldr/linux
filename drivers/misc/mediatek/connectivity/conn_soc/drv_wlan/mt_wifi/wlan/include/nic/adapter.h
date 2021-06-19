@@ -1363,6 +1363,7 @@ struct _ADAPTER_T {
 #if	CFG_SUPPORT_WAKEUP_STATISTICS
 	WAKEUP_STATISTIC arWakeupStatistic[WAKEUP_TYPE_NUM];
 #endif
+	unsigned char dtim_skip_count;
 };/* end of _ADAPTER_T */
 
 /*******************************************************************************
