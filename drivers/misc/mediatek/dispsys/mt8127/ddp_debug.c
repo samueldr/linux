@@ -101,8 +101,6 @@ static char STR_HELP[] =
     "ACTION\n"
     "       regr:addr\n"
     "\n"
-    "       regw:addr,value\n"
-    "\n"
     "       dbg_log:0|1\n"
     "\n"
     "       irq_log:0|1\n"
@@ -191,22 +189,6 @@ static void process_dbg_opt(const char *opt)
             unsigned int regVal = DISP_REG_GET(addr);
             DISP_MSG("regr: 0x%08X = 0x%08X\n", addr, regVal);
             sprintf(buf, "regr: 0x%08X = 0x%08X\n", addr, regVal);
-        } else {
-            goto Error;
-        }
-    }
-    else if (0 == strncmp(opt, "regw:", 5))
-    {
-        char *p = (char *)opt + 5;
-        unsigned int addr = (unsigned int) simple_strtoul(p, &p, 16);
-        unsigned int val = (unsigned int) simple_strtoul(p + 1, &p, 16);
-        if (addr) 
-        {
-            unsigned int regVal;
-            DISP_REG_SET(addr, val);
-            regVal = DISP_REG_GET(addr);
-            DISP_DBG("regw: 0x%08X, 0x%08X = 0x%08X\n", addr, val, regVal);
-            sprintf(buf, "regw: 0x%08X, 0x%08X = 0x%08X\n", addr, val, regVal);
         } else {
             goto Error;
         }

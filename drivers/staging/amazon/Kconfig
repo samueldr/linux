@@ -81,6 +81,23 @@ config MDUMP_MESSAGE_SIZE
           Make sure you also changed this value on bootloader config code
           There are two stage messages. So mdump buffer's real size is MDUMP_MESSAGE_SIZE * 2
 
+config AMAZON_LL_LOG
+        bool "Low Level Log Support"
+        depends on PROC_FS
+        default n
+        help
+          Cache the log of LK and Preloader at /proc/pllk.
+
+config AMAZON_LOW_LEVEL_LOG_DRAM_ADDR
+        hex "Amazon low level log dram addr"
+        default 0
+        depends on AMAZON_LL_LOG
+
+config AMAZON_LOW_LEVEL_LOG_DRAM_SIZE
+        hex "Amazon low level log dram size"
+        default 0
+        depends on AMAZON_LL_LOG
+
 endif # if AMAZON
 
 endmenu

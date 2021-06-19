@@ -587,7 +587,6 @@ void select_charging_curret(void)
 
 			battery_xlog_printk(BAT_LOG_CRTI, "[BATTERY] set_ac_current \n");
 		}
-#ifdef CONFIG_AUSTIN_PROJECT
 	} else if (g_custom_charging_current != -1) {
 		battery_xlog_printk(BAT_LOG_CRTI, "[BATTERY] custom charging : %d\r\n",
 			g_custom_charging_current);
@@ -597,7 +596,6 @@ void select_charging_curret(void)
 			g_temp_input_CC_value = CHARGE_CURRENT_500_00_MA;
 		else
 			g_temp_input_CC_value = CHARGE_CURRENT_2000_00_MA;
-#endif
 	} else {
 		if (BMT_status.charger_type == STANDARD_HOST) {
 #ifdef CONFIG_USB_IF

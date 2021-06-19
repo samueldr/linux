@@ -551,6 +551,38 @@ kal_uint32 bq24296_get_pn(void)
   *   [Internal Function]
   *
   *********************************************************/
+static unsigned char bq24296_get_reg9_fault_type(unsigned char reg9_fault)
+{
+	unsigned char ret = 0;
+
+	if ((reg9_fault & (CON9_OTG_FAULT_MASK << CON9_OTG_FAULT_SHIFT)) != 0) {
+		ret = BQ_OTG_FAULT;
+	} else if ((reg9_fault & (CON9_CHRG_FAULT_MASK << CON9_CHRG_FAULT_SHIFT)) != 0) {
+		if ((reg9_fault & (CON9_CHRG_INPUT_FAULT_MASK << CON9_CHRG_FAULT_SHIFT)) != 0)
+			ret = BQ_CHRG_INPUT_FAULT;
+		else if ((reg9_fault &
+			  (CON9_CHRG_THERMAL_SHUTDOWN_FAULT_MASK << CON9_CHRG_FAULT_SHIFT)) != 0)
+			ret = BQ_CHRG_THERMAL_FAULT;
+		else if ((reg9_fault &
+			  (CON9_CHRG_TIMER_EXPIRATION_FAULT_MASK << CON9_CHRG_FAULT_SHIFT)) != 0)
+			ret = BQ_CHRG_TIMER_EXPIRATION_FAULT;
+	} else if ((reg9_fault & (CON9_BAT_FAULT_MASK << CON9_BAT_FAULT_SHIFT)) != 0)
+		ret = BQ_BAT_FAULT;
+	else if ((reg9_fault & (CON9_NTC_FAULT_MASK << CON9_NTC_FAULT_SHIFT)) != 0) {
+		if ((reg9_fault & (CON9_NTC_COLD_FAULT_MASK << CON9_NTC_FAULT_SHIFT)) != 0)
+			ret = BQ_NTC_COLD_FAULT;
+		else if ((reg9_fault & (CON9_NTC_HOT_FAULT_MASK << CON9_NTC_FAULT_SHIFT)) != 0)
+			ret = BQ_NTC_HOT_FAULT;
+	}
+	return ret;
+}
+
+void bq24296_get_fault_type(unsigned char *type)
+{
+	*type = bq24296_get_reg9_fault_type(bq24296_reg[bq24296_CON9]);
+}
+EXPORT_SYMBOL(bq24296_get_fault_type);
+
 void bq24296_dump_register(void)
 {
 	int i = 0;

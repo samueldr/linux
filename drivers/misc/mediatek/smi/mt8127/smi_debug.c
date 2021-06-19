@@ -68,9 +68,6 @@ static char STR_HELP[] =
     "        reg:[MPU|MAU1|MAU2]\n"
     "             dump hw register values\n"
     "\n"
-    "        regw:addr=val\n"
-    "             write hw register\n"
-    "\n"
     "        regr:addr\n"
     "             read hw register\n"
     "\n"
@@ -224,37 +221,20 @@ static void process_dbg_opt(const char *opt)
 
     }
 
-    if (0 == strncmp(opt, "set_reg:", 8 ))
-    {
-        unsigned int addr, val;
-		char *p = (char *)opt + 8;
-
-		addr = (unsigned int) simple_strtoul(p, &p, 16);
-		p++;
-		val = (unsigned int) simple_strtoul(p, &p, 16);
-
-		SMIMSG("set register: 0x%x = 0x%x\n", addr, val);
-
-        COM_WriteReg32(addr, val);
-    }
     if (0 == strncmp(opt, "get_reg:", 8 ))
     {
         unsigned int addr;
-		char *p = (char *)opt + 8;
+        char *p = (char *)opt + 8;
 
-		addr = (unsigned int) simple_strtoul(p, &p, 16);
-
-		SMIMSG("get register: 0x%x = 0x%x \n", addr, COM_ReadReg32(addr));
+        addr = (unsigned int) simple_strtoul(p, &p, 16);
+        SMIMSG("get register: 0x%x = 0x%x \n", addr, COM_ReadReg32(addr));
     }
-
-
 
     return;
 Error:
     SMIERR("parse command error!\n");
     SMIMSG("%s", STR_HELP);
 }
-
 
 static void process_dbg_cmd(char *cmd)
 {
@@ -264,7 +244,6 @@ static void process_dbg_cmd(char *cmd)
         process_dbg_opt(tok);
     }
 }
-
 
 // ---------------------------------------------------------------------------
 //  Debug FileSystem Routines

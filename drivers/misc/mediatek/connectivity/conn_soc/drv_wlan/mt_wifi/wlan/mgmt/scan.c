@@ -1671,7 +1671,7 @@ scanAddToBssDesc (
     UINT_8 ucHwChannelNum = 0;
     UINT_8 ucIeDsChannelNum = 0;
     UINT_8 ucIeHtChannelNum = 0;
-    BOOLEAN fgIsValidSsid = FALSE, fgEscape = FALSE;
+    BOOLEAN fgIsValidSsid = FALSE, fgEscape = FALSE, fgIsCopy = FALSE;
     PARAM_SSID_T rSsid;
     UINT_64 u8Timestamp;
 	BOOLEAN fgIsNewBssDesc = FALSE;
@@ -1860,9 +1860,11 @@ scanAddToBssDesc (
         }
     }
 #if 1
-	
+	if ((prBssDesc->u2RawLength == 0) || (fgIsValidSsid)) {
 		prBssDesc->u2RawLength = prSwRfb->u2PacketLen;
 		kalMemCopy(prBssDesc->aucRawBuf, prWlanBeaconFrame, prBssDesc->u2RawLength);
+		fgIsCopy = TRUE;
+	}
 #endif
 
     /* NOTE: Keep consistency of Scan Record during JOIN process */
@@ -1895,9 +1897,12 @@ scanAddToBssDesc (
     else {
         prBssDesc->fgIsIEOverflow = FALSE;
     }
-    prBssDesc->u2IELength = u2IELength;
 
-    kalMemCopy(prBssDesc->aucIEBuf, prWlanBeaconFrame->aucInfoElem, u2IELength);
+	if (fgIsCopy) {
+    		prBssDesc->u2IELength = u2IELength;
+
+    		kalMemCopy(prBssDesc->aucIEBuf, prWlanBeaconFrame->aucInfoElem, u2IELength);
+	}
 
     //4 <2.2> reset prBssDesc variables in case that AP has been reconfigured
     prBssDesc->fgIsERPPresent = FALSE;

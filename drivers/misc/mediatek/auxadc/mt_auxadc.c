@@ -810,6 +810,11 @@ static DEVICE_ATTR(AUXADC_Channel_Is_Calibration, 0664, show_AUXADC_Channel_Is_C
 
 static ssize_t show_AUXADC_register(struct device *dev,struct device_attribute *attr, char *buf)
 {
+	if (buf == NULL) {
+		pr_debug("[%s] Invalid input!!\n", __func__);
+		return 0;
+	}
+
     return mt_auxadc_dump_register(buf);
 }
 
@@ -828,6 +833,12 @@ static ssize_t show_AUXADC_chanel(struct device *dev,struct device_attribute *at
     int i = 0, data[4] = {0,0,0,0};
     char buf_temp[960];
     int res =0;
+
+	if (buf == NULL) {
+		pr_debug("[%s] Invalid input!!\n", __func__);
+		return 0;
+	}
+
 	for (i = 0; i < 5; i++) {
 		res = IMM_auxadc_GetOneChannelValue(i,data,NULL);
 		if (res < 0) {
@@ -889,23 +900,32 @@ static int dbug_thread(void *unused)
 static ssize_t store_AUXADC_channel(struct device *dev, struct device_attribute *attr,
 				    const char *buf, size_t size)
 {
-	unsigned int start_flag;
-	int error;
+	int start_flag = 0;
+	int error = 0;
+	int ret = 0;
 
-		if (sscanf(buf, "%u", &start_flag) != 1) {
-			printk(KERN_ERR "[adc_driver]: Invalid values\n");
-			return -EINVAL;
-		}
+	if (buf == NULL) {
+		pr_debug("[%s] Invalid input!!\n", __func__);
+		return 0;
+	}
 
+	ret = kstrtoint(buf, 0, &start_flag);
+	if (ret < 0) {
+		pr_debug("[%s] Invalid invalues!!\n", __func__);
+		return 0;
+	}
+
+	pr_debug("[adc_driver] start flag =%d\n", start_flag);
+	if (start_flag) {
 		g_start_debug_thread = start_flag;
-	if (1 == start_flag) {
-		   thread = kthread_run(dbug_thread, 0, "AUXADC");
-
+		thread = kthread_run(dbug_thread, 0, "AUXADC");
 		if (IS_ERR(thread)) {
-			  error = PTR_ERR(thread);
-			  printk(KERN_ERR "[adc_driver] failed to create kernel thread: %d\n", error);
-		   }
+			error = PTR_ERR(thread);
+			pr_debug("[adc_driver] failed to create kernel thread: %d\n", error);
 		}
+	} else {
+		pr_debug("[%s] Invalid input!!\n", __func__);
+	}
 
     return size;
 }

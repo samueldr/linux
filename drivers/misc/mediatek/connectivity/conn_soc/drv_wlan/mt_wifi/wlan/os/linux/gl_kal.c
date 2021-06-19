@@ -1951,6 +1951,7 @@ kalIndicateStatusAndComplete (
                         prGlueInfo->aucRspIe,
                         prGlueInfo->u4RspIeLength,
                         GFP_KERNEL);
+		bss = NULL;
             } else if(prGlueInfo->prDevHandler->ieee80211_ptr->sme_state == CFG80211_SME_CONNECTING) {
             	/* to support user space roaming, cfg80211 will change the sme_state to connecting before reassociate */
                 cfg80211_connect_result(prGlueInfo->prDevHandler,
@@ -1962,6 +1963,8 @@ kalIndicateStatusAndComplete (
                         WLAN_STATUS_SUCCESS,
                         GFP_KERNEL);
             }
+		if (bss)
+			cfg80211_put_bss(priv_to_wiphy(prGlueInfo), bss);
         }
 
         break;

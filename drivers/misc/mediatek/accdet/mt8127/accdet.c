@@ -1503,9 +1503,17 @@ static int dump_register(void)
 
 static ssize_t accdet_store_call_state(struct device_driver *ddri, const char *buf, size_t count)
 {
-	if (sscanf(buf, "%u", &call_status) != 1) {
-			ACCDET_DEBUG("accdet: Invalid values\n");
-			return -EINVAL;
+	int ret;
+
+	if (buf == NULL) {
+		ACCDET_DEBUG("[%s] Invalid input!!\n",  __func__);
+		return -EINVAL;
+	}
+
+	ret = kstrtoint(buf, 0, &call_status);
+	if (ret != 0) {
+		ACCDET_DEBUG("accdet: Invalid values\n");
+		return -EINVAL;
 	}
 
 	switch(call_status)
@@ -1526,7 +1534,7 @@ static ssize_t accdet_store_call_state(struct device_driver *ddri, const char *b
 			break;
             
 		default:
-   		    ACCDET_DEBUG("[Accdet]accdet call : Invalid values\n");
+			ACCDET_DEBUG("[Accdet]accdet call : Invalid values\n");
             break;
      }
 	return count;
@@ -1536,11 +1544,16 @@ static ssize_t accdet_store_call_state(struct device_driver *ddri, const char *b
 
 static ssize_t show_pin_recognition_state(struct device_driver *ddri, char *buf)
 {
+	if (buf == NULL) {
+		ACCDET_DEBUG("[%s] Invalid input!!\n",  __func__);
+		return -EINVAL;
+	}
+
    #ifdef ACCDET_PIN_RECOGNIZATION
 	ACCDET_DEBUG("ACCDET show_pin_recognition_state = %d\n", cable_pin_recognition);
-	return sprintf(buf, "%u\n", cable_pin_recognition);
+	return snprintf(buf, (size_t)sizeof(cable_pin_recognition), "%u\n", cable_pin_recognition);
    #else
-    return sprintf(buf, "%u\n", 0);
+    return snprintf(buf, 4, "%u\n", 0);
    #endif
 }
 
@@ -1568,54 +1581,55 @@ static int dbug_thread(void *unused)
 //static ssize_t store_trace_value(struct device_driver *ddri, const char *buf, size_t count)
 static ssize_t store_accdet_start_debug_thread(struct device_driver *ddri, const char *buf, size_t count)
 {
-	
-	unsigned int start_flag;
-	int error;
+	int ret = 0;
+	int error = 0;
+	int start_flag = 0;
 
-	if (sscanf(buf, "%u", &start_flag) != 1) {
+	if (buf == NULL) {
+		ACCDET_DEBUG("[%s] Invalid input!!\n",  __func__);
+		return -EINVAL;
+	}
+
+	ret = kstrtoint(buf, 0, &start_flag);
+	if (ret != 0) {
 		ACCDET_DEBUG("accdet: Invalid values\n");
 		return -EINVAL;
 	}
 
-	ACCDET_DEBUG("[Accdet] start flag =%d \n",start_flag);
-
-	g_start_debug_thread = start_flag;
-
-    if(1 == start_flag)
-    {
-	   thread = kthread_run(dbug_thread, 0, "ACCDET");
-       if (IS_ERR(thread)) 
-	   { 
-          error = PTR_ERR(thread);
-          ACCDET_DEBUG( " failed to create kernel thread: %d\n", error);
-       }
-    }
+	if (start_flag) {/* if write 0, Invalid; otherwise, valid */
+		g_start_debug_thread = 1;
+		thread = kthread_run(dbug_thread, 0, "ACCDET");
+		if (IS_ERR(thread)) {
+			error = PTR_ERR(thread);
+			ACCDET_DEBUG("[store_accdet_start_debug_thread] failed to create kernel thread: %d\n", error);
+		} else {
+			ACCDET_DEBUG("[store_accdet_start_debug_thread] start debug thread!\n");
+		}
+	} else {
+		g_start_debug_thread = 0;
+		ACCDET_DEBUG("[store_accdet_start_debug_thread] stop debug thread!\n");
+	}
 
 	return count;
 }
 static ssize_t store_accdet_set_headset_mode(struct device_driver *ddri, const char *buf, size_t count)
 {
-
-    unsigned int value;
-	//int error;
-
-	if (sscanf(buf, "%u", &value) != 1) {
-		ACCDET_DEBUG("accdet: Invalid values\n");
-		return -EINVAL;
-	}
-
-	ACCDET_DEBUG("[Accdet]store_accdet_set_headset_mode value =%d \n",value);
-
+	ACCDET_DEBUG("[%s] Not Support\n", __func__);
 	return count;
 }
 
 static ssize_t store_accdet_dump_register(struct device_driver *ddri, const char *buf, size_t count)
 {
-    unsigned int value;
-//	int error;
+	int value;
+	int ret;
 
-	if (sscanf(buf, "%u", &value) != 1) 
-	{
+	if (buf == NULL) {
+		ACCDET_DEBUG("[%s] Invalid input!!\n",  __func__);
+		return -EINVAL;
+	}
+
+	ret = kstrtoint(buf, 0, &value);
+	if (ret != 0) {
 		ACCDET_DEBUG("accdet: Invalid values\n");
 		return -EINVAL;
 	}

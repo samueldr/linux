@@ -196,7 +196,6 @@ extern U32 suspend_time;
 #if defined(CONFIG_AUSTIN_PROJECT)
 int battery_idV = 0;
 extern int IMM_GetOneChannelValue(int dwChannel, int data[4], int* rawdata);
-extern int orderly_poweroff(bool force);
 
 unsigned int g_custom_charging_mode = 0; /* 0=ratail unit, 1=demo unit */
 #endif
@@ -205,6 +204,8 @@ unsigned int g_custom_charging_mode = 0; /* 0=ratail unit, 1=demo unit */
 signed int g_custom_charging_cv = -1;
 struct timespec chr_plug_in_time;
 static unsigned long g_custom_plugin_time;
+
+extern int orderly_poweroff(bool force);
 
 /* ////////////////////////////////////////////////////////////////////////////// */
 /* Integrate with NVRAM */
@@ -271,6 +272,35 @@ int g_present_smb = 0;
 static int cmd_discharging = -1;
 static int adjust_power = -1;
 static int suspend_discharging = -1;
+
+#if defined(CONFIG_AMAZON_METRICS_LOG) && defined(CONFIG_AUSTIN_PROJECT)
+static bool bat_full_flag;
+static bool bat_empty_flag;
+static struct timespec charging_time;
+static struct timespec discharging_time;
+static unsigned int init_charging_vol;
+static unsigned int init_discharging_vol;
+
+static bool bat_96_93_flag;
+static bool bat_15_20_flag;
+static bool bat_0_20_flag;
+static bool bat_1_flag;
+static bool bat_14days_flag;
+static bool bat_demo_flag;
+
+static struct timespec charging_96_93_time;
+static struct timespec charging_15_20_time;
+static struct timespec charging_0_20_time;
+
+static unsigned char charger_fault_type;
+extern void bq24296_get_fault_type(unsigned char *type);
+
+extern unsigned long get_virtualsensor_temp(void);
+
+extern signed int gFG_aging_factor;
+extern signed int gFG_battery_cycle;
+extern signed int gFG_columb_sum;
+#endif
 
 /* ////////////////////////////////////////////////////////////////////////////// */
 /* FOR ANDROID BATTERY SERVICE */
@@ -379,15 +409,57 @@ extern kal_uint32 g_fg_battery_id;
 void metrics_charger(bool connect)
 {
 	int cap = BMT_status.UI_SOC;
-	char buf[128];
-
+	char buf[256];
+#if defined(CONFIG_AMAZON_METRICS_LOG) && defined(CONFIG_AUSTIN_PROJECT)
+	long elaps_sec;
+	struct timespec diff;
+	unsigned long virtual_temp = get_virtualsensor_temp();
+#endif
 	if (connect == true) {
+#if defined(CONFIG_AMAZON_METRICS_LOG) && defined(CONFIG_AUSTIN_PROJECT)
+		init_charging_vol = BMT_status.bat_vol;
+		charging_time = current_kernel_time();
+		diff = timespec_sub(charging_time, discharging_time);
+
+		elaps_sec = diff.tv_sec + diff.tv_nsec / NSEC_PER_SEC;
+
+		if (elaps_sec > 60) {
+			snprintf(buf, sizeof(buf),
+				"bq24296:def:Charger_Exist=%d;CT;1,Elaps_Sec=%ld;CT;1,Initial_Bat_Vol=%d;CT;1,"
+				"Final_Bat_Vol=%d;CT;1,UI_SOC=%d;CT;1,SOC=%d;CT;1,Bat_Avg_Temp=%d;CT;1,"
+				"Vir_Avg_Temp=%ld;CT;1,Bat_Cycle_Count=%d;CT;1:NA",
+				BMT_status.charger_exist, elaps_sec, init_charging_vol, BMT_status.bat_vol, BMT_status.UI_SOC,
+				BMT_status.SOC, BMT_status.temperature, virtual_temp, gFG_battery_cycle);
+
+			log_to_metrics(ANDROID_LOG_INFO, "battery", buf);
+			memset(buf, 0, 256);
+		}
+#endif
 		snprintf(buf, sizeof(buf),
 			"bq24296:def:POWER_STATUS_CHARGING=1;CT;1,"
 			"cap=%u;CT;1:NR", cap);
 
 		log_to_metrics(ANDROID_LOG_INFO, "battery", buf);
 	} else {
+#if defined(CONFIG_AMAZON_METRICS_LOG) && defined(CONFIG_AUSTIN_PROJECT)
+		init_discharging_vol = BMT_status.bat_vol;
+		discharging_time = current_kernel_time();
+		diff = timespec_sub(discharging_time, charging_time);
+
+		elaps_sec = diff.tv_sec + diff.tv_nsec / NSEC_PER_SEC;
+
+		if (elaps_sec > 60) {
+			snprintf(buf, sizeof(buf),
+				"bq24296:def:Charger_Exist=%d;CT;1,Elaps_Sec=%ld;CT;1,Initial_Bat_Vol=%d;CT;1,"
+				"Final_Bat_Vol=%d;CT;1,UI_SOC=%d;CT;1,SOC=%d;CT;1,Bat_Avg_Temp=%d;CT;1,"
+				"Vir_Avg_Temp=%ld;CT;1,Bat_Cycle_Count=%d;CT;1:NA",
+				BMT_status.charger_exist, elaps_sec, init_charging_vol, BMT_status.bat_vol, BMT_status.UI_SOC,
+				BMT_status.SOC, BMT_status.temperature, virtual_temp, gFG_battery_cycle);
+
+			log_to_metrics(ANDROID_LOG_INFO, "battery", buf);
+			memset(buf, 0, 256);
+		}
+#endif
 		snprintf(buf, sizeof(buf),
 			"bq24296:def:POWER_STATUS_DISCHARGING=1;CT;1,"
 			"cap=%u;CT;1:NR", cap);
@@ -511,7 +583,10 @@ static int metrics_init(void)
 	mutex_lock(&info->lock);
 	info->flags = 0;
 	mutex_unlock(&info->lock);
-
+#if defined(CONFIG_AMAZON_METRICS_LOG) && defined(CONFIG_AUSTIN_PROJECT)
+	charging_time = current_kernel_time();
+	discharging_time = current_kernel_time();
+#endif
 	return 0;
 }
 
@@ -1842,7 +1917,6 @@ static ssize_t store_Custom_PlugIn_Time(struct device *dev,
 static DEVICE_ATTR(Custom_PlugIn_Time, 0664, show_Custom_PlugIn_Time,
 		   store_Custom_PlugIn_Time);
 
-#ifdef CONFIG_AUSTIN_PROJECT
 static ssize_t show_Custom_Charging_Current(struct device *dev, struct device_attribute *attr,
 					    char *buf)
 {
@@ -1867,6 +1941,7 @@ static ssize_t store_Custom_Charging_Current(struct device *dev, struct device_a
 static DEVICE_ATTR(Custom_Charging_Current, 0664, show_Custom_Charging_Current,
 		   store_Custom_Charging_Current);
 
+#ifdef CONFIG_AUSTIN_PROJECT
 #if defined(CONFIG_AUSTIN_PROJECT)
 static ssize_t show_Custom_Charging_Mode(struct device *dev,
 	struct device_attribute *attr, char *buf)
@@ -2168,6 +2243,15 @@ static void battery_update(struct battery_data *bat_data)
 	struct power_supply *bat_psy = &bat_data->psy;
 	kal_bool resetBatteryMeter = KAL_FALSE;
 	int cc_value;
+#if defined(CONFIG_AMAZON_METRICS_LOG) && defined(CONFIG_AUSTIN_PROJECT)
+	char buf[256] = {0};
+	unsigned long virtual_temp = get_virtualsensor_temp();
+	long elaps_sec;
+	long elaps_msec;
+	struct timespec diff;
+	struct timespec curr;
+#endif
+
 	bat_data->BAT_TECHNOLOGY = POWER_SUPPLY_TECHNOLOGY_LION;
 	if (BMT_status.temperature >= MAX_CHARGE_TEMPERATURE) {
 		bat_data->BAT_HEALTH = POWER_SUPPLY_HEALTH_OVERHEAT;
@@ -2196,7 +2280,28 @@ static void battery_update(struct battery_data *bat_data)
 			} else {
 				resetBatteryMeter = mt_battery_100Percent_tracking_check();
 			}
+#if defined(CONFIG_AMAZON_METRICS_LOG) && defined(CONFIG_AUSTIN_PROJECT)
+			if (BMT_status.bat_full && !bat_full_flag) {
+				bat_full_flag = 1;
+				curr = current_kernel_time();
+				diff = timespec_sub(curr, charging_time);
 
+				elaps_sec = diff.tv_sec + diff.tv_nsec / NSEC_PER_SEC;
+
+				snprintf(buf, sizeof(buf),
+					"bq24296:def:Charger_Exist=%d;CT;1,Elaps_Sec=%ld;CT;1,Initial_Bat_Vol=%d;CT;1,"
+					"Final_Bat_Vol=%d;CT;1,UI_SOC=%d;CT;1,SOC=%d;CT;1,Bat_Avg_Temp=%d;CT;1,"
+					"Vir_Avg_Temp=%ld;CT;1,Bat_Cycle_Count=%d;CT;1:NA",
+					BMT_status.charger_exist, elaps_sec, init_charging_vol, BMT_status.bat_vol, BMT_status.UI_SOC,
+					BMT_status.SOC, BMT_status.temperature, virtual_temp, gFG_battery_cycle);
+
+				log_to_metrics(ANDROID_LOG_INFO, "battery", buf);
+				memset(buf, 0, 256);
+			}
+
+			if (!BMT_status.bat_full && bat_full_flag)
+				bat_full_flag = 0;
+#endif
 			bat_data->BAT_STATUS = POWER_SUPPLY_STATUS_CHARGING;
 		} else {	/* No Battery, Only Charger */
 
@@ -2218,6 +2323,111 @@ static void battery_update(struct battery_data *bat_data)
 	else
 		mt_battery_Sync_UI_Percentage_to_Real();
 
+#if defined(CONFIG_AMAZON_METRICS_LOG) && defined(CONFIG_AUSTIN_PROJECT)
+	if (BMT_status.SOC == 1 && !bat_empty_flag) {
+		bat_empty_flag = 1;
+		curr = current_kernel_time();
+		diff = timespec_sub(curr, discharging_time);
+		elaps_sec = diff.tv_sec + diff.tv_nsec / NSEC_PER_SEC;
+
+		snprintf(buf, sizeof(buf),
+			"bq24296:def:Charger_Exist=%d;CT;1,Elaps_Sec=%ld;CT;1,Initial_Bat_Vol=%d;CT;1,"
+			"Final_Bat_Vol=%d;CT;1,UI_SOC=%d;CT;1,SOC=%d;CT;1,Bat_Avg_Temp=%d;CT;1,"
+			"Vir_Avg_Temp=%ld;CT;1,Bat_Cycle_Count=%d;CT;1:NA",
+			BMT_status.charger_exist, elaps_sec, init_charging_vol, BMT_status.bat_vol, BMT_status.UI_SOC,
+			BMT_status.SOC, BMT_status.temperature, virtual_temp, gFG_battery_cycle);
+
+		log_to_metrics(ANDROID_LOG_INFO, "battery", buf);
+		memset(buf, 0, 256);
+
+		snprintf(buf, sizeof(buf),
+			"bq24296:def:battery_soc=%d;CT;1:NA", BMT_status.SOC);
+
+		log_to_metrics(ANDROID_LOG_INFO, "battery", buf);
+		memset(buf, 0, 256);
+	}
+
+	if (BMT_status.SOC > 0 && bat_empty_flag)
+		bat_empty_flag = 0;
+
+	if (BMT_status.SOC >= 96 && !bat_96_93_flag) {
+		bat_96_93_flag = true;
+		charging_96_93_time = current_kernel_time();
+	}
+
+	if (BMT_status.SOC <= 93 && bat_96_93_flag) {
+		bat_96_93_flag = false;
+		curr = current_kernel_time();
+		diff = timespec_sub(curr, charging_96_93_time);
+		elaps_msec = diff.tv_sec * 1000 + diff.tv_nsec / NSEC_PER_MSEC;
+
+		snprintf(buf, sizeof(buf),
+				"bq24296:def:time_soc96_soc93=%ld;CT;1:NA",
+				elaps_msec);
+
+		log_to_metrics(ANDROID_LOG_INFO, "battery", buf);
+		memset(buf, 0, 256);
+	}
+
+	if (BMT_status.SOC <= 15 && !bat_15_20_flag) {
+		bat_15_20_flag = true;
+		charging_15_20_time = current_kernel_time();
+	}
+
+	if (BMT_status.SOC == 1 && bat_15_20_flag && !bat_1_flag) {
+		bat_1_flag = true;
+		curr = current_kernel_time();
+		diff = timespec_sub(curr, charging_15_20_time);
+		elaps_msec = diff.tv_sec * 1000 + diff.tv_nsec / NSEC_PER_MSEC;
+
+		snprintf(buf, sizeof(buf),
+				"bq24296:def:time_soc15_soc1=%ld;CT;1:NA",
+				elaps_msec);
+
+		log_to_metrics(ANDROID_LOG_INFO, "battery", buf);
+		memset(buf, 0, 256);
+	}
+
+	if (BMT_status.SOC >= 20 && bat_15_20_flag) {
+		bat_15_20_flag = false;
+		bat_1_flag = false;
+		curr = current_kernel_time();
+		diff = timespec_sub(curr, charging_15_20_time);
+		elaps_msec = diff.tv_sec * 1000 + diff.tv_nsec / NSEC_PER_MSEC;
+
+		snprintf(buf, sizeof(buf),
+				"bq24296:def:time_soc15_soc20=%ld;CT;1:NA",
+				elaps_msec);
+
+		log_to_metrics(ANDROID_LOG_INFO, "battery", buf);
+		memset(buf, 0, 256);
+	}
+
+	if (BMT_status.SOC >= 20 && bat_0_20_flag) {
+		bat_0_20_flag = false;
+		curr = current_kernel_time();
+		diff = timespec_sub(curr, charging_0_20_time);
+		elaps_msec = diff.tv_sec * 1000 + diff.tv_nsec / NSEC_PER_MSEC;
+
+		if (elaps_msec > 60000) {
+			snprintf(buf, sizeof(buf),
+					"bq24296:def:time_soc0_soc20=%ld;CT;1:NA",
+					elaps_msec);
+
+			log_to_metrics(ANDROID_LOG_INFO, "battery", buf);
+			memset(buf, 0, 256);
+		}
+	}
+
+	bq24296_get_fault_type(&charger_fault_type);
+	if (0 != charger_fault_type) {
+		snprintf(buf, sizeof(buf),
+			"bq24296:def:chager_fault_type=%u;CT;1:NA",
+			charger_fault_type);
+
+		log_to_metrics(ANDROID_LOG_INFO, "battery", buf);
+	}
+#endif
 	battery_xlog_printk(BAT_LOG_CRTI, "UI_SOC=(%d), resetBatteryMeter=(%d)\n",
 			    BMT_status.UI_SOC, resetBatteryMeter);
 
@@ -3003,7 +3213,7 @@ static void mt_battery_thermal_check(void)
 					    "[Battery] In thermal_test_mode , Tbat=%d\n",
 					    BMT_status.temperature);
 		}
-#if defined(CONFIG_MTK_JEITA_STANDARD_SUPPORT) && defined(CONFIG_AUSTIN_PROJECT)
+#if defined(CONFIG_MTK_JEITA_STANDARD_SUPPORT)
 		/* ignore default rule */
 	if (BMT_status.temperature <= -10) {
 		pr_notice("[Battery] Tbat(%d)<= -10, system need power down.\n", BMT_status.temperature);
@@ -3366,11 +3576,22 @@ void BAT_thread(void)
 	static kal_bool battery_meter_initilized = KAL_FALSE;
 	struct timespec now_time;
 	unsigned long total_time_plug_in;
+#if defined(CONFIG_AMAZON_METRICS_LOG) && defined(CONFIG_AUSTIN_PROJECT)
+	char buf[256] = {0};
+	unsigned long virtual_temp = get_virtualsensor_temp();
+#endif
 
 	if (battery_meter_initilized == KAL_FALSE) {
 		battery_meter_initial();	/* move from battery_probe() to decrease booting time */
 		BMT_status.nPercent_ZCV = battery_meter_get_battery_nPercent_zcv();
 		battery_meter_initilized = KAL_TRUE;
+
+#if defined(CONFIG_AMAZON_METRICS_LOG) && defined(CONFIG_AUSTIN_PROJECT)
+		if (BMT_status.SOC == 0) {
+			bat_0_20_flag = true;
+			charging_0_20_time = current_kernel_time();
+		}
+#endif
 	}
 
 	mt_battery_charger_detect_check();
@@ -3381,18 +3602,53 @@ void BAT_thread(void)
 	mt_battery_thermal_check();
 	mt_battery_notify_check();
 
-	if (BMT_status.charger_exist == KAL_TRUE) {	
+	if (BMT_status.charger_exist == KAL_TRUE) {
 		getrawmonotonic(&now_time);
 
 		total_time_plug_in = g_custom_plugin_time;
 		if ((now_time.tv_sec - chr_plug_in_time.tv_sec) > 0)
 			total_time_plug_in += now_time.tv_sec - chr_plug_in_time.tv_sec;
 
-		if (total_time_plug_in > PLUGIN_THRESHOLD)
+		if (total_time_plug_in > PLUGIN_THRESHOLD) {
 			g_custom_charging_cv = BATTERY_VOLT_04_100000_V;
+#if defined(CONFIG_AMAZON_METRICS_LOG) && defined(CONFIG_AUSTIN_PROJECT)
+			if (!bat_14days_flag) {
+				bat_14days_flag = true;
+				snprintf(buf, sizeof(buf),
+				"bq24296:def:Charing_Over_14days=%d;CT;1,Total_Plug_Time=%ld;CT;1,"
+				"Bat_Vol=%d;CT;1,UI_SOC=%d;CT;1,SOC=%d;CT;1,Bat_Temp=%d;CT;1,"
+				"Vir_Avg_Temp=%ld;CT;1,Bat_Cycle_Count=%d;CT;1:NA",
+				1, total_time_plug_in, BMT_status.bat_vol, BMT_status.UI_SOC, BMT_status.SOC, BMT_status.temperature,
+				virtual_temp, gFG_battery_cycle);
+
+				log_to_metrics(ANDROID_LOG_INFO, "battery", buf);
+				memset(buf, 0, 256);
+			}
+
+			if (total_time_plug_in <= PLUGIN_THRESHOLD && bat_14days_flag)
+				bat_14days_flag = false;
+#endif
+		}
 		else
 			g_custom_charging_cv = -1;
 
+#if defined(CONFIG_AMAZON_METRICS_LOG) && defined(CONFIG_AUSTIN_PROJECT)
+		if (g_custom_charging_mode == 1 && !bat_demo_flag) {
+			bat_demo_flag = true;
+			snprintf(buf, sizeof(buf),
+			"bq24296:def:Store_Demo_Mode=%d;CT;1,Total_Plug_Time=%ld;CT;1,"
+			"Bat_Vol=%d;CT;1,UI_SOC=%d;CT;1,SOC=%d;CT;1,Bat_Temp=%d;CT;1,"
+			"Vir_Avg_Temp=%ld;CT;1,Bat_Cycle_Count=%d;CT;1:NA",
+			g_custom_charging_mode, total_time_plug_in, BMT_status.bat_vol, BMT_status.UI_SOC, BMT_status.SOC, BMT_status.temperature,
+			virtual_temp, gFG_battery_cycle);
+
+			log_to_metrics(ANDROID_LOG_INFO, "battery", buf);
+
+		}
+
+		if (g_custom_charging_mode != 1 && bat_demo_flag)
+			bat_demo_flag = false;
+#endif
 		battery_xlog_printk(BAT_LOG_FULL, "total plug-in time(%lu), cv(%d)\r\n",
 			total_time_plug_in, g_custom_charging_cv);
 
@@ -4028,8 +4284,8 @@ static int battery_probe(struct platform_device *dev)
 		ret_device_file = device_create_file(&(dev->dev), &dev_attr_Charging_CallState);
 		ret_device_file = device_create_file(&(dev->dev), &dev_attr_Charger_Type);
 		ret_device_file = device_create_file(&(dev->dev), &dev_attr_Custom_PlugIn_Time);
-	#ifdef CONFIG_AUSTIN_PROJECT
 		ret_device_file = device_create_file(&(dev->dev), &dev_attr_Custom_Charging_Current);
+	#ifdef CONFIG_AUSTIN_PROJECT
 		ret_device_file = device_create_file(&(dev->dev), &dev_attr_Custom_Charging_Mode);
 		ret_device_file = device_create_file(&(dev->dev), &dev_attr_ChargeIC_Vendor_Name);
 		ret_device_file = device_create_file(&(dev->dev), &dev_attr_Battery_Vendor_Name);

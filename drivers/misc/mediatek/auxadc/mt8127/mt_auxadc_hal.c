@@ -745,6 +745,16 @@ void mt_auxadc_hal_resume(void)
 
 int mt_auxadc_dump_register(char *buf)
 {
+	if (buf == NULL) {
+		pr_debug("[%s] Invalid input!!\n", __func__);
+		return 0;
+	}
+
+	if (strlen(buf) < 64) {
+		pr_debug("[%s] Invalid input!!\n", __func__);
+		return 0;
+	}
+
 	printk(KERN_DEBUG "[auxadc]: AUXADC_CON0=%x\n", *(volatile u16 *)AUXADC_CON0);
 	printk(KERN_DEBUG "[auxadc]: AUXADC_CON1=%x\n", *(volatile u16 *)AUXADC_CON1);
 	printk(KERN_DEBUG "[auxadc]: AUXADC_CON2=%x\n", *(volatile u16 *)AUXADC_CON2);

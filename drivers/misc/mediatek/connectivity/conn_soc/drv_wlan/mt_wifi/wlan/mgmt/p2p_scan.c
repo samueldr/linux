@@ -694,7 +694,7 @@ scanP2pProcessBeaconAndProbeResp(
             rChannelInfo.eBand = prBssDesc->eBand;
 			prBssDesc->fgIsP2PReport = TRUE;
 
-			DBGLOG(P2P, INFO, ("indicate %s [%d]\n", prBssDesc->aucSSID,prBssDesc->ucChannelNum));
+			DBGLOG(P2P, TRACE, ("indicate %s [%d]\n", prBssDesc->aucSSID,prBssDesc->ucChannelNum));
 
             kalP2PIndicateBssInfo(prAdapter->prGlueInfo,
                             (PUINT_8)prSwRfb->pvHeader,

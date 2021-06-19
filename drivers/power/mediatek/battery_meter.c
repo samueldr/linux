@@ -300,13 +300,13 @@ kal_int32 g_Q_MAX_POS_25_H_CURRENT_0cycle[] = {2965, 2984};
 kal_int32 g_Q_MAX_POS_0_H_CURRENT_0cycle[] = {2977, 2917};
 kal_int32 g_Q_MAX_NEG_10_H_CURRENT_0cycle[] = {2648, 2506};
 
-kal_int32 g_Q_MAX_POS_50_500cycle[] = {2963, 2871};
-kal_int32 g_Q_MAX_POS_25_500cycle[] = {3000, 2911};
-kal_int32 g_Q_MAX_POS_0_500cycle[] = {3047, 2903};
+kal_int32 g_Q_MAX_POS_50_500cycle[] = {2887, 2871};
+kal_int32 g_Q_MAX_POS_25_500cycle[] = {2910, 2911};
+kal_int32 g_Q_MAX_POS_0_500cycle[] = {2954, 2903};
 kal_int32 g_Q_MAX_NEG_10_500cycle[] = {3061, 3042};
-kal_int32 g_Q_MAX_POS_50_H_CURRENT_500cycle[] = {2937, 2835};
-kal_int32 g_Q_MAX_POS_25_H_CURRENT_500cycle[] = {2965, 2848};
-kal_int32 g_Q_MAX_POS_0_H_CURRENT_500cycle[] = {2977, 2279};
+kal_int32 g_Q_MAX_POS_50_H_CURRENT_500cycle[] = {2870, 2835};
+kal_int32 g_Q_MAX_POS_25_H_CURRENT_500cycle[] = {2868, 2848};
+kal_int32 g_Q_MAX_POS_0_H_CURRENT_500cycle[] = {2463, 2279};
 kal_int32 g_Q_MAX_NEG_10_H_CURRENT_500cycle[] = {2648, 2506};
 #endif
 

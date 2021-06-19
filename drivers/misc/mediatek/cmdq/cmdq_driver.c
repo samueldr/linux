@@ -41,7 +41,10 @@ static const struct of_device_id cmdq_of_ids[] = {
 };
 #endif
 
+/* max count of regs */
+#define CMDQ_MAX_COMMAND_SIZE	(0x10000)
 #define CMDQ_MAX_DUMP_REG_COUNT (2048)
+#define CMDQ_MAX_WRITE_ADDR_COUNT	(PAGE_SIZE / sizeof(u32))
 
 static dev_t gCmdqDevNo;
 static struct cdev *gCmdqCDev;
@@ -240,8 +243,9 @@ static void cmdq_driver_process_read_address_request(cmdqReadAddressStruct *req_
 
 	do {
 		if (NULL == req_user ||
-		    0 == req_user->count ||
-		    NULL == req_user->values || NULL == req_user->dmaAddresses) {
+			0 == req_user->count ||
+			req_user->count > CMDQ_MAX_DUMP_REG_COUNT ||
+			NULL == req_user->values || NULL == req_user->dmaAddresses) {
 			CMDQ_ERR("[READ_PA] invalid req_user\n");
 			break;
 		}
@@ -367,6 +371,8 @@ static long cmdq_driver_process_command_request(cmdqCommandStruct *pCommand)
 		CMDQ_ERR("mismatch regRequest and regValue\n");
 		return -EFAULT;
 	}
+	if (pCommand->regRequest.count > CMDQ_MAX_DUMP_REG_COUNT)
+		return -EINVAL;
 
 	/* allocate secure medatata */
 	status = cmdq_driver_create_secure_medadata(pCommand);
@@ -461,6 +467,10 @@ static long cmdq_ioctl(struct file *pFile, unsigned int code, unsigned long para
 		if (copy_from_user(&command, (void *)param, sizeof(cmdqCommandStruct))) {
 			return -EFAULT;
 		}
+		if (command.regRequest.count > CMDQ_MAX_DUMP_REG_COUNT ||
+			!command.blockSize ||
+			command.blockSize > CMDQ_MAX_COMMAND_SIZE)
+			return -EINVAL;
 
 		/* insert private_data for resource reclaim */
 		command.privateData = (void *)pFile->private_data;
@@ -484,6 +494,8 @@ static long cmdq_ioctl(struct file *pFile, unsigned int code, unsigned long para
 			return -EFAULT;
 		}
 
+		if (job.command.blockSize > CMDQ_MAX_COMMAND_SIZE)
+			return -EINVAL;
 		/* not support secure path for async ioctl yet */
 		if (true == job.command.secData.isSecure) {
 			CMDQ_ERR("not support secure path for CMDQ_IOCTL_ASYNC_JOB_EXEC\n");
@@ -541,6 +553,9 @@ static long cmdq_ioctl(struct file *pFile, unsigned int code, unsigned long para
 			return -EFAULT;
 		}
 		pTask = (TaskStruct *)(unsigned long)jobResult.hJob;
+
+		if (pTask->regCount > CMDQ_MAX_DUMP_REG_COUNT)
+			return -EINVAL;
 
 		/* utility service, fill the engine flag. */
 		/* this is required by MDP. */
@@ -634,6 +649,13 @@ static long cmdq_ioctl(struct file *pFile, unsigned int code, unsigned long para
 			if (copy_from_user(&addrReq, (void *)param, sizeof(addrReq))) {
 				CMDQ_ERR("CMDQ_IOCTL_ALLOC_WRITE_ADDRESS copy_from_user failed\n");
 				return -EFAULT;
+			}
+
+			if (!addrReq.count || addrReq.count > CMDQ_MAX_WRITE_ADDR_COUNT) {
+				CMDQ_ERR(
+					"CMDQ_IOCTL_ALLOC_WRITE_ADDRESS invalid alloc write addr count:%u\n",
+					addrReq.count);
+				return -EINVAL;
 			}
 
 			status = cmdqCoreAllocWriteAddress(addrReq.count, &paStart);

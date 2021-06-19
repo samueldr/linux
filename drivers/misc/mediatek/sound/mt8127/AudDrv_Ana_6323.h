@@ -64,6 +64,11 @@
 #define ABB_AFE_PMIC_NEWIF_CFG3 (PMIC_ABB_AFE_REG_BASE+0x002A)
 #define ABB_AFE_TOP_CON0    (PMIC_ABB_AFE_REG_BASE+0x002C)
 #define ABB_AFE_MON_DEBUG0  (PMIC_ABB_AFE_REG_BASE+0x002E)
+
+/* The valid range of audio digital hardware in PMIC */
+#define ABB_AFE_ADDR_START	ABB_AFE_CON0
+#define ABB_AFE_ADDR_END	ABB_AFE_MON_DEBUG0
+
 //---------------digital pmic  register define -------------------------------------------
 #if 0//
 #define AFE_PMICDIG_AUDIO_BASE        (0x4000)

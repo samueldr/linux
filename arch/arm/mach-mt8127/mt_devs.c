@@ -2504,6 +2504,9 @@ void mt_reserve(void)
 //    aee_dram_console_reserve_memory();
     mrdump_reserve_memory();
 
+#if defined(CONFIG_AMAZON_LL_LOG)
+    memblock_reserve(CONFIG_AMAZON_LOW_LEVEL_LOG_DRAM_ADDR, CONFIG_AMAZON_LOW_LEVEL_LOG_DRAM_SIZE);
+#endif
 #if defined(CONFIG_MTK_RAM_CONSOLE_USING_DRAM)
     memblock_reserve(CONFIG_MTK_RAM_CONSOLE_DRAM_ADDR, CONFIG_MTK_RAM_CONSOLE_DRAM_SIZE);
 #endif

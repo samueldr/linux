@@ -252,8 +252,11 @@ static int life_cycle_reason_lookup(void)
 	if (lcr_found)
 		return 0;
 
-	/* boot reason: abnormal */
 	switch (boot_reason) {
+	case WARMBOOT_BY_SW:
+		p_dev_sol->life_cycle_reason_idx = WARM_BOOT_BY_SW;
+		lcr_found = true;
+		break;
 	case WARMBOOT_BY_KERNEL_WATCHDOG:
 		p_dev_sol->life_cycle_reason_idx = WARM_BOOT_BY_KERNEL_WDG;
 		lcr_found = true;
@@ -270,8 +273,21 @@ static int life_cycle_reason_lookup(void)
 		break;
 	}
 
-	/* shutdown reason: abnormal */
+	if (lcr_found)
+		return 0;
+
 	switch (shutdown_reason) {
+	case SHUTDOWN_BY_SW:
+		p_dev_sol->life_cycle_reason_idx = SW_SHUTDOWN;
+		lcr_found = true;
+		break;
+	case SHUTDOWN_BY_SW_LONG_PWR_KEY_PRESS:
+		/*LCR reason should be same for SW/HW long pwr key press shutdown,
+		do not introdcue new LCR as it might create confusion
+		for others products*/
+		p_dev_sol->life_cycle_reason_idx = LONG_KEY_PRESSED_PWR_KEY_SHUTDOWN;
+		lcr_found = true;
+		break;
 	case SHUTDOWN_BY_LONG_PWR_KEY_PRESS:
 		p_dev_sol->life_cycle_reason_idx = LONG_KEY_PRESSED_PWR_KEY_SHUTDOWN;
 		lcr_found = true;
@@ -287,13 +303,7 @@ static int life_cycle_reason_lookup(void)
 	if (lcr_found)
 		return 0;
 
-	/* boot reason: normal */
 	switch (boot_reason) {
-	case WARMBOOT_BY_SW:
-		p_dev_sol->life_cycle_reason_idx = WARM_BOOT_BY_SW;
-		lcr_found = true;
-		break;
-
 	case COLDBOOT_BY_USB:
 		p_dev_sol->life_cycle_reason_idx = COLD_BOOT_BY_USB_CHARGER;
 		lcr_found = true;
@@ -313,16 +323,6 @@ static int life_cycle_reason_lookup(void)
 		break;
 	}
 
-
-	/* shutdown reason: normal */
-	switch (shutdown_reason) {
-	case SHUTDOWN_BY_SW:
-		p_dev_sol->life_cycle_reason_idx = SW_SHUTDOWN;
-		lcr_found = true;
-		break;
-	default:
-		break;
-	}
 
 	return 0;
 }
@@ -460,7 +460,7 @@ int __weak life_cycle_platform_init(sign_of_life_ops *sol_ops)
 
 static int __init dev_sol_init(void)
 {
-	printk(KERN_INFO "Amazon: sign of life device driver init\n");
+	printk(KERN_NOTICE "Amazon: sign of life device driver init\n");
 	p_dev_sol = kzalloc(sizeof(struct dev_sol), GFP_KERNEL);
 	if (!p_dev_sol) {
 		printk (KERN_ERR "%s: kmalloc allocation failed\n", __func__);
@@ -479,13 +479,14 @@ static int __init dev_sol_init(void)
 
 	/* look up the life cycle reason */
 	life_cycle_reason_lookup();
-	printk(KERN_INFO "%s: life cycle reason is %s\n", __func__, life_cycle_reasons[p_dev_sol->life_cycle_reason_idx]);
+	printk(KERN_NOTICE "%s: life cycle reason is %s\n",
+		 __func__, life_cycle_reasons[p_dev_sol->life_cycle_reason_idx]);
 
 	/* clean up the life cycle reason settings */
 	if (get_boot_mode() == KERNEL_POWER_OFF_CHARGING_BOOT || get_boot_mode() == LOW_POWER_OFF_CHARGING_BOOT) {
-		printk(KERN_INFO "%s: in charger mode. Don't reset LCR registers.\n", __func__);
+		printk(KERN_NOTICE "%s: in charger mode. Don't reset LCR registers.\n", __func__);
 	} else {
-		printk(KERN_INFO "%s: not in charger mode. Reset LCR registers.\n", __func__);
+		printk(KERN_NOTICE "%s: not in charger mode. Reset LCR registers.\n", __func__);
 		p_dev_sol->sol_ops.lcr_reset();
 	}
 

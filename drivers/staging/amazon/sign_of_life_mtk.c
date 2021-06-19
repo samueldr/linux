@@ -56,6 +56,7 @@
 #define RTC_NEW_SPARE2_SHUTDOWN_PWR_KEY                (1U << 10)
 #define RTC_NEW_SPARE2_SHUTDOWN_SUDDEN_PWR_LOSS        (1U << 11)
 #define RTC_NEW_SPARE2_SHUTDOWN_UKNOWN                 (1U << 12)
+#define RTC_NEW_SPARE2_SHUTDOWN_SW_LONG_PWR_KEY_PRESS  (1U << 13)
 
 /*
  * RTC_NEW_SPARE3: RTC_AL_MTH bit0~3
@@ -123,12 +124,11 @@ static int (mtk_read_boot_reason)(life_cycle_boot_reason *boot_reason)
 	rtc_breason = rtc_read(RTC_AL_DOM);
 	rtc_release_lock();
 
-	printk(KERN_INFO"%s: boot_reason is 0x%x\n", __func__, (u32)(rtc_breason));
-
-	if (rtc_breason & RTC_NEW_SPARE1_WARM_BOOT_KERNEL_PANIC)
-		*boot_reason = WARMBOOT_BY_KERNEL_PANIC;
-	else if (rtc_breason & RTC_NEW_SPARE1_WARM_BOOT_KERNEL_WDOG)
+	printk(KERN_NOTICE"%s: boot_reason is 0x%x\n", __func__, (u32)(rtc_breason));
+	if (rtc_breason & RTC_NEW_SPARE1_WARM_BOOT_KERNEL_WDOG)
 		*boot_reason = WARMBOOT_BY_KERNEL_WATCHDOG;
+	else if (rtc_breason & RTC_NEW_SPARE1_WARM_BOOT_KERNEL_PANIC)
+		*boot_reason = WARMBOOT_BY_KERNEL_PANIC;
 	else if (rtc_breason & RTC_NEW_SPARE1_WARM_BOOT_HW_WDOG)
 		*boot_reason = WARMBOOT_BY_HW_WATCHDOG;
 	else if (rtc_breason & RTC_NEW_SPARE1_WARM_BOOT_SW)
@@ -155,7 +155,7 @@ static int (mtk_write_boot_reason)(life_cycle_boot_reason boot_reason)
 	rtc_breason = rtc_read(RTC_AL_DOM);
 	rtc_release_lock();
 
-	printk(KERN_INFO"%s: current 0x%x boot_reason 0x%x\n", __func__, rtc_breason, boot_reason);
+	printk(KERN_NOTICE"%s: current 0x%x boot_reason 0x%x\n", __func__, rtc_breason, boot_reason);
 	if (boot_reason == WARMBOOT_BY_KERNEL_PANIC)
 		rtc_breason = rtc_breason | RTC_NEW_SPARE1_WARM_BOOT_KERNEL_PANIC;
 	else if (boot_reason == WARMBOOT_BY_KERNEL_WATCHDOG)
@@ -187,11 +187,13 @@ static int (mtk_read_shutdown_reason)(life_cycle_shutdown_reason *shutdown_reaso
 	rtc_shutdown_reason = rtc_read(RTC_AL_DOW);
 	rtc_release_lock();
 
-	printk(KERN_INFO"%s: shutdown reason is 0x%x\n", __func__, rtc_shutdown_reason);
-	if (rtc_shutdown_reason & RTC_NEW_SPARE2_SHUTDOWN_LONG_PWR_KEY_PRESS)
-		*shutdown_reason = SHUTDOWN_BY_LONG_PWR_KEY_PRESS;
-	else if (rtc_shutdown_reason & RTC_NEW_SPARE2_SHUTDOWN_SW)
+	printk(KERN_NOTICE"%s: shutdown reason is 0x%x\n", __func__, rtc_shutdown_reason);
+	if (rtc_shutdown_reason & RTC_NEW_SPARE2_SHUTDOWN_SW)
 		*shutdown_reason = SHUTDOWN_BY_SW;
+	else if (rtc_shutdown_reason & RTC_NEW_SPARE2_SHUTDOWN_SW_LONG_PWR_KEY_PRESS)
+		*shutdown_reason = SHUTDOWN_BY_SW_LONG_PWR_KEY_PRESS;
+	else if (rtc_shutdown_reason & RTC_NEW_SPARE2_SHUTDOWN_LONG_PWR_KEY_PRESS)
+		*shutdown_reason = SHUTDOWN_BY_LONG_PWR_KEY_PRESS;
 	else if (rtc_shutdown_reason & RTC_NEW_SPARE2_SHUTDOWN_PWR_KEY)
 		*shutdown_reason = SHUTDOWN_BY_PWR_KEY;
 	else if (rtc_shutdown_reason & RTC_NEW_SPARE2_SHUTDOWN_SUDDEN_PWR_LOSS)
@@ -199,7 +201,7 @@ static int (mtk_read_shutdown_reason)(life_cycle_shutdown_reason *shutdown_reaso
 	else if (rtc_shutdown_reason & RTC_NEW_SPARE2_SHUTDOWN_UKNOWN)
 		*shutdown_reason = SHUTDOWN_BY_UNKNOWN_REASONS;
 	else {
-		printk(KERN_ERR"Failed to read boot rtc boot reason\n");
+		printk(KERN_ERR"Failed to read shutdown reason\n");
 		return -1;
 	}
 
@@ -214,7 +216,7 @@ static int (mtk_write_shutdown_reason)(life_cycle_shutdown_reason shutdown_reaso
 	rtc_shutdown_reason = rtc_read(RTC_AL_DOW);
 	rtc_release_lock();
 
-	printk(KERN_INFO"%s: shutdown_reason 0x%x\n", __func__, rtc_shutdown_reason);
+	printk(KERN_NOTICE"%s: current 0x%x shutdown_reason 0x%x\n", __func__, rtc_shutdown_reason, shutdown_reason);
 
 	if (shutdown_reason == SHUTDOWN_BY_LONG_PWR_KEY_PRESS)
 		rtc_shutdown_reason = rtc_shutdown_reason | RTC_NEW_SPARE2_SHUTDOWN_LONG_PWR_KEY_PRESS;
@@ -226,6 +228,8 @@ static int (mtk_write_shutdown_reason)(life_cycle_shutdown_reason shutdown_reaso
 		rtc_shutdown_reason = rtc_shutdown_reason | RTC_NEW_SPARE2_SHUTDOWN_SUDDEN_PWR_LOSS;
 	else if (shutdown_reason == SHUTDOWN_BY_UNKNOWN_REASONS)
 		rtc_shutdown_reason = rtc_shutdown_reason | RTC_NEW_SPARE2_SHUTDOWN_UKNOWN;
+	else if (shutdown_reason == SHUTDOWN_BY_SW_LONG_PWR_KEY_PRESS)
+		rtc_shutdown_reason = rtc_shutdown_reason | RTC_NEW_SPARE2_SHUTDOWN_SW_LONG_PWR_KEY_PRESS;
 
 	rtc_acquire_lock();
 	rtc_write(RTC_AL_DOW, rtc_shutdown_reason);
@@ -242,7 +246,7 @@ static int (mtk_read_thermal_shutdown_reason)(life_cycle_thermal_shutdown_reason
 	rtc_thermal_shutdown_reason = rtc_read(RTC_AL_MTH);
 	rtc_release_lock();
 
-	printk(KERN_INFO"%s: thermal shutdown reason 0x%x\n", __func__, rtc_thermal_shutdown_reason);
+	printk(KERN_NOTICE"%s: thermal shutdown reason 0x%x\n", __func__, rtc_thermal_shutdown_reason);
 	if (rtc_thermal_shutdown_reason & RTC_NEW_SPARE3_THERMAL_SHUTDOWN_BATTERY)
 		*thermal_shutdown_reason = THERMAL_SHUTDOWN_REASON_BATTERY;
 	else if (rtc_thermal_shutdown_reason & RTC_NEW_SPARE3_THERMAL_SHUTDOWN_PMIC)
@@ -256,7 +260,7 @@ static int (mtk_read_thermal_shutdown_reason)(life_cycle_thermal_shutdown_reason
 	else if (rtc_thermal_shutdown_reason & RTC_NEW_SPARE3_THERMAL_SHUTDOWN_PCB)
 		*thermal_shutdown_reason = THERMAL_SHUTDOWN_REASON_PCB;
 	else {
-		printk(KERN_ERR"Failed to read boot rtc boot reason\n");
+		printk(KERN_ERR"Failed to read thermal shutdown reason\n");
 		return -1;
 	}
 
@@ -271,7 +275,8 @@ static int (mtk_write_thermal_shutdown_reason)(life_cycle_thermal_shutdown_reaso
 	rtc_thermal_shutdown_reason = rtc_read(RTC_AL_MTH);
 	rtc_release_lock();
 
-	printk(KERN_INFO "%s: shutdown_reason 0x%0x\n", __func__, rtc_thermal_shutdown_reason);
+	printk(KERN_NOTICE "%s: current 0x%x thermal shutdown_reason 0x%0x\n",
+		 __func__, rtc_thermal_shutdown_reason, thermal_shutdown_reason);
 
 
 	if (thermal_shutdown_reason == THERMAL_SHUTDOWN_REASON_BATTERY)
@@ -301,7 +306,7 @@ static int (mtk_read_special_mode)(life_cycle_special_mode *special_mode)
 	rtc_smode = rtc_read(RTC_SPAR1);
 	rtc_release_lock();
 
-	printk(KERN_ERR"%s: special mode is 0x%x\n", __func__, rtc_smode);
+	printk(KERN_NOTICE"%s: special mode is 0x%x\n", __func__, rtc_smode);
 	if (rtc_smode & RTC_SPAR0_SPECIAL_MODE_LOW_BATTERY)
 		*special_mode = LIFE_CYCLE_SMODE_LOW_BATTERY;
 	else if (rtc_smode & RTC_SPAR0_SPECIAL_MODE_WARM_BOOT_USB_CONNECTED)
@@ -311,7 +316,7 @@ static int (mtk_read_special_mode)(life_cycle_special_mode *special_mode)
 	else if (rtc_smode & RTC_SPAR0_SPECIAL_MODE_FACTORY_RESET)
 		*special_mode = LIFE_CYCLE_SMODE_FACTORY_RESET;
 	else {
-		printk(KERN_ERR"Failed to read boot rtc boot reason\n");
+		printk(KERN_ERR"Failed to read special mode\n");
 		return -1;
 	}
 	return 0;
@@ -325,7 +330,7 @@ static int (mtk_write_special_mode)(life_cycle_special_mode special_mode)
 	rtc_smode = rtc_read(RTC_SPAR1);
 	rtc_release_lock();
 
-	printk(KERN_INFO"%s: special_mode 0x%x\n", __func__, rtc_smode);
+	printk(KERN_NOTICE"%s: current 0x%x  special_mode 0x%x\n", __func__, rtc_smode, special_mode);
 
 	if (special_mode == LIFE_CYCLE_SMODE_LOW_BATTERY)
 		rtc_smode = rtc_smode | RTC_SPAR0_SPECIAL_MODE_LOW_BATTERY;
@@ -375,7 +380,7 @@ int mtk_lcr_reset(void)
 
 int life_cycle_platform_init(sign_of_life_ops *sol_ops)
 {
-	printk(KERN_ERR "%s: Support MTK platform\n", __func__);
+	printk(KERN_NOTICE "%s: Support MTK platform\n", __func__);
 	sol_ops->read_boot_reason = mtk_read_boot_reason;
 	sol_ops->write_boot_reason = mtk_write_boot_reason;
 	sol_ops->read_shutdown_reason = mtk_read_shutdown_reason;

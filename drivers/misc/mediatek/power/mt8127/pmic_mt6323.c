@@ -148,7 +148,7 @@ static unsigned long timer_pos = 0;
 #endif
 
 static struct hrtimer long_press_pwrkey_shutdown_timer;
-#define LONG_PRESS_PWRKEY_SHUTDOWN_TIME		(8)	/* 8sec */
+#define LONG_PRESS_PWRKEY_SHUTDOWN_TIME		(6)	/* 6sec */
 
 #ifdef CONFIG_AMAZON_POWEROFF_LOG
 static void log_long_press_power_key(void)
@@ -165,7 +165,7 @@ static void log_long_press_power_key(void)
 	if (rc < 0)
 		pr_err("call /sbin/crashreport failed, rc = %d\n", rc);
 
-	msleep(2000); /* 2s */
+	msleep(6000); /* 6s */
 }
 #endif /* CONFIG_AMAZON_POWEROFF_LOG */
 
@@ -598,18 +598,25 @@ static void deferred_restart(struct work_struct *dummy)
 {
 	mutex_lock(&pmic_mutex);
 
-	pr_info("Long key press power off\n");
+	pr_notice("[deferred_restart] -- Long key press power off\n");
 #ifdef CONFIG_AMAZON_POWEROFF_LOG
         log_long_press_power_key();
 #endif /* CONFIG_AMAZON_POWEROFF_LOG */
-	sys_sync();
-	rtc_mark_enter_lprst();  /* for metrics */
-	rtc_mark_enter_sw_lprst(); /* for long press power off */
-	if (upmu_get_rgs_chrdet())
-		rtc_mark_enter_kpoc();
+	unsigned int pwrkey_deb = 0;
+        pwrkey_deb = upmu_get_pwrkey_deb();
+        if (pwrkey_deb == 1) {
+                pr_err("[deferred_restart] -- pwrkey release, do nothing\n");
+        } else {
+                sys_sync();
+#ifdef CONFIG_AMAZON_SIGN_OF_LIFE
+		life_cycle_set_shutdown_reason(SHUTDOWN_BY_SW_LONG_PWR_KEY_PRESS);
+#endif /* for metrics */
+		rtc_mark_enter_sw_lprst(); /* for long press power off */
+		if (upmu_get_rgs_chrdet())
+			rtc_mark_enter_kpoc();
 
-	orderly_reboot(true);
-
+		orderly_reboot(true);
+	}
 	mutex_unlock(&pmic_mutex);
 }
 
