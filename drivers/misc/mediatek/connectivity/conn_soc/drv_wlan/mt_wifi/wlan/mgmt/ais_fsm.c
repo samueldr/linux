@@ -973,6 +973,7 @@
 *                            P U B L I C   D A T A
 ********************************************************************************
 */
+BOOLEAN g_fgDisconnectByOid = FALSE;
 
 /*******************************************************************************
 *                           P R I V A T E   D A T A
@@ -4030,11 +4031,13 @@ aisFsmDisconnect (
     )
 {
     P_BSS_INFO_T prAisBssInfo;
+	P_GLUE_INFO_T prGlueInfo;
 
     ASSERT(prAdapter);
 
 	DBGLOG(INIT, INFO, ("aisFsmDisconnect\n"));
-    prAisBssInfo = &(prAdapter->rWifiVar.arBssInfo[NETWORK_TYPE_AIS_INDEX]);
+	prGlueInfo = prAdapter->prGlueInfo;
+	prAisBssInfo = &(prAdapter->rWifiVar.arBssInfo[NETWORK_TYPE_AIS_INDEX]);
 
     nicPmIndicateBssAbort(prAdapter, NETWORK_TYPE_AIS_INDEX);
 
@@ -4125,6 +4128,11 @@ aisFsmDisconnect (
             PARAM_MEDIA_STATE_DISCONNECTED,
             fgDelayIndication);
 
+	if (g_fgDisconnectByOid) {
+		g_fgDisconnectByOid = FALSE;
+		DBGLOG(INIT, INFO, ("Disconnect by Oid\n"));
+		kalOidComplete(prGlueInfo, FALSE, 0, WLAN_STATUS_SUCCESS);
+	}
 
     //4 <7> Trigger AIS FSM
     aisFsmSteps(prAdapter, AIS_STATE_IDLE);

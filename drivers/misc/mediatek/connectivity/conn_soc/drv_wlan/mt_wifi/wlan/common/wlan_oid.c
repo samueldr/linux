@@ -7809,7 +7809,12 @@ wlanoidSetDisassociate (
     prAdapter->fgIsRadioOff = TRUE;
 #endif
 
-    return WLAN_STATUS_SUCCESS;
+	if (g_fgDisconnectByOid == TRUE)
+		DBGLOG(OID, WARN, ("Previous Disassociation not complete!\n"));
+	else
+		g_fgDisconnectByOid = TRUE;
+
+	return WLAN_STATUS_PENDING;
 } /* wlanoidSetDisassociate */
 
 

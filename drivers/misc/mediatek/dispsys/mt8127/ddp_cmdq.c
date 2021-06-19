@@ -98,6 +98,30 @@ static int disp_unlock_mutex(int id)
     return 0;
 }
 
+static long cmdq_verify_command(struct cmdqCommandStruct *command)
+{
+	#define CMDQ_INST_SIZE (2 * sizeof(uint32_t))	/* instruction is 64-bit */
+	#define CMDQ_MAX_COMMAND_SIZE		(0x10000)
+	/*
+	 * block size must grate than 0
+	 * block size must less than 64k
+	 * each cmdq instruction is 64bit,
+	 * block size must be multiple of 8
+	 */
+	if (command->blockSize < (2 * CMDQ_INST_SIZE)
+	   || (command->blockSize > CMDQ_MAX_COMMAND_SIZE)
+	   || (command->blockSize % 8 != 0)
+	   ) {
+	   /* for userspace command: must ends with EOC+JMP. */
+		CMDQ_ERR("Command block size invalid! size:%d\n",
+			command->blockSize);
+		return -EFAULT;
+	}
+
+    return 0;
+}
+
+
 static long cmdq_proc_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
     cmdqCommandStruct command = {0};
@@ -130,6 +154,9 @@ static long cmdq_proc_unlocked_ioctl(struct file *file, unsigned int cmd, unsign
             command.secData.addrList = NULL;
             command.secData.portList = NULL;
 
+			if (cmdq_verify_command(&command) != 0)
+				return -EINVAL;
+
             if (cmdqSubmitTask(&command))
             {
                 CMDQ_ERR("DISP_IOCTL_EXEC_COMMAND: Execute commands failed\n");
@@ -154,7 +181,10 @@ static long cmdq_proc_unlocked_ioctl(struct file *file, unsigned int cmd, unsign
             command.secData.portListLength = csParams.metadata.portListLength; 
             command.secData.addrList = csParams.metadata.addrList;
             command.secData.portList = csParams.metadata.portList;
-            
+
+			if (cmdq_verify_command(&command) != 0)
+				return -EINVAL;
+
             if (cmdqSubmitTask(&command))
             {
                 CMDQ_ERR("DISP_IOCTL_EXEC_COMMAND_SECURE: Execute commands failed\n");

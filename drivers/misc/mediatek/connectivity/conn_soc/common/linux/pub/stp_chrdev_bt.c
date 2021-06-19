@@ -1,10 +1,10 @@
 /*
 * Copyright (C) 2011-2014 MediaTek Inc.
-* 
-* This program is free software: you can redistribute it and/or modify it under the terms of the 
+*
+* This program is free software: you can redistribute it and/or modify it under the terms of the
 * GNU General Public License version 2 as published by the Free Software Foundation.
-* 
-* This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
+*
+* This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
 * without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 * See the GNU General Public License for more details.
 *
@@ -161,6 +161,8 @@ ssize_t BT_write(struct file *filp, const char __user *buf, size_t count, loff_t
 {
     int retval = 0;
     int written = 0;
+    int len = 0;
+
     down(&wr_mtx);
 
     BT_DBG_FUNC("%s: count %zd pos %lld\n", __func__, count, *f_pos);
@@ -176,7 +178,7 @@ ssize_t BT_write(struct file *filp, const char __user *buf, size_t count, loff_t
           retval = -99;
             BT_INFO_FUNC("MT662x reset Write: end\n");
         }
-    goto OUT;
+        goto OUT;
     }
 
     if (count > 0)
@@ -188,6 +190,45 @@ ssize_t BT_write(struct file *filp, const char __user *buf, size_t count, loff_t
             goto OUT;
         }
         //printk("%02x ", val);
+
+        /* Get length by parsing the frame
+        For more information of frame format,
+        please refer the BT spec
+        */
+        switch (o_buf[0]) {
+        case 0x01:
+            /* HCI command, type = 0x01
+            Type(8b) OpCode(16b) length(8b)
+            Head length = 1 + 2 + 1
+            */
+            len = o_buf[3] + 4;
+            break;
+        case 0x02:
+            /* ACL data, type = 0x02
+            Type(8b) handle+flag(16b) length(16b)
+            Head length = 1 + 2 + 2
+            */
+            len = (o_buf[3] | (o_buf[4] << 8)) + 5;
+            break;
+        case 0x03:
+            /* SCO data, type = 0x03
+            Type(8b) handle+flag(16b) length(8b)
+            Head length = 1 + 2 + 1
+            */
+            len = o_buf[3] + 4;
+            break;
+        default:
+            BT_ERR_FUNC("type is %d\n", o_buf[0]);
+            retval = -EFAULT;
+            goto OUT;
+        }
+
+        /* check frame length is valid */
+        if (len != copy_size) {
+            BT_ERR_FUNC("length error %d:%d\n", len, copy_size);
+            retval = -EFAULT;
+            goto OUT;
+        }
 
         written = mtk_wcn_stp_send_data(&o_buf[0], copy_size, BT_TASK_INDX);
         if(0 == written)
@@ -488,7 +529,7 @@ static void BT_exit(void)
 }
 
 #ifdef MTK_WCN_REMOVE_KERNEL_MODULE
-	
+
 int mtk_wcn_stpbt_drv_init(void)
 {
 	return BT_init();
@@ -504,10 +545,10 @@ void mtk_wcn_stpbt_drv_exit (void)
 EXPORT_SYMBOL(mtk_wcn_stpbt_drv_init);
 EXPORT_SYMBOL(mtk_wcn_stpbt_drv_exit);
 #else
-	
+
 module_init(BT_init);
 module_exit(BT_exit);
 
-	
+
 #endif
 
