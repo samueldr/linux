@@ -1432,6 +1432,143 @@ static TaskStruct* cmdq_find_free_task(uint32_t blockSize)
     return pTask;
 }
 
+bool cmdq_core_check_subsys_id_valid(u32 subsys_id)
+{
+	switch (subsys_id) {
+	case 0: /* 0x1400XXXX */
+	case 1:	/* 0x1500XXXX */
+		return true;
+	default:
+		/* check error */
+		CMDQ_ERR("subsys ID:%d check error\n", subsys_id);
+	}
+	return false;
+}
+
+bool cmdq_core_check_value_gpr_valid(u32 value_gpr)
+{
+#if 0
+	switch (value_gpr) {
+	case CMDQ_DATA_REG_JPEG:
+	case CMDQ_DATA_REG_PQ_COLOR:
+	case CMDQ_DATA_REG_2D_SHARPNESS_0:
+	case CMDQ_DATA_REG_2D_SHARPNESS_1:
+	case CMDQ_DATA_REG_DEBUG:
+		return true;
+	default:
+		return false;
+	}
+#endif
+	/* for 8127 MDP.
+	** no register backup function.
+	** no need to use GPR register.
+	*/
+	return false;
+}
+
+bool cmdq_core_check_addr_gpr_valid(u32 addr_gpr)
+{
+	#if 0
+	switch (addr_gpr) {
+	case CMDQ_DATA_REG_JPEG_DST:
+	case CMDQ_DATA_REG_PQ_COLOR_DST:
+	case CMDQ_DATA_REG_2D_SHARPNESS_0_DST:
+	case CMDQ_DATA_REG_2D_SHARPNESS_1_DST:
+	case CMDQ_DATA_REG_DEBUG_DST:
+		return true;
+	default:
+		return false;
+	}
+	#endif
+	/* for 8127 MDP.
+	** no register backup function.
+	** no need to use GPR register.
+	*/
+	return false;
+}
+
+bool cmdq_core_check_instruction_valid(struct TaskStruct *pTask, u64 instruction)
+{
+	u32 op = instruction >> 56;	/* 56 ~ 63 */
+	u32 argA = (instruction >> 32) & 0x00FFFFFF; /* 32 ~ 55 */
+	u32 argB = instruction & 0xFFFFFFFF; /* 0 ~ 31 */
+	u32 subsys_id = argA >> 22; /* 54 ~ 55 */
+	u32 offset = (argA & 0x3FFFFF); /* 32 ~ 53 */
+
+
+	switch (op) {
+	case CMDQ_CODE_READ:
+		/* no read operation in 8127.
+		** always check fail.
+		*/
+		break;
+	case CMDQ_CODE_MOVE:
+		/* allow mask instruction
+		** argA = 0
+		** argB: no limit.
+		**	*m_pCommand++ = argB;
+		**	*m_pCommand++ = CMDQ_OP_MOVE << 24;
+		*/
+		if (argA == 0) {
+			/* check OK */
+			return true;
+		}
+
+		break;
+	case CMDQ_CODE_WRITE:
+		/* allow write value to mdp related subsys register
+		** argA = subsysID + offset: subsysID should valid (mdp related subsys ID).
+		** argB: not limit.
+		**	*m_pCommand++ = argB;
+		**	*m_pCommand++ = (CMDQ_OP_WRITE << 24) | (offset & 0x3fffff) | ((subsysID & 0x3)<< 22);
+		*/
+		if (cmdq_core_check_subsys_id_valid(subsys_id)) {
+			/* check OK */
+			return true;
+		}
+		break;
+	case CMDQ_CODE_JUMP:
+		/* only allow JUMP + 8
+		** argA = 0
+		** argB = 8
+		*/
+		if ((argA == 0) && (argB == 8))
+			return true;
+		break;
+	case CMDQ_CODE_POLL:
+	case CMDQ_CODE_WFE:
+	case CMDQ_CODE_EOC:
+		return true;
+	default:
+		return false;
+	}
+
+	CMDQ_ERR("check fail: op[0x%x] argA[0x%x] subsysID[0x%x] offset[0x%x] argB[0x%x]\n", op, argA, subsys_id, offset, argB);
+	return false;
+}
+
+
+/*
+** return true for valid. false for invalid
+*/
+bool cmdq_core_check_command_valid(struct TaskStruct *pTask, u32 *pVaBase, u32 commandSize)
+{
+	u32 i = 0; /* scan inst buffer bytes */
+	u64 *pBase = (u64 *)pVaBase;
+
+	if (commandSize % 8 != 0) {
+		CMDQ_ERR("commandSize: %d not 8 align\n", commandSize);
+		return false;
+	}
+
+	for (i = 0; (i * 8) < commandSize; i++) {
+		if (!cmdq_core_check_instruction_valid(pTask, pBase[i]))
+			return false;
+	}
+	return true;
+}
+
+
 TaskStruct* cmdq_acquire_task(cmdqCommandStruct *pCommandDesc)
 {
     const bool     copyCmdFromUserSpace = (CMDQ_SCENARIO_DEBUG == pCommandDesc->scenario) ? (false): (true);
@@ -1514,7 +1651,14 @@ TaskStruct* cmdq_acquire_task(cmdqCommandStruct *pCommandDesc)
             status = -3000; 
             break;
         }
-        
+
+		/* check instruction valid. */
+		if (!cmdq_core_check_command_valid(pTask, pTask->pVABase, pTask->blockSize)) {
+			CMDQ_ERR("check inst fail\n");
+			status = -3001;
+			break;
+		}
+
         // continue to copy metadata
         if((0 < pCommandDesc->secData.addrListLength) && 
            (0 > cmdq_insert_command_buffer(pTask->secData.addrList, pCommandDesc->secData.addrList, secAddrListLength_byte, copyCmdFromUserSpace)))

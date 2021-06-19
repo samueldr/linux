@@ -2792,13 +2792,6 @@ void mmc_rescan(struct work_struct *work)
 		goto out;
 	}
 
-#ifdef CONFIG_MMC_ERR_REMOVE
-	if (host->rest_remove_flags) {
-		mmc_bus_put(host);
-		goto out;
-	}
-#endif
-
 	/*
 	 * Only we can add a new handler, so it's safe to
 	 * release the lock here.

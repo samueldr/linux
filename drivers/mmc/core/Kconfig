@@ -47,10 +47,3 @@ config MMC_SAMSUNG_SMART
 	help
 	  If you say Y here, code will be added to retrieve the Smart
 	  Report from Samsung e-MMC cards and make it available via sysfs.
-
-config MMC_ERR_REMOVE
-	bool "SD Card will be removed if SD card keeps reporting error"
-	default n
-	help
-	  If you say Y here, when SD card still keep reporting error after being
-	  reseted twice, SD card will be removed.

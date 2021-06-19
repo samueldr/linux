@@ -1256,28 +1256,8 @@ static int mmc_blk_reset(struct mmc_blk_data *md, struct mmc_host *host,
 {
 	int err;
 
-	if (md->reset_done & type) {
-#ifdef CONFIG_MMC_ERR_REMOVE
-		/*
-		 * some SD cards may keep reporting data read timeout error,
-		 * even after power cycle card, still get data read timeout,
-		 * in this case, make the card removed.
-		 * go here means that has alreay done one time reset but still
-		 * got the same error.
-		 */
-		if (!(host->caps & MMC_CAP_NONREMOVABLE)) {
-			if (host->rest_remove_flags) {
-				pr_err("%s: card reset failed again, remove card."
-					"CMD type is %d\n", __func__, type);
-				mmc_detect_change(host, 0);
-				return -EEXIST;
-			}
-
-			host->rest_remove_flags = true;
-		} else
-#endif
+	if (md->reset_done & type)
 		return -EEXIST;
-	}
 
 	md->reset_done |= type;
 	err = mmc_hw_reset(host);

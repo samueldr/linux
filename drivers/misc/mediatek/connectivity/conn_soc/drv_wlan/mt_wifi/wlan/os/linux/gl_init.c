@@ -701,7 +701,7 @@ int g_u4P2POnOffing = 0;
 #define IDME_OF_BOARD_ID	"/proc/idme/board_id"
 #endif
 #define BOARD_ID_abf123_STR "0031"
-#define BOARD_ID_BISCUIT_STR "0110"
+#define BOARD_ID_abh123_STR "0110"
 #define BOARD_ID_AUSTIN_STR "0037"
 char idme_board_id[16];
 
@@ -1112,7 +1112,7 @@ static COUNTRY_POWER_TABLE power_table_abf123[] = {
 			0x1, 0x20, 0x20), /* 5G band edge */
 };
 
-static COUNTRY_POWER_TABLE power_table_biscuit[] = {
+static COUNTRY_POWER_TABLE power_table_abh123[] = {
 	COUNTRY_PWR_TBL("WW", /* country code */
 			0x24, /* CCK */
 			0x26, 0x26, 0x26, 0x26, 0x26, /* OFDM */
@@ -1161,7 +1161,7 @@ static COUNTRY_POWER_TABLE power_table_biscuit[] = {
 
 struct board_id_power_table_map board_id_power_table_list[] = {
 	{BOARD_ID_abf123_STR, power_table_abf123, ARRAY_SIZE(power_table_abf123)},
-	{BOARD_ID_BISCUIT_STR, power_table_biscuit, ARRAY_SIZE(power_table_biscuit)},
+	{BOARD_ID_abh123_STR, power_table_abh123, ARRAY_SIZE(power_table_abh123)},
 };
 #endif
 

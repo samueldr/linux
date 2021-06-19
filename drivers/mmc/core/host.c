@@ -482,10 +482,6 @@ struct mmc_host *mmc_alloc_host(int extra, struct device *dev)
 	mutex_init(&host->slot.lock);
 	host->slot.cd_irq = -EINVAL;
 
-#ifdef CONFIG_MMC_ERR_REMOVE
-	host->rest_remove_flags = false;
-#endif
-
 #if (defined(CONFIG_AMAZON_METRICS_LOG) && defined(ENABLE_SAMSUNG_EMMC_METRICS))
 	INIT_DELAYED_WORK(&host->metrics_delay_work,
 				mmc_host_metrics_work);

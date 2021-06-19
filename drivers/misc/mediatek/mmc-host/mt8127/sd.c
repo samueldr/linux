@@ -7435,11 +7435,6 @@ static void msdc1_eint_handler(void)
     } else {
         mt_eint_set_polarity(CUST_EINT_MSDC1_INS_NUM, MT_POLARITY_HIGH);
     }
-
-#ifdef CONFIG_MMC_ERR_REMOVE
-	if (host->mmc->rest_remove_flags)
-		host->mmc->rest_remove_flags = false;
-#endif
 	
     //mt_eint_set_polarity(EINT_MSDC1_INS_NUM, host->sd_cd_polarity);
 	if(got_bad_card == 0)
