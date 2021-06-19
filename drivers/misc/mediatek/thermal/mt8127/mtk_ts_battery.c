@@ -34,7 +34,7 @@
 #include <linux/thermal_framework.h>
 #include <linux/platform_data/mtk_thermal.h>
 
-#define MTKTSBATTERY_TEMP_CRIT 60000
+#define MTKTSBATTERY_TEMP_CRIT 58000
 static DEFINE_MUTEX(therm_lock);
 
 struct mtktsbattery_thermal_zone {
@@ -184,6 +184,18 @@ static int mtktsbattery_set_trip_temp(struct thermal_zone_device *thermal,
 	return 0;
 }
 
+#ifdef CONFIG_AUSTIN_PROJECT
+static int mtktsbattery_thermal_notify(struct thermal_zone_device *thermal,
+				int trip, enum thermal_trip_type type)
+{
+	pr_err("%s: thermal_shutdown notify\n", __func__);
+	last_kmsg_thermal_shutdown();
+	pr_err("%s: thermal_shutdown notify end\n", __func__);
+
+	return 0;
+}
+#endif
+
 static struct thermal_zone_device_ops mtktsbattery_dev_ops = {
 	.get_temp = mtktsbattery_get_temp,
 	.get_mode = mtktsbattery_get_mode,
@@ -192,6 +204,9 @@ static struct thermal_zone_device_ops mtktsbattery_dev_ops = {
 	.get_trip_temp = mtktsbattery_get_trip_temp,
 	.get_crit_temp = mtktsbattery_get_crit_temp,
 	.set_trip_temp = mtktsbattery_set_trip_temp,
+#ifdef CONFIG_AUSTIN_PROJECT
+	.notify = mtktsbattery_thermal_notify,
+#endif
 };
 
 static void mtktsbattery_work(struct work_struct *work)

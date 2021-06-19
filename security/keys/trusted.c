@@ -991,6 +991,8 @@ static int trusted_update(struct key *key, struct key_preparsed_payload *prep)
 	char *datablob;
 	int ret = 0;
 
+	if (test_bit(KEY_FLAG_NEGATIVE, &key->flags))
+		return -ENOKEY;
 	if (!p->migratable)
 		return -EPERM;
 	if (datalen <= 0 || datalen > 32767 || !prep->data)

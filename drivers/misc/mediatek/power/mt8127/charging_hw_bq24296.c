@@ -586,7 +586,7 @@ static kal_uint32 charging_hw_init(void *data)
 	mutex_unlock(&g_charging_enable_mutex);
 #endif
 
-	bq24296_set_vindpm(0x8); /*VIN DPM check 4.52V*/
+	bq24296_set_vindpm(0x7); /*VIN DPM check 4.44V*/
 	bq24296_set_reg_rst(0x0);
 	bq24296_set_wdt_rst(0x1); /*Kick watchdog*/
 	bq24296_set_sys_min(0x5); /*Minimum system voltage 3.5V*/

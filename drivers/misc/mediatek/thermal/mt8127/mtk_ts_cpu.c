@@ -930,6 +930,18 @@ static int mtktscpu_set_trip_hyst(struct thermal_zone_device *thermal,
 	return 0;
 }
 
+#ifdef CONFIG_AUSTIN_PROJECT
+static int mtktscpu_thermal_notify(struct thermal_zone_device *thermal,
+				int trip, enum thermal_trip_type type)
+{
+	pr_err("%s: thermal_shutdown notify\n", __func__);
+	last_kmsg_thermal_shutdown();
+	pr_err("%s: thermal_shutdown notify end\n", __func__);
+
+	return 0;
+}
+#endif
+
 static struct thermal_zone_device_ops mtktscpu_dev_ops = {
 	.bind = mtktscpu_cdev_bind,
 	.unbind = mtktscpu_cdev_unbind,
@@ -942,6 +954,9 @@ static struct thermal_zone_device_ops mtktscpu_dev_ops = {
 	.get_crit_temp = mtktscpu_get_crit_temp,
 	.get_trip_hyst = mtktscpu_get_trip_hyst,
 	.set_trip_hyst = mtktscpu_set_trip_hyst,
+#ifdef CONFIG_AUSTIN_PROJECT
+	.notify = mtktscpu_thermal_notify,
+#endif
 };
 
 static void mtktscpu_work(struct work_struct *work)

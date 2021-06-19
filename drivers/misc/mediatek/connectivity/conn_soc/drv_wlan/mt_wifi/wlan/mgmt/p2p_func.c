@@ -1463,7 +1463,7 @@ p2pFuncValidateAuth (
     P_STA_RECORD_T prStaRec = (P_STA_RECORD_T)NULL;
     P_WLAN_AUTH_FRAME_T prAuthFrame = (P_WLAN_AUTH_FRAME_T)NULL;
 
-   DBGLOG(P2P, TRACE, ("p2pValidate Authentication Frame\n"))
+   DBGLOG(P2P, TRACE, ("p2pValidate Authentication Frame\n"));
 
     do {
         ASSERT_BREAK((prAdapter != NULL) &&

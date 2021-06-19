@@ -42,7 +42,7 @@
 #include <linux/thermal_framework.h>
 #include <linux/platform_data/mtk_thermal.h>
 
-#define MTKTSWMT_TEMP_CRIT 120000 /* value from MTK */
+#define MTKTSWMT_TEMP_CRIT 118000 /* value from MTK */
 static DEFINE_MUTEX(therm_lock);
 
 struct mtktswmt_thermal_zone {
@@ -150,6 +150,18 @@ static int mtktswmt_get_crit_temp(struct thermal_zone_device *thermal, unsigned 
 	return -EINVAL;
 }
 
+#ifdef CONFIG_AUSTIN_PROJECT
+static int mtktswmt_thermal_notify(struct thermal_zone_device *thermal,
+					int trip, enum thermal_trip_type type)
+{
+	pr_err("%s: thermal_shutdown notify\n", __func__);
+	last_kmsg_thermal_shutdown();
+	pr_err("%s: thermal_shutdown notify end\n", __func__);
+
+	return 0;
+}
+#endif
+
 static struct thermal_zone_device_ops mtktswmt_dev_ops = {
 	.get_temp = mtktswmt_get_temp,
 	.get_mode = mtktswmt_get_mode,
@@ -158,6 +170,9 @@ static struct thermal_zone_device_ops mtktswmt_dev_ops = {
 	.get_trip_temp = mtktswmt_get_trip_temp,
 	.set_trip_temp = mtktswmt_set_trip_temp,
 	.get_crit_temp = mtktswmt_get_crit_temp,
+#ifdef CONFIG_AUSTIN_PROJECT
+	.notify = mtktswmt_thermal_notify,
+#endif
 };
 
 static void mtktswmt_work(struct work_struct *work)

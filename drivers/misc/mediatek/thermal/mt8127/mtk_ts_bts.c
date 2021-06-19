@@ -388,6 +388,18 @@ static int mtkts_bts_get_crit_temp(struct thermal_zone_device *thermal, unsigned
 	return -EINVAL;
 }
 
+#ifdef CONFIG_AUSTIN_PROJECT
+static int mtkts_bts_thermal_notify(struct thermal_zone_device *thermal,
+				int trip, enum thermal_trip_type type)
+{
+	pr_err("%s: thermal_shutdown notify\n", __func__);
+	last_kmsg_thermal_shutdown();
+	pr_err("%s: thermal_shutdown notify end\n", __func__);
+
+	return 0;
+}
+#endif
+
 /* bind callback functions to thermalzone */
 static struct thermal_zone_device_ops mtkts_bts_dev_ops = {
 	.get_temp = mtkts_bts_get_temp,
@@ -397,6 +409,9 @@ static struct thermal_zone_device_ops mtkts_bts_dev_ops = {
 	.get_trip_temp = mtkts_bts_get_trip_temp,
 	.set_trip_temp = mtkts_bts_set_trip_temp,
 	.get_crit_temp = mtkts_bts_get_crit_temp,
+#ifdef CONFIG_AUSTIN_PROJECT
+	.notify = mtkts_bts_thermal_notify,
+#endif
 };
 
 /* =========== bts thermal param handling ========== */
@@ -736,16 +751,16 @@ static struct platform_driver mtkts_bts_driver = {
 };
 
 static struct mtk_thermal_platform_data mtkts_bts_thermal_data = {
-	.num_trips = 3,
+	.num_trips = 0,
 	.mode = THERMAL_DEVICE_DISABLED,
 	.polling_delay = 1000,
 	/* original trip temps:
 	   {120000,110000,100000,90000,80000,70000,65000,60000,55000,50000};
 	   Only use the ones below critical temp
-	*/
 	.trips[0] = {.temp = 85000, .type = THERMAL_TRIP_ACTIVE, .hyst = 0},
 	.trips[1] = {.temp = 90000, .type = THERMAL_TRIP_ACTIVE, .hyst = 0},
 	.trips[2] = {.temp = MTKTS_BTS_TEMP_CRIT, .type = THERMAL_TRIP_CRITICAL, .hyst = 0},
+	*/
 };
 
 static struct platform_device mtkts_bts_device = {

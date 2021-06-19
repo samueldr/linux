@@ -836,10 +836,21 @@ static int wdm_probe(struct usb_interface *intf, const struct usb_device_id *id)
 	u8 *buffer = intf->altsetting->extra;
 	int buflen = intf->altsetting->extralen;
 	u16 maxcom = WDM_DEFAULT_BUFSIZE;
+	unsigned int elength;
 
 	if (!buffer)
 		goto err;
-	while (buflen > 2) {
+	while (buflen > 0) {
+		elength = buffer[0];
+		if (!elength) {
+			dev_err(&intf->dev, "skipping garbage byte\n");
+			elength = 1;
+			goto next_desc;
+		}
+		if ((buflen < elength) || (elength < 3)) {
+			dev_err(&intf->dev, "invalid descriptor buffer length\n");
+			break;
+		}
 		if (buffer[1] != USB_DT_CS_INTERFACE) {
 			dev_err(&intf->dev, "skipping garbage\n");
 			goto next_desc;
@@ -849,6 +860,8 @@ static int wdm_probe(struct usb_interface *intf, const struct usb_device_id *id)
 		case USB_CDC_HEADER_TYPE:
 			break;
 		case USB_CDC_DMM_TYPE:
+			if (elength < sizeof(struct usb_cdc_dmm_desc))
+				goto next_desc;
 			dmhd = (struct usb_cdc_dmm_desc *)buffer;
 			maxcom = le16_to_cpu(dmhd->wMaxCommand);
 			dev_dbg(&intf->dev,
@@ -861,8 +874,8 @@ static int wdm_probe(struct usb_interface *intf, const struct usb_device_id *id)
 			break;
 		}
 next_desc:
-		buflen -= buffer[0];
-		buffer += buffer[0];
+		buflen -= elength;
+		buffer += elength;
 	}
 
 	iface = intf->cur_altsetting;

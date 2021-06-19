@@ -31,7 +31,7 @@
 #include <linux/thermal_framework.h>
 #include <linux/platform_data/mtk_thermal.h>
 
-#define MTKTSABB_TEMP_CRIT 120000 /* 120.000 degree Celsius */
+#define MTKTSABB_TEMP_CRIT 118000 /* 120.000 degree Celsius */
 static DEFINE_MUTEX(therm_lock);
 
 struct mtktsabb_thermal_zone {

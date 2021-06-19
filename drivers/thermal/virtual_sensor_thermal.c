@@ -157,7 +157,7 @@ static int virtual_sensor_thermal_get_temp(struct thermal_zone_device *thermal,
 #ifdef CONFIG_AMAZON_METRICS_LOG
 #define PREFIX "thermalsensor:def"
         char buf[TMP103_METRICS_STR_LEN];
-        static unsigned int mask;
+        static unsigned int mask = 0x1FFF;
         unsigned int count;
         static atomic_t query_count;
         int i;
@@ -181,7 +181,7 @@ static int virtual_sensor_thermal_get_temp(struct thermal_zone_device *thermal,
         #ifdef CONFIG_AMAZON_METRICS_LOG
                 if (!(count & mask)) {
                         snprintf(buf, TMP103_METRICS_STR_LEN,
-                                "%s:pcbmonitor=%d;CT;1,%s_temp=%lu;CT;1:NR",
+                                "%s:pcbmonitor=%d;CT;1,%s_temp=%lu;CT;1:NA",
                                 PREFIX, i++, tdev->name, temp);
                         log_to_metrics(ANDROID_LOG_INFO, "ThermalEvent", buf);
                 }
@@ -219,11 +219,11 @@ static int virtual_sensor_thermal_get_temp(struct thermal_zone_device *thermal,
                 log_to_metrics(ANDROID_LOG_INFO, "ThermalEvent", buf);
         }
         if (tempv > pdata->trips[0].temp)
-        /* Log in metrics around every 2 mins */
-                mask = 0x7F;
+        /* Log in metrics around every 4 mins */
+                mask = 0xFF;
         else
-        /* Log in metrics around every 60 mins */
-                mask = 0xDFF;
+        /* Log in metrics around every 2 hours */
+                mask = 0x1FFF;
 #endif
 
 #ifdef CONFIG_AMAZON_METRICS_LOG
@@ -338,6 +338,30 @@ static int virtual_sensor_thermal_set_trip_hyst(struct thermal_zone_device *ther
 	pdata->trips[trip].hyst = hyst;
 	return 0;
 }
+
+#ifdef CONFIG_AUSTIN_PROJECT
+void last_kmsg_thermal_shutdown(void)
+{
+	int rc;
+	char *argv[] = {
+		"/sbin/crashreport",
+		"thermal_shutdown",
+		NULL
+	};
+
+	pr_err("%s: start to save last kmsg\n", __func__);
+	//UMH_WAIT_PROC UMH_WAIT_EXEC
+	rc = call_usermodehelper(argv[0], argv, NULL, UMH_WAIT_EXEC);
+	pr_err("%s: save last kmsg finish\n", __func__);
+
+	if (rc < 0)
+		pr_err("call /sbin/crashreport failed, rc = %d\n", rc);
+
+	msleep(6000); /* 6000ms */
+}
+EXPORT_SYMBOL_GPL(last_kmsg_thermal_shutdown);
+#endif
+
 static int virtual_sensor_thermal_notify(struct thermal_zone_device *thermal,
 					 int trip,
 					 enum thermal_trip_type type)
@@ -346,6 +370,12 @@ static int virtual_sensor_thermal_notify(struct thermal_zone_device *thermal,
 	char *envp[] = { data, NULL};
 	snprintf(data, sizeof(data), "%s", "SHUTDOWN_WARNING");
 	kobject_uevent_env(&thermal->device.kobj, KOBJ_CHANGE, envp);
+
+#ifdef CONFIG_AUSTIN_PROJECT
+	pr_err("%s: thermal_shutdown notify\n", __func__);
+	last_kmsg_thermal_shutdown();
+	pr_err("%s: thermal_shutdown notify end\n", __func__);
+#endif
 	return 0;
 }
 static struct thermal_zone_device_ops virtual_sensor_tz_dev_ops = {

@@ -87,6 +87,7 @@ int usbnet_generic_cdc_bind(struct usbnet *dev, struct usb_interface *intf)
 	struct usb_driver		*driver = driver_of(intf);
 	struct usb_cdc_mdlm_desc	*desc = NULL;
 	struct usb_cdc_mdlm_detail_desc *detail = NULL;
+	unsigned int elength;
 
 	if (sizeof dev->data < sizeof *info)
 		return -EDOM;
@@ -128,7 +129,17 @@ int usbnet_generic_cdc_bind(struct usbnet *dev, struct usb_interface *intf)
 
 	memset(info, 0, sizeof *info);
 	info->control = intf;
-	while (len > 3) {
+	while (len > 0) {
+		elength = buf[0];
+		if (!elength) {
+			dev_err(&intf->dev, "invalid descriptor buffer length\n");
+			elength = 1;
+			goto next_desc;
+		}
+		if ((len < elength) || (elength < 3)) {
+			dev_err(&intf->dev, "invalid descriptor buffer length\n");
+			break;
+		}
 		if (buf [1] != USB_DT_CS_INTERFACE)
 			goto next_desc;
 
@@ -141,6 +152,8 @@ int usbnet_generic_cdc_bind(struct usbnet *dev, struct usb_interface *intf)
 		 */
 		switch (buf [2]) {
 		case USB_CDC_HEADER_TYPE:
+			if (elength != sizeof(struct usb_cdc_header_desc))
+				goto next_desc;
 			if (info->header) {
 				dev_dbg(&intf->dev, "extra CDC header\n");
 				goto bad_desc;
@@ -170,6 +183,8 @@ int usbnet_generic_cdc_bind(struct usbnet *dev, struct usb_interface *intf)
 			}
 			break;
 		case USB_CDC_UNION_TYPE:
+			if (elength < sizeof(struct usb_cdc_union_desc))
+				goto next_desc;
 			if (info->u) {
 				dev_dbg(&intf->dev, "extra CDC union\n");
 				goto bad_desc;
@@ -224,6 +239,8 @@ int usbnet_generic_cdc_bind(struct usbnet *dev, struct usb_interface *intf)
 			}
 			break;
 		case USB_CDC_ETHERNET_TYPE:
+			if (elength != sizeof(struct usb_cdc_ether_desc))
+				goto next_desc;
 			if (info->ether) {
 				dev_dbg(&intf->dev, "extra CDC ether\n");
 				goto bad_desc;
@@ -241,6 +258,8 @@ int usbnet_generic_cdc_bind(struct usbnet *dev, struct usb_interface *intf)
 			 */
 			break;
 		case USB_CDC_MDLM_TYPE:
+			if (elength < sizeof(struct usb_cdc_mdlm_desc *))
+				goto next_desc;
 			if (desc) {
 				dev_dbg(&intf->dev, "extra MDLM descriptor\n");
 				goto bad_desc;
@@ -255,6 +274,8 @@ int usbnet_generic_cdc_bind(struct usbnet *dev, struct usb_interface *intf)
 				goto bad_desc;
 			break;
 		case USB_CDC_MDLM_DETAIL_TYPE:
+			if (elength < sizeof(struct usb_cdc_mdlm_detail_desc *))
+				goto next_desc;
 			if (detail) {
 				dev_dbg(&intf->dev, "extra MDLM detail descriptor\n");
 				goto bad_desc;
@@ -270,8 +291,8 @@ int usbnet_generic_cdc_bind(struct usbnet *dev, struct usb_interface *intf)
 			break;
 		}
 next_desc:
-		len -= buf [0];	/* bLength */
-		buf += buf [0];
+		len -= elength;	/* bLength */
+		buf += elength;
 	}
 
 	/* Microsoft ActiveSync based and some regular RNDIS devices lack the
