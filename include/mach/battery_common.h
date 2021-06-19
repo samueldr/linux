@@ -194,8 +194,8 @@ extern int charging_level_data[1];
 extern kal_bool g_call_state;
 extern kal_bool g_charging_full_reset_bat_meter;
 extern signed int g_custom_charging_current;
-#ifdef CONFIG_AUSTIN_PROJECT
 extern signed int g_custom_charging_cv;
+#ifdef CONFIG_AUSTIN_PROJECT
 extern unsigned int g_custom_charging_mode;
 #endif
 

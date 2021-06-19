@@ -21,6 +21,7 @@
 #include <mach/mt_cpufreq.h>
 #include <mach/mt_power_gs.h>
 #include <mach/mt_ptp.h>
+#include <mach/battery_common.h>
 
 #include <mach/mt_idle.h>
 
@@ -626,7 +627,7 @@ static int dpidle_cpu_pdn = 1;
 static inline int dpidle_handler(int cpu)
 {
 	int ret = 0;
-	if (idle_switch[IDLE_TYPE_DP]) {
+	if (idle_switch[IDLE_TYPE_DP] && !BMT_status.charger_exist) {
 		if (dpidle_can_enter()) {
 			spm_go_to_dpidle(dpidle_cpu_pdn, 0);
 			ret = 1;

@@ -556,8 +556,9 @@ void bq24296_dump_register(void)
 	int i = 0;
 	for (i = 0; i < bq24296_REG_NUM; i++) {
 		bq24296_read_byte(i, &bq24296_reg[i]);
-		battery_xlog_printk(BAT_LOG_CRTI, "[bq24296_dump_register] Reg[0x%X]=0x%X\n", i, bq24296_reg[i]);
 	}
+	battery_xlog_printk(BAT_LOG_CRTI, "[bq24296_dump_register]:0x%X;0x%X;0x%X;0x%X;0x%X;0x%X;0x%X;0x%X;0x%X;0x%X;0x%X;\n", bq24296_reg[0], bq24296_reg[1],
+		bq24296_reg[2], bq24296_reg[3], bq24296_reg[4], bq24296_reg[5], bq24296_reg[6], bq24296_reg[7], bq24296_reg[8], bq24296_reg[9], bq24296_reg[10]);
 }
 
 kal_bool bq24296_is_found = KAL_FALSE;

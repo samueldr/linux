@@ -331,16 +331,16 @@ static BATTERY_VOLTAGE_ENUM select_jeita_cv(void)
 		cv_voltage = BATTERY_VOLT_04_200000_V;
 	}
 
-#if defined(CONFIG_AUSTIN_PROJECT)
-	/*if (g_custom_charging_cv != -1)*/
-		/*cv_voltage = g_custom_charging_cv;*/
+	if (g_custom_charging_cv != -1)
+		cv_voltage = g_custom_charging_cv;
 
+#if defined(CONFIG_AUSTIN_PROJECT)
 	if (g_custom_charging_mode) /* For demo unit */
 		cv_voltage = BATTERY_VOLT_04_100000_V;
+#endif
 
 	battery_xlog_printk(BAT_LOG_FULL, "[%s] CV(%d) custom CV(%d)\r\n",
 		__func__, cv_voltage, g_custom_charging_cv);
-#endif
 
 	return cv_voltage;
 }
@@ -384,7 +384,7 @@ PMU_STATUS do_jeita_state_machine(void)
 			battery_xlog_printk(BAT_LOG_CRTI,
 					    "[BATTERY] Battery Temperature not recovery to normal temperature charging mode yet!!\n\r");
 		} else {
-			battery_xlog_printk(BAT_LOG_CRTI,
+			battery_xlog_printk(BAT_LOG_FULL,
 					    "[BATTERY] Battery Normal Temperature between %d and %d !!\n\r",
 					    TEMP_POS_10_THRESHOLD, TEMP_POS_45_THRESHOLD);
 			g_temp_status = TEMP_POS_10_TO_POS_45;

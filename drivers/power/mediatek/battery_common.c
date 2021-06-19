@@ -198,12 +198,13 @@ int battery_idV = 0;
 extern int IMM_GetOneChannelValue(int dwChannel, int data[4], int* rawdata);
 extern int orderly_poweroff(bool force);
 
+unsigned int g_custom_charging_mode = 0; /* 0=ratail unit, 1=demo unit */
+#endif
+
 #define PLUGIN_THRESHOLD (14*86400)
 signed int g_custom_charging_cv = -1;
 struct timespec chr_plug_in_time;
 static unsigned long g_custom_plugin_time;
-unsigned int g_custom_charging_mode = 0; /* 0=ratail unit, 1=demo unit */
-#endif
 
 /* ////////////////////////////////////////////////////////////////////////////// */
 /* Integrate with NVRAM */
@@ -1817,6 +1818,29 @@ static ssize_t store_Charger_Type(struct device *dev,struct device_attribute *at
 }
 static DEVICE_ATTR(Charger_Type, 0664, show_Charger_Type, store_Charger_Type);
 
+static ssize_t show_Custom_PlugIn_Time(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	battery_xlog_printk(BAT_LOG_CRTI, "custom plugin_time = %lu\n", g_custom_plugin_time);
+	return sprintf(buf, "0");
+}
+
+static ssize_t store_Custom_PlugIn_Time(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t size)
+{
+	int ret;
+
+	ret = kstrtoul(buf, 0, &g_custom_plugin_time);
+	battery_xlog_printk(BAT_LOG_CRTI, "custom plugin_time = %lu\n", g_custom_plugin_time);
+	if (g_custom_plugin_time > PLUGIN_THRESHOLD)
+		g_custom_plugin_time = PLUGIN_THRESHOLD;
+
+	wake_up_bat();
+	return size;
+}
+
+static DEVICE_ATTR(Custom_PlugIn_Time, 0664, show_Custom_PlugIn_Time,
+		   store_Custom_PlugIn_Time);
 
 #ifdef CONFIG_AUSTIN_PROJECT
 static ssize_t show_Custom_Charging_Current(struct device *dev, struct device_attribute *attr,
@@ -1844,30 +1868,6 @@ static DEVICE_ATTR(Custom_Charging_Current, 0664, show_Custom_Charging_Current,
 		   store_Custom_Charging_Current);
 
 #if defined(CONFIG_AUSTIN_PROJECT)
-static ssize_t show_Custom_PlugIn_Time(struct device *dev,
-	struct device_attribute *attr, char *buf)
-{
-	battery_xlog_printk(BAT_LOG_CRTI, "custom plugin_time = %lu\n", g_custom_plugin_time);
-	return sprintf(buf, "0");
-}
-
-static ssize_t store_Custom_PlugIn_Time(struct device *dev,
-	struct device_attribute *attr, const char *buf, size_t size)
-{
-	int ret;
-
-	ret = kstrtoul(buf, 0, &g_custom_plugin_time);
-	battery_xlog_printk(BAT_LOG_CRTI, "custom plugin_time = %lu\n", g_custom_plugin_time);
-	if (g_custom_plugin_time > PLUGIN_THRESHOLD)
-		g_custom_plugin_time = PLUGIN_THRESHOLD;
-
-	wake_up_bat();
-	return size;
-}
-
-static DEVICE_ATTR(Custom_PlugIn_Time, 0664, show_Custom_PlugIn_Time,
-		   store_Custom_PlugIn_Time);
-
 static ssize_t show_Custom_Charging_Mode(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
@@ -2037,7 +2037,7 @@ static kal_bool mt_battery_100Percent_tracking_check(void)
 			resetBatteryMeter = KAL_TRUE;
 		}
 
-		battery_xlog_printk(BAT_LOG_CRTI, "[100percent], UI_SOC(%d), reset(%d)\n",
+		battery_xlog_printk(BAT_LOG_FULL, "[100percent], UI_SOC(%d), reset(%d)\n",
 				    BMT_status.UI_SOC, resetBatteryMeter);
 	} else {
 		/* charging is not full,  UI keep 99% if reaching 100%, */
@@ -2046,7 +2046,7 @@ static kal_bool mt_battery_100Percent_tracking_check(void)
 			BMT_status.UI_SOC = 99;
 			resetBatteryMeter = KAL_FALSE;
 
-			battery_xlog_printk(BAT_LOG_CRTI, "[100percent],UI_SOC = %d\n",
+			battery_xlog_printk(BAT_LOG_FULL, "[100percent],UI_SOC = %d\n",
 					    BMT_status.UI_SOC);
 		}
 
@@ -2675,7 +2675,7 @@ static PMU_STATUS mt_battery_CheckBatteryTemp(void)
 
 #if defined(CONFIG_MTK_JEITA_STANDARD_SUPPORT)
 
-	battery_xlog_printk(BAT_LOG_CRTI, "[BATTERY] support JEITA, temperature=%d\n",
+	battery_xlog_printk(BAT_LOG_FULL, "[BATTERY] support JEITA, temperature=%d\n",
 			    BMT_status.temperature);
 
 	if (do_jeita_state_machine() == PMU_STATUS_FAIL) {
@@ -3092,12 +3092,10 @@ CHARGER_TYPE mt_charger_type_detection(void)
 		battery_charging_control(CHARGING_CMD_GET_CHARGER_TYPE, &CHR_Type_num);
 		BMT_status.charger_type = CHR_Type_num;
 
-	#if defined(CONFIG_AUSTIN_PROJECT)
 	getrawmonotonic(&chr_plug_in_time);
 	g_custom_plugin_time = 0;
 	g_custom_charging_cv = -1;
 	battery_xlog_printk(BAT_LOG_FULL, "[%s]init charger plug-in timer\n", __func__);
-	#endif
 
 #if defined(CONFIG_MTK_KERNEL_POWER_OFF_CHARGING)&&(defined(CONFIG_MTK_PUMP_EXPRESS_SUPPORT) || defined(CONFIG_MTK_PUMP_EXPRESS_PLUS_SUPPORT))
  	    if (BMT_status.UI_SOC == 100)
@@ -3196,7 +3194,7 @@ static void mt_kpoc_power_off_check(void)
 {
 #ifdef CONFIG_MTK_KERNEL_POWER_OFF_CHARGING
 	battery_xlog_printk(BAT_LOG_CRTI,
-			    "[mt_kpoc_power_off_check] , chr_vol=%d, boot_mode=%d\n", BMT_status.charger_vol,
+			    "chr_vol=%d, boot_mode=%d\n", BMT_status.charger_vol,
 			    g_platform_boot_mode);
 	if (g_platform_boot_mode == KERNEL_POWER_OFF_CHARGING_BOOT
 	    || g_platform_boot_mode == LOW_POWER_OFF_CHARGING_BOOT) {
@@ -3366,10 +3364,8 @@ void do_chrdet_int_task(void)
 void BAT_thread(void)
 {
 	static kal_bool battery_meter_initilized = KAL_FALSE;
-	#if defined(CONFIG_AUSTIN_PROJECT)
 	struct timespec now_time;
 	unsigned long total_time_plug_in;
-	#endif
 
 	if (battery_meter_initilized == KAL_FALSE) {
 		battery_meter_initial();	/* move from battery_probe() to decrease booting time */
@@ -3386,7 +3382,6 @@ void BAT_thread(void)
 	mt_battery_notify_check();
 
 	if (BMT_status.charger_exist == KAL_TRUE) {	
-		#if defined(CONFIG_AUSTIN_PROJECT)
 		getrawmonotonic(&now_time);
 
 		total_time_plug_in = g_custom_plugin_time;
@@ -3400,7 +3395,7 @@ void BAT_thread(void)
 
 		battery_xlog_printk(BAT_LOG_FULL, "total plug-in time(%lu), cv(%d)\r\n",
 			total_time_plug_in, g_custom_charging_cv);
-		#endif
+
 		mt_battery_CheckBatteryStatus();
 		mt_battery_charging_algorithm();
 	}
@@ -4032,9 +4027,9 @@ static int battery_probe(struct platform_device *dev)
 		ret_device_file = device_create_file(&(dev->dev), &dev_attr_FG_SW_CoulombCounter);
 		ret_device_file = device_create_file(&(dev->dev), &dev_attr_Charging_CallState);
 		ret_device_file = device_create_file(&(dev->dev), &dev_attr_Charger_Type);
+		ret_device_file = device_create_file(&(dev->dev), &dev_attr_Custom_PlugIn_Time);
 	#ifdef CONFIG_AUSTIN_PROJECT
 		ret_device_file = device_create_file(&(dev->dev), &dev_attr_Custom_Charging_Current);
-		ret_device_file = device_create_file(&(dev->dev), &dev_attr_Custom_PlugIn_Time);
 		ret_device_file = device_create_file(&(dev->dev), &dev_attr_Custom_Charging_Mode);
 		ret_device_file = device_create_file(&(dev->dev), &dev_attr_ChargeIC_Vendor_Name);
 		ret_device_file = device_create_file(&(dev->dev), &dev_attr_Battery_Vendor_Name);
@@ -4072,11 +4067,9 @@ static int battery_probe(struct platform_device *dev)
 	dual_input_init();
 	#endif
 
-	#if defined(CONFIG_AUSTIN_PROJECT)
 	getrawmonotonic(&chr_plug_in_time);
 	g_custom_plugin_time = 0;
 	g_custom_charging_cv = -1;
-	#endif
 
 	/* battery kernel thread for 10s check and charger in/out event */
 	/* Replace GPT timer by hrtime */

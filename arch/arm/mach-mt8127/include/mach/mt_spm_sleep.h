@@ -48,7 +48,7 @@ extern wake_reason_t spm_go_to_sleep_dpidle(bool cpu_pdn, u16 pwrlevel, int pwak
 extern void spm_dpidle_before_wfi(void);        /* can be redefined */
 extern void spm_dpidle_after_wfi(void);         /* can be redefined */
 extern wake_reason_t spm_go_to_dpidle(bool cpu_pdn, u16 pwrlevel);
-
+extern void aee_rr_rec_deepidle_val(u32 val);
 
 extern bool spm_is_md_sleep(void);
 extern bool spm_is_conn_sleep(void);

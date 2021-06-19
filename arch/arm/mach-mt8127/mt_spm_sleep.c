@@ -1371,6 +1371,8 @@ wake_reason_t spm_go_to_dpidle(bool cpu_pdn, u16 pwrlevel)
     const pcm_desc_t *pcmdesc = &pcm_dpidle;
     const bool pcmwdt_en = false;
 
+    aee_rr_rec_deepidle_val(0x1);
+
     spin_lock_irqsave(&spm_lock, flags);
     mt_irq_mask_all(&mask);
     mt_irq_unmask_for_sleep(MT_SPM_IRQ_ID);
@@ -1380,6 +1382,8 @@ wake_reason_t spm_go_to_dpidle(bool cpu_pdn, u16 pwrlevel)
     spm_reset_and_init_pcm();
 
     spm_kick_im_to_fetch(pcmdesc);
+
+    aee_rr_rec_deepidle_val(0x3);
 
     if (spm_request_uart_to_sleep()) {
         wr = WR_UART_BUSY;
@@ -1398,7 +1402,11 @@ wake_reason_t spm_go_to_dpidle(bool cpu_pdn, u16 pwrlevel)
 
     spm_dpidle_before_wfi();
 
+    aee_rr_rec_deepidle_val(0x7);
+
     spm_trigger_wfi_for_dpidle(cpu_pdn);
+
+    aee_rr_rec_deepidle_val(0xF);
 
     spm_dpidle_after_wfi();
 
@@ -1413,6 +1421,8 @@ RESTORE_IRQ:
     mt_cirq_disable();
     mt_irq_mask_restore(&mask);
     spin_unlock_irqrestore(&spm_lock, flags);
+
+    aee_rr_rec_deepidle_val(0x0);
 
     return wr;
 }

@@ -214,7 +214,7 @@ static kal_uint32 charging_parameter_to_value(const kal_uint32 *parameter, const
 {
 	kal_uint32 i;
 
-    battery_xlog_printk(BAT_LOG_CRTI, "array_size = %d \n", array_size);
+    battery_xlog_printk(BAT_LOG_FULL, "array_size = %d \n", array_size);
     
 	for(i=0;i<array_size;i++)
 	{
@@ -250,7 +250,7 @@ static kal_uint32 bmt_find_closest_level(const kal_uint32 *pList,kal_uint32 numb
 			}	  
 		}
 
-		battery_xlog_printk(BAT_LOG_CRTI, "Can't find closest level, small value first \n");
+		battery_xlog_printk(BAT_LOG_FULL, "Can't find closest level, small value first \n");
 		return pList[0];
 		//return CHARGE_CURRENT_0_00_MA;
 	}
@@ -264,7 +264,7 @@ static kal_uint32 bmt_find_closest_level(const kal_uint32 *pList,kal_uint32 numb
 			}	  
 		}
 
-		battery_xlog_printk(BAT_LOG_CRTI, "Can't find closest level, large value first \n"); 	 
+		battery_xlog_printk(BAT_LOG_FULL, "Can't find closest level, large value first \n");
 		return pList[number -1];
 		//return CHARGE_CURRENT_0_00_MA;
 	}
@@ -614,7 +614,7 @@ static kal_uint32 charging_dump_register(void *data)
 {
 	kal_uint32 status = STATUS_OK;
 
-	battery_xlog_printk(BAT_LOG_CRTI, "charging_dump_register\n");
+	battery_xlog_printk(BAT_LOG_FULL, "charging_dump_register\n");
 
 	bq24296_dump_register();
 
@@ -826,7 +826,7 @@ static kal_uint32 charging_reset_watch_dog_timer(void *data)
 {
 	kal_uint32 status = STATUS_OK;
 
-	battery_xlog_printk(BAT_LOG_CRTI, "charging_reset_watch_dog_timer\n");
+	battery_xlog_printk(BAT_LOG_FULL, "charging_reset_watch_dog_timer\n");
 
 	bq24296_set_wdt_rst(0x1); //Kick watchdog
 

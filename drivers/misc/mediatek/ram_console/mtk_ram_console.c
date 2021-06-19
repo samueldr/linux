@@ -730,8 +730,8 @@ static int __init ram_console_late_init(void)
 
 
 	str_real_len =
-	    sprintf(ram_console_header_buffer, "ram console header, hw_status: %u, fiq step %u.\n",
-		    LAST_RRPL_VAL(wdt_status), LAST_RRR_VAL(fiq_step));
+	    sprintf(ram_console_header_buffer, "ram console header, hw_status: %u, fiq step %u, dpidle %u.\n",
+		    LAST_RRPL_VAL(wdt_status), LAST_RRR_VAL(fiq_step), LAST_RRR_VAL(deepidle_data));
 
 	str_real_len +=
 	    sprintf(ram_console_header_buffer + str_real_len, "bin log %d.\n",
@@ -744,9 +744,9 @@ static int __init ram_console_late_init(void)
 		kfree(ram_console_header_buffer);
 		return 0;
 	}
-	memcpy(ram_console_old_log, ram_console_header_buffer, str_real_len);
-	memcpy(ram_console_old_log + str_real_len,
+	memcpy(ram_console_old_log,
 	       ram_console_old_log_init_buffer, ram_console_old_log_size);
+	memcpy(ram_console_old_log + ram_console_old_log_size, ram_console_header_buffer, str_real_len);
 
 	/* append string terminator at the end of buffer */
 	ram_console_old_log[ram_console_old_log_size + str_real_len] = 0;
