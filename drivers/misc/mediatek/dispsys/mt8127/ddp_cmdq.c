@@ -118,6 +118,18 @@ static long cmdq_verify_command(struct cmdqCommandStruct *command)
 		return -EFAULT;
 	}
 
+	if (command->secData.addrListLength >
+		sizeof(iwcCmdqAddrMetadata_t) * CMDQ_IWC_MAX_ADDR_LIST_LENGTH ||
+		command->secData.portListLength >
+		sizeof(iwcCmdqPortMetadata_t) * CMDQ_IWC_MAX_PORT_LIST_LENGTH) {
+		CMDQ_ERR("invalid addrListLength:%d[%d] portListLength:%d[%d]\n",
+			command->secData.addrListLength,
+			sizeof(iwcCmdqAddrMetadata_t) * CMDQ_IWC_MAX_ADDR_LIST_LENGTH,
+			command->secData.portListLength,
+			sizeof(iwcCmdqPortMetadata_t) * CMDQ_IWC_MAX_PORT_LIST_LENGTH);
+		return -EINVAL;
+	}
+
     return 0;
 }
 
@@ -131,7 +143,6 @@ static long cmdq_proc_unlocked_ioctl(struct file *file, unsigned int cmd, unsign
     DISP_PQ_PARAM * pq_param = NULL;
     DISPLAY_TDSHP_T * tdshp_index = NULL;
 
-    
     cmdq_proc_node_struct *pNode = (cmdq_proc_node_struct*)file->private_data;
     
     switch(cmd)
@@ -143,7 +154,7 @@ static long cmdq_proc_unlocked_ioctl(struct file *file, unsigned int cmd, unsign
                 return -EFAULT;
             }
 
-            command.scenario   = cParams.scenario; 
+            command.scenario   = CMDQ_SCENARIO_MDP_STREAM_BITBLT;
             command.priority   = cParams.priority; 
             command.engineFlag = cParams.engineFlag; 
             command.pVABase  = cParams.pFrameBaseSW; 
@@ -171,14 +182,14 @@ static long cmdq_proc_unlocked_ioctl(struct file *file, unsigned int cmd, unsign
                 return -EFAULT;
             }
 
-            command.scenario   = csParams.command.scenario; 
+            command.scenario   = CMDQ_SCENARIO_MDP_STREAM_BITBLT;
             command.priority   = csParams.command.priority; 
             command.engineFlag = csParams.command.engineFlag; 
             command.pVABase  = csParams.command.pFrameBaseSW; 
             command.blockSize  = csParams.command.blockSize; 
             command.secData.isSecure = true;
-            command.secData.addrListLength = csParams.metadata.addrListLength;             
-            command.secData.portListLength = csParams.metadata.portListLength; 
+            command.secData.addrListLength = csParams.metadata.addrListLength;
+            command.secData.portListLength = csParams.metadata.portListLength;
             command.secData.addrList = csParams.metadata.addrList;
             command.secData.portList = csParams.metadata.portList;
 

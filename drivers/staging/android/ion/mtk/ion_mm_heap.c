@@ -21,7 +21,7 @@
 #include "ion_drv_priv.h"
 #include <linux/mtk_ion.h>
 
-typedef struct  
+typedef struct
 {
     struct mutex lock;
     int eModuleID;
@@ -245,7 +245,7 @@ static int ion_mm_heap_allocate(struct ion_heap *heap,
         mutex_init(&(pBufferInfo->lock));
 
         buffer->priv_virt = pBufferInfo;
-        
+
         mm_heap_total_memory += size;
 
         return 0;
@@ -300,7 +300,7 @@ void ion_mm_heap_free(struct ion_buffer *buffer)
 		ion_heap_buffer_zero(buffer);
 
     ion_mm_heap_free_bufferInfo(buffer);
-    
+
     for_each_sg(table->sgl, sg, table->nents, i)
 		free_buffer_page(sys_heap, buffer, sg_page(sg),
 				get_order(sg->length));
@@ -406,7 +406,7 @@ static int ion_mm_heap_debug_show(struct ion_heap *heap, struct seq_file *s,
     struct ion_device *dev = heap->dev;
     struct rb_node *n;
 	int i;
-    
+
 	for (i = 0; i < num_orders; i++) {
 		struct ion_page_pool *pool = sys_heap->pools[i];
 		ION_PRINT_LOG_OR_SEQ(s, "%d order %u highmem pages in pool = %lu total\n",
@@ -439,7 +439,7 @@ static int ion_mm_heap_debug_show(struct ion_heap *heap, struct seq_file *s,
 
         ION_PRINT_LOG_OR_SEQ(s, "----------------------------------------------------\n");
         ION_PRINT_LOG_OR_SEQ(s, "%8.s %8.s %4.s %3.s %3.s %3.s %8.s %3.s %4.s %3.s %8.s " \
-                        "%4.s %4.s %4.s %4.s %s\n", 
+                        "%4.s %4.s %4.s %4.s %s\n",
                     "buffer","size", "kmap", "ref","hdl","mod", "mva", "sec", "flag", "pid", "comm(client)",
                     "v1","v2","v3","v4","dbg_name");
 
@@ -452,13 +452,13 @@ static int ion_mm_heap_debug_show(struct ion_heap *heap, struct seq_file *s,
                     continue;
             pBufInfo = (ion_mm_buffer_info*)buffer->priv_virt;
             pDbg = &(pBufInfo->dbg_info);
-            
+
             ION_PRINT_LOG_OR_SEQ(s, "0x%p %8zu %3d %3d %3d %3d %8x %3u %3lu %3d %s " \
-                          "0x%x 0x%x 0x%x 0x%x %s", buffer, 
+                          "0x%x 0x%x 0x%x 0x%x %s", buffer,
                         buffer->size, buffer->kmap_cnt,
                        atomic_read(&buffer->ref.refcount),
                        buffer->handle_count,
-                       pBufInfo->eModuleID, pBufInfo->MVA, 
+                       pBufInfo->eModuleID, pBufInfo->MVA,
                        pBufInfo->security, buffer->flags,
                        buffer->pid, buffer->task_comm,
                        pDbg->value1,pDbg->value2,pDbg->value3,pDbg->value4,
@@ -475,7 +475,7 @@ static int ion_mm_heap_debug_show(struct ion_heap *heap, struct seq_file *s,
     }
 
     //dump all handle's backtrace
-    down_read(&dev->lock); 
+    down_read(&dev->lock);
     for (n = rb_first(&dev->clients); n; n = rb_next(n)) {
         struct ion_client *client = rb_entry(n, struct ion_client,node);
 
@@ -510,10 +510,10 @@ static int ion_mm_heap_debug_show(struct ion_heap *heap, struct seq_file *s,
             }
             mutex_unlock(&client->lock);
         }
-            
+
     }
     up_read(&dev->lock);
-    
+
 
         return 0;
 }
@@ -558,7 +558,7 @@ void ion_mm_heap_memory_detail(void) {
             continue;
         if (client->task) {
             char task_comm[TASK_COMM_LEN];
-        
+
             get_task_comm(task_comm, client->task);
             ION_PRINT_LOG_OR_SEQ(NULL, "%16.s(%16.s) %16u %16zu 0x%p\n", task_comm,
                        client->dbg_name, client->pid, size, client);
@@ -698,7 +698,7 @@ struct ion_heap *ion_mm_heap_create(struct ion_platform_heap *unused)
 		if (!pool)
 			goto err_create_pool;
 		heap->pools[i] = pool;
-		
+
 		pool = ion_page_pool_create(gfp_flags, orders[i]);
 		if (!pool)
 			goto err_create_pool;
@@ -752,7 +752,7 @@ int ion_mm_copy_dbg_info(ion_mm_buf_debug_info_t *src, ion_mm_buf_debug_info_t *
     dst->value4 = src->value4;
 
     return 0;
-    
+
 }
 int ion_mm_copy_sf_buf_info(ion_mm_sf_buf_info_t *src, ion_mm_sf_buf_info_t *dst)
 {
@@ -772,12 +772,15 @@ long ion_mm_ioctl(struct ion_client *client, unsigned int cmd, unsigned long arg
     ion_mm_data_t Param;
     long ret = 0;
     //char dbgstr[256];
-    unsigned long ret_copy;
+    unsigned long ret_copy = 0;
     ION_FUNC_ENTER;
     if (from_kernel)
         Param = *(ion_mm_data_t*) arg;
     else
         ret_copy = copy_from_user(&Param, (void __user *)arg, sizeof(ion_mm_data_t));
+
+    if (ret_copy)
+        return -EINVAL;
 
     switch (Param.mm_cmd)
     {
@@ -794,7 +797,7 @@ long ion_mm_ioctl(struct ion_client *client, unsigned int cmd, unsigned long arg
                 ret = -EINVAL;
                 break;
             }
-                
+
             buffer = ion_handle_buffer(kernel_handle);
             if (buffer->heap->type == ION_HEAP_TYPE_MULTIMEDIA)
             {
@@ -812,7 +815,7 @@ long ion_mm_ioctl(struct ion_client *client, unsigned int cmd, unsigned long arg
                         pBufferInfo->coherent != Param.config_buffer_param.coherent )
                     {
                         IONMSG("[ion_mm_heap]: Warning. config buffer param error:.\n");
-                        IONMSG("sec:%d(%d), coherent: %d(%d)\n", 
+                        IONMSG("sec:%d(%d), coherent: %d(%d)\n",
                             pBufferInfo->security, Param.config_buffer_param.security,
                             pBufferInfo->coherent, Param.config_buffer_param.coherent
                             );
@@ -835,7 +838,7 @@ long ion_mm_ioctl(struct ion_client *client, unsigned int cmd, unsigned long arg
             ret = -EFAULT;
         }
         break;
-        
+
     case ION_MM_SET_DEBUG_INFO:
         {
             struct ion_buffer* buffer;
@@ -994,6 +997,10 @@ long ion_mm_ioctl(struct ion_client *client, unsigned int cmd, unsigned long arg
         *(ion_mm_data_t*)arg = Param;
     else
         ret_copy = copy_to_user((void __user *)arg, &Param, sizeof(ion_mm_data_t));
+
+    if (ret_copy)
+        return -EINVAL;
+
     ION_FUNC_LEAVE;
     return ret;
 }
@@ -1007,12 +1014,12 @@ int ion_mm_heap_for_each_pool(int (*fn)(int high, int order, int cache, size_t s
 							struct ion_system_heap,
 							heap);
 	int i;
-    
+
 	for (i = 0; i < num_orders; i++) {
 		struct ion_page_pool *pool = sys_heap->pools[i];
 		fn(1, pool->order, 0, (1 << pool->order) * PAGE_SIZE * pool->high_count);
 		fn(0, pool->order, 0, (1 << pool->order) * PAGE_SIZE * pool->low_count);
-		
+
 		pool = sys_heap->cached_pools[i];
 		fn(1, pool->order, 1, (1 << pool->order) * PAGE_SIZE * pool->high_count);
 		fn(0, pool->order, 1, (1 << pool->order) * PAGE_SIZE * pool->low_count);

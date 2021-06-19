@@ -173,7 +173,7 @@ static int32_t cmdq_sec_execute_session_unlocked(cmdqSecContextHandle handle)
 		KREE_SHAREDMEM_HANDLE cmdq_share_handle = 0;
 		KREE_SHAREDMEM_PARAM  cmdq_shared_param;
 		cmdq_shared_param.buffer = handle->iwcMessage;
-		cmdq_shared_param.size = sizeof(uint8_t*) * (sizeof(iwcCmdqMessage_t));
+		cmdq_shared_param.size = sizeof(iwcCmdqMessage_t);
 		CMDQ_MSG("cmdq_shared_param.buffer %x\n",(uint32_t)cmdq_shared_param.buffer);
 		
 		tzRes = KREE_RegisterSharedmem (handle->memSessionHandle, &cmdq_share_handle, &cmdq_shared_param);

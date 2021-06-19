@@ -142,7 +142,7 @@ static long ion_sys_cache_sync(struct ion_client *client, ion_sys_cache_sync_par
         unsigned long start = -1;
         size_t size = 0;
         unsigned long end, page_num, page_start;
-        struct ion_handle *kernel_handle;   
+        struct ion_handle *kernel_handle;
 
         kernel_handle = ion_drv_get_handle(client, pParam->handle, pParam->kernel_handle, from_kernel);
         if(IS_ERR(kernel_handle))
@@ -264,14 +264,14 @@ static long ion_sys_cache_sync(struct ion_client *client, ion_sys_cache_sync_par
 #endif
 
         ion_drv_put_kernel_handle(kernel_handle);
-        
+
         if (pParam->sync_type == ION_CACHE_CLEAN_BY_RANGE)
             MMProfileLogEx(ION_MMP_Events[PROFILE_DMA_CLEAN_RANGE], MMProfileFlagEnd, size, 0);
         else if (pParam->sync_type == ION_CACHE_INVALID_BY_RANGE)
             MMProfileLogEx(ION_MMP_Events[PROFILE_DMA_INVALID_RANGE], MMProfileFlagEnd, size, 0);
         else if (pParam->sync_type == ION_CACHE_FLUSH_BY_RANGE)
             MMProfileLogEx(ION_MMP_Events[PROFILE_DMA_FLUSH_RANGE], MMProfileFlagEnd, size, 0);
-        
+
     }
     else
     {
@@ -330,6 +330,9 @@ static long ion_sys_ioctl(struct ion_client *client, unsigned int cmd, unsigned 
     else
         ret_copy = copy_from_user(&Param, (void __user *)arg, sizeof(ion_sys_data_t));
 
+    if (ret_copy)
+        return -EINVAL;
+
     switch (Param.sys_cmd)
     {
     case ION_SYS_CACHE_SYNC:
@@ -337,7 +340,7 @@ static long ion_sys_ioctl(struct ion_client *client, unsigned int cmd, unsigned 
         break;
     case ION_SYS_GET_PHYS:
         {
-            struct ion_handle *kernel_handle;  
+            struct ion_handle *kernel_handle;
 
             kernel_handle = ion_drv_get_handle(client, Param.get_phys_param.handle, Param.get_phys_param.kernel_handle, from_kernel);
             if(IS_ERR(kernel_handle))
@@ -376,8 +379,8 @@ static long ion_sys_ioctl(struct ion_client *client, unsigned int cmd, unsigned 
 		}
 		if(ion_debugger)
 		{
- 
-			///copy mapping info from userspace to kernel space 
+
+			///copy mapping info from userspace to kernel space
 			if(!from_kernel && (Param.record_param.backtrace_num > 0))
 			{
 				for(i = 0 ; i < Param.record_param.backtrace_num;i++)
@@ -411,8 +414,8 @@ static long ion_sys_ioctl(struct ion_client *client, unsigned int cmd, unsigned 
 			Param.record_param.client = client;
 			if(Param.record_param.handle != NULL)
 			{
-				struct ion_handle *kernel_handle;  
-				kernel_handle = ion_drv_get_handle(client,Param.record_param.handle, NULL, from_kernel); 
+				struct ion_handle *kernel_handle;
+				kernel_handle = ion_drv_get_handle(client,Param.record_param.handle, NULL, from_kernel);
 				if(IS_ERR(kernel_handle))
 				{
 					printk("ion_sys_record fail!\n");
@@ -434,12 +437,12 @@ static long ion_sys_ioctl(struct ion_client *client, unsigned int cmd, unsigned 
 				else
 				{
 					printk(ION_DEBUG_TRACE "[ION_FUNC%d]buffer is NULL handle: [0x%x]\n",Param.record_param.action,(unsigned int)Param.record_param.handle);
-				} 
+				}
 #endif
 			}
 			record_ion_info(from_kernel,&Param.record_param);
 			//printk(ION_DEBUG_TRACE "[ION_FUNC%d][ion_sys_ioctl]DONE\n",Param.record_param.action);
-		}	
+		}
 #endif
 		break;
 	}
@@ -447,8 +450,8 @@ static long ion_sys_ioctl(struct ion_client *client, unsigned int cmd, unsigned 
     {
 #if  ION_RUNTIME_DEBUGGER
 	     unsigned int i;
-        struct ion_handle *kernel_handle;  
-        kernel_handle = ion_drv_get_handle(client, 
+        struct ion_handle *kernel_handle;
+        kernel_handle = ion_drv_get_handle(client,
                         Param.record_param.handle, NULL, from_kernel);
         if(IS_ERR(kernel_handle))
         {
@@ -471,7 +474,7 @@ static long ion_sys_ioctl(struct ion_client *client, unsigned int cmd, unsigned 
 
 	}
     break;
-    
+
     default:
         printk("[ion_dbg][ion_sys_ioctl]: Error. Invalid command.\n");
         ret = -EFAULT;
@@ -481,6 +484,10 @@ static long ion_sys_ioctl(struct ion_client *client, unsigned int cmd, unsigned 
         *(ion_sys_data_t*)arg = Param;
     else
         ret_copy = copy_to_user((void __user *)arg, &Param, sizeof(ion_sys_data_t));
+
+    if (ret_copy)
+        return -EINVAL;
+
     ION_FUNC_LEAVE;
     return ret;
 }
@@ -538,7 +545,7 @@ int ion_drv_probe(struct platform_device *pdev)
 {
 	int ret,i;
 	struct ion_platform_data *pdata = pdev->dev.platform_data;
-    
+
 	IONMSG("ion_drv_probe() heap_nr=%d\n", pdata->nr);
 	num_heaps = pdata->nr;
 
@@ -555,7 +562,7 @@ int ion_drv_probe(struct platform_device *pdev)
 	for (i = 0; i < num_heaps; i++) {
 		struct ion_platform_heap *heap_data = &pdata->heaps[i];
 
-		if(heap_data->type == ION_HEAP_TYPE_CARVEOUT 
+		if(heap_data->type == ION_HEAP_TYPE_CARVEOUT
 			&& heap_data->base == 0) {
 			//reserve for carveout heap failed
 			heap_data->size = 0;
@@ -570,10 +577,10 @@ int ion_drv_probe(struct platform_device *pdev)
 			goto err;
 		}
 		heaps[i]->name = heap_data->name;
-		heaps[i]->id = heap_data->id;        
+		heaps[i]->id = heap_data->id;
 		ion_device_add_heap(g_ion_device, heaps[i]);
 	}
-    
+
 	platform_set_drvdata(pdev, g_ion_device);
 
 	debugfs_create_file("ion_profile", 0644, g_ion_device->debug_root, NULL,
@@ -592,7 +599,7 @@ err:
 	}
 	kfree(heaps);
 	return ret;
-    
+
 }
 
 int ion_drv_remove(struct platform_device *pdev)
@@ -617,7 +624,7 @@ struct ion_heap * ion_drv_get_heap(int heap_id)
 	return NULL;
 }
 
-static struct ion_platform_heap ion_drv_platform_heaps[] = 
+static struct ion_platform_heap ion_drv_platform_heaps[] =
 {
     {
         .type = ION_HEAP_TYPE_MULTIMEDIA,
@@ -637,11 +644,11 @@ static struct ion_platform_heap ion_drv_platform_heaps[] =
         .align = 0x1000,    //this must not be 0. (or ion_reserve wiil fail)
         .priv = NULL,
     },
-    
+
 };
 
 
-struct ion_platform_data ion_drv_platform_data = 
+struct ion_platform_data ion_drv_platform_data =
 {
     .nr = ARRAY_SIZE(ion_drv_platform_heaps),
     .heaps = ion_drv_platform_heaps,
@@ -660,7 +667,7 @@ static struct platform_device ion_device = {
 	.dev = {
 	    .platform_data = &ion_drv_platform_data,
 	},
-	
+
 };
 
 static int __init ion_init(void)
