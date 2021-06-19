@@ -457,7 +457,7 @@ static ssize_t mtkts_bts_store_params(struct device *dev,
 
 	if (!tzone)
 		return -EINVAL;
-	if (sscanf(buf, "%s %d", param, &value) == 2) {
+	if (sscanf(buf, "%19s %d", param, &value) == 2) {
 		if (!strcmp(param, "offset"))
 			tzone->therm_fw->tdp->offset = value;
 		if (!strcmp(param, "alpha"))

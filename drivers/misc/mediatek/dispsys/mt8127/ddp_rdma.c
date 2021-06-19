@@ -72,7 +72,7 @@ int RDMAStop(unsigned idx) {
     DISP_REG_SET(idx * DISP_INDEX_OFFSET + DISP_REG_RDMA_INT_STATUS, 0);
     return 0;
 }
-/* porting from ariel */
+/* porting from abc123 */
 int RDMADisable(unsigned idx)
 {
 	ASSERT(idx <= 2);

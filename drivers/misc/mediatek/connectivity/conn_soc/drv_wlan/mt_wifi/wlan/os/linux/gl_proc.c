@@ -390,8 +390,10 @@ static ssize_t procDbgLevelWrite(struct file *file, const char *buffer, size_t c
 	UINT_8 *temp = &aucProcBuf[0];
 
 	kalMemSet(aucProcBuf, 0, u4CopySize);
-	if (u4CopySize >= count + 1)
+	if (u4CopySize > count)
 		u4CopySize = count;
+	else
+		u4CopySize = u4CopySize - 1;
 
 	if (copy_from_user(aucProcBuf, buffer, u4CopySize)) {
 		pr_err("error of copy from user\n");

@@ -1086,6 +1086,13 @@ static void mmc_sd_detect(struct mmc_host *host)
 
 	mmc_claim_host(host);
 
+#ifdef CONFIG_MMC_ERR_REMOVE
+	if (host->rest_remove_flags) {
+		err = 1;
+		goto remove_card;
+	}
+#endif
+
 	/*
 	 * Just check if our card has been removed.
 	 */
@@ -1107,6 +1114,7 @@ static void mmc_sd_detect(struct mmc_host *host)
 	err = _mmc_detect_card_removed(host);
 #endif
 
+remove_card:
 	mmc_release_host(host);
 
 	if (err) {

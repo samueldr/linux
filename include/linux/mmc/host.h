@@ -342,6 +342,9 @@ struct mmc_host {
 	struct delayed_work     metrics_delay_work; /* delayed metrics output */
 #endif /* CONFIG_AMAZON_METRICS_LOG */
 
+#ifdef CONFIG_MMC_ERR_REMOVE
+	bool			rest_remove_flags;
+#endif
 	/* host specific block data */
 	unsigned int		max_seg_size;	/* see blk_queue_max_segment_size */
 	unsigned short		max_segs;	/* see blk_queue_max_segments */

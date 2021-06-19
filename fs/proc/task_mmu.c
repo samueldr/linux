@@ -498,6 +498,7 @@ struct mem_size_stats {
 	unsigned long nonlinear;
 	u64 pss;
         u64 pswap;
+        u64 swap_pss;
 };
 
 #ifdef CONFIG_SWAP 
@@ -528,11 +529,25 @@ static void smaps_pte_entry(pte_t ptent, unsigned long addr,
 #ifdef CONFIG_SWAP
 	                swp_entry_t entry;
 		        struct swap_info_struct *p;
+#ifndef CONFIG_TRANSPARENT_HUGEPAGE
+		        int mapcount;
+#endif
 #endif // CONFIG_SWAP
 
 			mss->swap += ptent_size;
 
 #ifdef CONFIG_SWAP
+#ifndef CONFIG_TRANSPARENT_HUGEPAGE
+			mapcount = swp_swapcount(swpent);
+			if (mapcount >= 2) {
+				u64 pss_delta = (u64)PAGE_SIZE << PSS_SHIFT;
+
+				do_div(pss_delta, mapcount);
+				mss->swap_pss += pss_delta;
+			} else {
+				mss->swap_pss += (u64)PAGE_SIZE << PSS_SHIFT;
+			}
+#endif
 			entry = pte_to_swp_entry(ptent);
 			if (non_swap_entry(entry))
 				return;
@@ -696,6 +711,7 @@ static int show_smap(struct seq_file *m, void *v, int is_pid)
 		   "AnonHugePages:  %8lu kB\n"
 		   "Swap:           %8lu kB\n"
 		   "PSwap:          %8lu kB\n"
+		   "SwapPss:        %8lu kB\n"
 		   "KernelPageSize: %8lu kB\n"
 		   "MMUPageSize:    %8lu kB\n"
 		   "Locked:         %8lu kB\n",
@@ -711,6 +727,7 @@ static int show_smap(struct seq_file *m, void *v, int is_pid)
 		   mss.anonymous_thp >> 10,
 		   mss.swap >> 10,
 		   (unsigned long)(mss.pswap >> (10 + PSS_SHIFT)),
+		   (unsigned long)(mss.swap_pss >> (10 + PSS_SHIFT)),
 		   vma_kernel_pagesize(vma) >> 10,
 		   vma_mmu_pagesize(vma) >> 10,
 		   (vma->vm_flags & VM_LOCKED) ?

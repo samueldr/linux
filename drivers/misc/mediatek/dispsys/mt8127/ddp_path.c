@@ -1547,7 +1547,7 @@ int disp_path_config(struct disp_path_config_struct* pConfig)
 	fb_height = pConfig->srcROI.height;
     return disp_path_config_(pConfig, gMutexID);
 }
-/* porting from ariel : power_saving*/
+/* porting from abc123 : power_saving*/
 int disp_path_config_internal_setting(struct disp_path_config_struct *pConfig)
 {
 	fb_width = pConfig->srcROI.width;
@@ -2610,12 +2610,12 @@ int disp_path_clock_on(char* name)
 	//enable_clock(MT_CG_DISP0_DISP_WDMA, "DDP");
 	//enable_clock(MT_CG_DISP0_WDMA0_SMI   , "DDP");
 
-    //enable_clock(MT_CG_DISP0_DISP_OVL  , "DDP");		/* porting from ariel : power_saving*/
+    //enable_clock(MT_CG_DISP0_DISP_OVL  , "DDP");		/* porting from abc123 : power_saving*/
     //enable_clock(MT_CG_DISP0_OVL_SMI     , "DDP");
     enable_clock(MT_CG_DISP0_DISP_COLOR       , "DDP");
 	//enable_clock(MT_CG_DISP0_2DSHP       , "DDP");
     enable_clock(MT_CG_DISP0_DISP_BLS         , "DDP");
-    //enable_clock(MT_CG_DISP0_DISP_WDMA, "DDP");		/* porting from ariel : power_saving*/
+    //enable_clock(MT_CG_DISP0_DISP_WDMA, "DDP");		/* porting from abc123 : power_saving*/
     //enable_clock(MT_CG_DISP0_WDMA0_SMI   , "DDP");
     //enable_clock(MT_CG_DISP0_RDMA0_ENGINE, "DDP");
     //enable_clock(MT_CG_DISP0_RDMA0_SMI   , "DDP");
@@ -2640,7 +2640,7 @@ int disp_path_clock_on(char* name)
 //#endif
 
 
-	/* porting from ariel: DE request RDMA reset before engine enable */
+	/* porting from abc123: DE request RDMA reset before engine enable */
 	/* prevent reset RDMA interruptedly during RDMA working */
 	//when boot up, skip it, orelse it will cause screen flash issue.
 	/*if(*pRegBackup != DDP_UNBACKED_REG_MEM)
@@ -2694,7 +2694,7 @@ int disp_path_clock_off(char* name)
     // disable intr and clear intr status
     disp_intr_disable_and_clear();
     
-	/* porting from ariel: */
+	/* porting from abc123: */
 	/* DE request RDMA engine enable after DSI, so disable before backup register */
 	//RDMADisable(0);   //this line causes reboot
 	
@@ -2719,7 +2719,7 @@ int disp_path_clock_off(char* name)
     // Better to reset DMA engine before disable their clock
     RDMAStop(0);
     RDMAReset(0);
-/* porting from ariel */
+/* porting from abc123 */
 /*
 #ifdef CONFIG_MTK_SEC_VIDEO_PATH_SUPPORT
 	if (0 == (gOvlLayerSecure[0]|gOvlLayerSecure[1]|gOvlLayerSecure[2]|gOvlLayerSecure[3]))
@@ -2761,7 +2761,7 @@ int disp_path_clock_off(char* name)
     disable_clock(MT_CG_DISP0_DISP_COLOR       , "DDP");
 	//disable_clock(MT_CG_DISP0_2DSHP       , "DDP");
     disable_clock(MT_CG_DISP0_DISP_BLS         , "DDP");
-    //disable_clock(MT_CG_DISP0_DISP_WDMA, "DDP");		/* porting from ariel */
+    //disable_clock(MT_CG_DISP0_DISP_WDMA, "DDP");		/* porting from abc123 */
     //disable_clock(MT_CG_DISP0_WDMA0_SMI   , "DDP");
     //disable_clock(MT_CG_DISP0_RDMA0_ENGINE, "DDP");
     //disable_clock(MT_CG_DISP0_RDMA0_SMI   , "DDP");
@@ -2804,7 +2804,7 @@ int disp_path_clock_off(char* name)
     return 0;
 }
 
-/* porting from ariel */
+/* porting from abc123 */
 int disp_path_rdma_start(unsigned idx)
 {
 	return RDMAStart(idx);
@@ -3068,8 +3068,8 @@ int disp_path_config_layer_ovl_engine(OVL_CONFIG_STRUCT* pOvlConfig,int OvlSecur
 
     disp_path_config_layer_(pOvlConfig,OvlSecure);
 
-	OVLSWReset();	/* porting from ariel; */
-   	OVLStart();  	/* porting from ariel; originally removed fro 8127 but 8135 has it */
+	OVLSWReset();	/* porting from abc123; */
+   	OVLStart();  	/* porting from abc123; originally removed fro 8127 but 8135 has it */
 
     return 0;
 }
@@ -3464,7 +3464,7 @@ int disp_path_config_mutex(struct disp_path_config_struct *pConfig, int mutexId)
         	DISP_REG_SET(DISP_REG_CONFIG_MUTEX_INTSTA, (1 << gMemOutMutexID)|(1 << mutexId));
         }
 
-	/* porting from ariel */
+	/* porting from abc123 */
 	return 0;
 }
 
@@ -3613,7 +3613,7 @@ int disp_path_config_setting(struct disp_path_config_struct *pConfig, int mutexI
             {
                 DISP_ERR("layer ID undefined! %d \n", pConfig->ovl_config.layer);
             }
-			if (disp_path_get_ovl_en() == 0)  /* porting from ariel */
+			if (disp_path_get_ovl_en() == 0)  /* porting from abc123 */
 				OVLSWReset();
             OVLStart();
 #ifdef CONFIG_MTK_SEC_VIDEO_PATH_SUPPORT

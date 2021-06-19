@@ -917,14 +917,16 @@ static int SYSRAM_mmap(
     struct vm_area_struct*  pVma)
 {
     //LOG_MSG("");
-    long length = 0;
+    unsigned long length = 0;
     MUINT32 pfn=0x0;
+
     pVma->vm_page_prot = pgprot_noncached(pVma->vm_page_prot);
-	length=(long)(pVma->vm_end - pVma->vm_start);
+	length = pVma->vm_end - pVma->vm_start;
 	pfn=pVma->vm_pgoff<<PAGE_SHIFT;//page from number, physical address of kernel memory
 	LOG_WRN("pVma->vm_pgoff(0x%x),phy(0x%x),pVmapVma->vm_start(0x%x),pVma->vm_end(0x%x),length(0x%x)",\
 			pVma->vm_pgoff,pVma->vm_pgoff<<PAGE_SHIFT,pVma->vm_start,pVma->vm_end,length);
-	if((length>ISP_VALID_REG_RANGE) || (pfn<IMGSYS_BASE_ADDR) || (pfn>(IMGSYS_BASE_ADDR+ISP_VALID_REG_RANGE)))
+
+	if((length>ISP_VALID_REG_RANGE) || (pfn<IMGSYS_BASE_ADDR) || (pfn>(IMGSYS_BASE_ADDR+ISP_VALID_REG_RANGE) || pVma->vm_end <= pVma->vm_start))
 	{
 		LOG_ERR("mmap range error : vm_start(0x%x),vm_end(0x%x),length(0x%x),pfn(0x%x)!",pVma->vm_start,pVma->vm_end,length,pfn);
 		return -EAGAIN;

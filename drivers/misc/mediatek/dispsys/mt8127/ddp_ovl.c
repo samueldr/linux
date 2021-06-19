@@ -148,7 +148,7 @@ int OVLReset() {
     return 0;
 }
 
-/* porting from ariel : power_saving*/
+/* porting from abc123 : power_saving*/
 int OVLSWReset(void)
 {
 	unsigned int delay_cnt = 0;

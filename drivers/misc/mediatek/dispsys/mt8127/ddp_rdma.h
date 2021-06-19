@@ -34,7 +34,7 @@ int RDMAStop(unsigned idx);
 // reset module
 int RDMAReset(unsigned idx);
 
-/* porting from ariel; disable module */
+/* porting from abc123; disable module */
 int RDMADisable(unsigned idx);
 
 // configu module

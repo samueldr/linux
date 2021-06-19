@@ -3336,7 +3336,7 @@ void disp_print_reg(DISP_MODULE_ENUM module)
 		break;
 	}
 }
-/* porting from ariel : power_saving*/
+/* porting from abc123 : power_saving*/
 int disp_module_clock_on(DISP_MODULE_ENUM module, char* caller_name)
 {
 	switch (module) {
@@ -3367,7 +3367,7 @@ int disp_module_clock_on(DISP_MODULE_ENUM module, char* caller_name)
 
     return 0;
 }
-/* porting from ariel : power_saving*/
+/* porting from abc123 : power_saving*/
 int disp_module_clock_off(DISP_MODULE_ENUM module, char* caller_name)
 {
 	switch (module) {

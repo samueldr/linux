@@ -2444,11 +2444,11 @@ static int mtkfb_ioctl(struct file *file, struct fb_info *info, unsigned int cmd
 		DISP_PrepareSuspend();
 		wait_dsi_engine_notbusy();
 
-        disp_path_clock_off("mtkfb");  /* porting from ariel */
+        disp_path_clock_off("mtkfb");  /* porting from abc123 */
         DISP_CHECK_RET(DISP_PauseVsync(TRUE));
         DISP_CHECK_RET(DISP_PanelEnable(FALSE));
         DISP_CHECK_RET(DISP_PowerEnable(FALSE));
-        /*disp_path_clock_off("mtkfb");*/		/* porting from ariel */
+        /*disp_path_clock_off("mtkfb");*/		/* porting from abc123 */
 
 #if defined(MTK_OVERLAY_ENGINE_SUPPORT)
 				Disp_Ovl_Engine_clock_off();

@@ -508,7 +508,7 @@ int Disp_Ovl_Engine_Ack_Request(struct disp_ovl_engine_request_struct *overlayRe
 #if 1 //def monica_porting
 void Disp_Ovl_Engine_clock_on(void)
 {
-	/* porting from ariel */
+	/* porting from abc123 */
 	/*if (!disp_ovl_engine.bCouple) {
 		//disp_module_clock_on(DISP_MODULE_GAMMA, "DDP");
 		disp_module_clock_on(DISP_MODULE_WDMA, "DDP");
@@ -517,7 +517,7 @@ void Disp_Ovl_Engine_clock_on(void)
 
 void Disp_Ovl_Engine_clock_off(void)
 {
-	/* porting from ariel */
+	/* porting from abc123 */
 	/*if (!disp_ovl_engine.bCouple) {
 		//disp_module_clock_off(DISP_MODULE_GAMMA, "DDP");
 		disp_module_clock_off(DISP_MODULE_WDMA, "DDP");
