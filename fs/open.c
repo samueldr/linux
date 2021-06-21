@@ -1145,6 +1145,7 @@ struct file *file_open_name(struct filename *name, int flags, umode_t mode)
  */
 struct file *filp_open(const char *filename, int flags, umode_t mode)
 {
+	printk("[TRACE] filp_open(); // %s\n", filename);
 	struct filename *name = getname_kernel(filename);
 	struct file *file = ERR_CAST(name);
 	

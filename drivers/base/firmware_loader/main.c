@@ -521,6 +521,8 @@ fw_get_filesystem_firmware(struct device *device, struct fw_priv *fw_priv,
 			break;
 		}
 
+		printk("[TRACE] fw_get_filesystem_firmware(); // %s\n", path);
+
 		fw_priv->size = 0;
 
 		/*
@@ -804,6 +806,8 @@ _request_firmware(const struct firmware **firmware_p, const char *name,
 		ret = -EINVAL;
 		goto out;
 	}
+
+	printk("[TRACE] _request_firmware(); // %s\n", name);
 
 	ret = _request_firmware_prepare(&fw, name, device, buf, size,
 					offset, opt_flags);
