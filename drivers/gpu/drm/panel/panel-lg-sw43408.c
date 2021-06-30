@@ -413,9 +413,10 @@ static int lg_panel_enable(struct drm_panel *panel)
 	if (panel->dsc) {
 		/* this panel uses DSC so send the pps */
 		drm_dsc_dsi_pps_header_init(&pps.dsc_header);
-		drm_dsc_compute_rc_parameters(panel->dsc);
 		drm_dsc_pps_payload_pack(&pps.pps_payload, panel->dsc);
-		pr_err("VK: in %s doing pps write now\n", __func__);
+		print_hex_dump(KERN_DEBUG, "DSC params:", DUMP_PREFIX_NONE,
+                               16, 1, &pps, sizeof(pps), false);
+
 		ret = mipi_dsi_dcs_write(pinfo->link,
 					 MIPI_DSI_PICTURE_PARAMETER_SET,
 					 &pps, 135);

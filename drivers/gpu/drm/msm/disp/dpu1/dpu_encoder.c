@@ -1839,27 +1839,6 @@ static void dpu_encoder_vsync_event_work_handler(struct kthread_work *work)
 			nsecs_to_jiffies(ktime_to_ns(wakeup_time)));
 }
 
-static int dpu_encoder_dsc_update_pic_dim(struct msm_display_dsc_config *dsc,
-					  int pic_width, int pic_height)
-{
-	if (!dsc || !pic_width || !pic_height) {
-		DPU_ERROR("invalid input: pic_width=%d pic_height=%d\n",
-			  pic_width, pic_height);
-		return -EINVAL;
-	}
-
-	if ((pic_width % dsc->drm.slice_width) || (pic_height % dsc->drm.slice_height)) {
-		DPU_ERROR("pic_dim=%dx%d has to be multiple of slice=%dx%d\n",
-			  pic_width, pic_height, dsc->drm.slice_width, dsc->drm.slice_height);
-		return -EINVAL;
-	}
-
-	dsc->drm.pic_width = pic_width;
-	dsc->drm.pic_height = pic_height;
-
-	return 0;
-}
-
 static void
 dpu_encoder_dsc_pclk_param_calc(struct msm_display_dsc_config *dsc, u32 width)
 {
@@ -1982,8 +1961,6 @@ static void dpu_encoder_prep_dsc(struct dpu_encoder_virt *dpu_enc,
 	dsc_common_mode = 0;
 	pic_width = dsc->drm.pic_width;
 	pic_height = dsc->drm.pic_height;
-
-	dpu_encoder_dsc_update_pic_dim(dsc, pic_width, pic_height);
 
 	dsc_common_mode = DSC_MODE_MULTIPLEX | DSC_MODE_SPLIT_PANEL;
 	if (enc_master->intf_mode == INTF_MODE_VIDEO)

@@ -30,6 +30,8 @@
 
 #define DSI_RESET_TOGGLE_DELAY_MS 20
 
+static int dsi_populate_dsc_params(struct msm_display_dsc_config *dsc);
+
 static int dsi_get_version(const void __iomem *base, u32 *major, u32 *minor)
 {
 	u32 ver;
@@ -940,6 +942,27 @@ static void dsi_ctrl_config(struct msm_dsi_host *msm_host, bool enable,
 	dsi_write(msm_host, REG_DSI_CTRL, data);
 }
 
+static int dsi_dsc_update_pic_dim(struct msm_display_dsc_config *dsc,
+				  int pic_width, int pic_height)
+{
+	if (!dsc || !pic_width || !pic_height) {
+		pr_err("DSI: invalid input: pic_width: %d pic_height: %d\n", pic_width, pic_height);
+		return -EINVAL;
+	}
+
+	if ((pic_width % dsc->drm.slice_width) || (pic_height % dsc->drm.slice_height)) {
+		pr_err("DSI: pic_dim %dx%d has to be multiple of slice %dx%d\n",
+		       pic_width, pic_height, dsc->drm.slice_width, dsc->drm.slice_height);
+		return -EINVAL;
+	}
+
+	dsc->drm.pic_width = pic_width;
+	dsc->drm.pic_height = pic_height;
+
+	return 0;
+}
+
+
 static void dsi_timing_setup(struct msm_dsi_host *msm_host, bool is_dual_dsi)
 {
 	struct drm_display_mode *mode = msm_host->mode;
@@ -977,8 +1000,13 @@ static void dsi_timing_setup(struct msm_dsi_host *msm_host, bool is_dual_dsi)
 		struct msm_display_dsc_config *dsc = msm_host->dsc;
 
 		/* update dsc params with timing params */
-		dsc->drm.pic_width = mode->hdisplay;
-		dsc->drm.pic_height = mode->vdisplay;
+		dsi_dsc_update_pic_dim(dsc, mode->hdisplay, mode->vdisplay);
+		DBG("Mode Width- %d x Height %d\n", dsc->drm.pic_width, dsc->drm.pic_height);
+
+		/* we do the calculations for dsc parameters here so that
+		 * panel can use these parameters
+		 */
+		dsi_populate_dsc_params(dsc);
 
 		/* Divide the display by 3 but keep back/font porch and
 		 * pulse width same
@@ -1864,10 +1892,19 @@ static char bpg_offset[DSC_NUM_BUF_RANGES] = {
 
 static int dsi_populate_dsc_params(struct msm_display_dsc_config *dsc)
 {
+	int mux_words_size;
+	int groups_per_line, groups_total;
+	int min_rate_buffer_size;
+	int hrd_delay;
+	int pre_num_extra_mux_bits, num_extra_mux_bits;
+	int slice_bits;
+	int target_bpp_x16;
+	int data;
+	int final_value, final_scale;
 	int i;
 
 	dsc->drm.rc_model_size = 8192;
-	dsc->drm.first_line_bpg_offset = 15;
+	dsc->drm.first_line_bpg_offset = 12;
 	dsc->drm.rc_edge_factor = 6;
 	dsc->drm.rc_tgt_offset_high = 3;
 	dsc->drm.rc_tgt_offset_low = 3;
@@ -1885,7 +1922,14 @@ static int dsi_populate_dsc_params(struct msm_display_dsc_config *dsc)
 		dsc->drm.rc_range_params[i].range_bpg_offset = bpg_offset[i];
 	}
 
-	dsc->drm.initial_offset = 6144;
+	dsc->drm.initial_offset = 6144; /* Not bpp 12 */
+	if (dsc->drm.bits_per_pixel != 8)
+		dsc->drm.initial_offset = 2048;	/* bpp = 12 */
+
+	mux_words_size = 48;		/* bpc == 8/10 */
+	if (dsc->drm.bits_per_component == 12)
+		mux_words_size = 64;
+
 	dsc->drm.initial_xmit_delay = 512;
 	dsc->drm.initial_scale_value = 32;
 	dsc->drm.first_line_bpg_offset = 12;
@@ -1894,7 +1938,7 @@ static int dsi_populate_dsc_params(struct msm_display_dsc_config *dsc)
 	/* bpc 8 */
 	dsc->drm.flatness_min_qp = 3;
 	dsc->drm.flatness_max_qp = 12;
-	dsc->det_thresh_flatness = 7;
+	dsc->det_thresh_flatness = 7 + 2 * (dsc->drm.bits_per_component - 8);
 	dsc->drm.rc_quant_incr_limit0 = 11;
 	dsc->drm.rc_quant_incr_limit1 = 11;
 	dsc->drm.mux_word_size = DSC_MUX_WORD_SIZE_8_10_BPC;
@@ -1902,24 +1946,58 @@ static int dsi_populate_dsc_params(struct msm_display_dsc_config *dsc)
 	/* FIXME: need to call drm_dsc_compute_rc_parameters() so that rest of
 	 * params are calculated
 	 */
+	dsc->slice_last_group_size = 3 - (dsc->drm.slice_width % 3);
+	groups_per_line = DIV_ROUND_UP(dsc->drm.slice_width, 3);
+	dsc->drm.slice_chunk_size = dsc->drm.slice_width * dsc->drm.bits_per_pixel / 8;
+	if ((dsc->drm.slice_width * dsc->drm.bits_per_pixel) % 8)
+		dsc->drm.slice_chunk_size++;
 
-	i = dsc->drm.slice_width % 3;
-	switch (i) {
-	case 0:
-		dsc->slice_last_group_size = 2;
-		break;
+	/* rbs-min */
+	min_rate_buffer_size =  dsc->drm.rc_model_size - dsc->drm.initial_offset +
+				dsc->drm.initial_xmit_delay * dsc->drm.bits_per_pixel +
+				groups_per_line * dsc->drm.first_line_bpg_offset;
 
-	case 1:
-		dsc->slice_last_group_size = 0;
-		break;
+	hrd_delay = DIV_ROUND_UP(min_rate_buffer_size, dsc->drm.bits_per_pixel);
 
-	case 2:
-		dsc->slice_last_group_size = 0;
-		break;
+	dsc->drm.initial_dec_delay = hrd_delay - dsc->drm.initial_xmit_delay;
 
-	default:
-		break;
-	}
+	dsc->drm.initial_scale_value = 8 * dsc->drm.rc_model_size /
+				       (dsc->drm.rc_model_size - dsc->drm.initial_offset);
+
+	slice_bits = 8 * dsc->drm.slice_chunk_size * dsc->drm.slice_height;
+
+	groups_total = groups_per_line * dsc->drm.slice_height;
+
+	data = dsc->drm.first_line_bpg_offset * 2048;
+
+	dsc->drm.nfl_bpg_offset = DIV_ROUND_UP(data, (dsc->drm.slice_height - 1));
+
+	pre_num_extra_mux_bits = 3 * (mux_words_size + (4 * dsc->drm.bits_per_component + 4) - 2);
+
+	num_extra_mux_bits = pre_num_extra_mux_bits - (mux_words_size -
+			     ((slice_bits - pre_num_extra_mux_bits) % mux_words_size));
+
+	data = 2048 * (dsc->drm.rc_model_size - dsc->drm.initial_offset + num_extra_mux_bits);
+	dsc->drm.slice_bpg_offset = DIV_ROUND_UP(data, groups_total);
+
+	/* bpp * 16 + 0.5 */
+	data = dsc->drm.bits_per_pixel * 16;
+	data *= 2;
+	data++;
+	data /= 2;
+	target_bpp_x16 = data;
+
+	data = (dsc->drm.initial_xmit_delay * target_bpp_x16) / 16;
+	final_value =  dsc->drm.rc_model_size - data + num_extra_mux_bits;
+	dsc->drm.final_offset = final_value;
+
+	final_scale = 8 * dsc->drm.rc_model_size / (dsc->drm.rc_model_size - final_value);
+
+
+	data = (final_scale - 9) * (dsc->drm.nfl_bpg_offset + dsc->drm.slice_bpg_offset);
+	dsc->drm.scale_increment_interval = (2048 * dsc->drm.final_offset) / data;
+
+	dsc->drm.scale_decrement_interval = groups_per_line / (dsc->drm.initial_scale_value - 8);
 
 	return 0;
 }
@@ -1994,8 +2072,6 @@ static int dsi_host_parse_dsc(struct msm_dsi_host *msm_host,
 
 	dsc->drm.block_pred_enable = of_property_read_bool(np,
 			 "qcom,mdss-block-prediction-enable");
-
-	dsi_populate_dsc_params(dsc);
 
 	msm_host->dsc = dsc;
 
