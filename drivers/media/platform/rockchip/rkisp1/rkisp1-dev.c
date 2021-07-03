@@ -559,7 +559,7 @@ static int rkisp1_probe(struct platform_device *pdev)
 
 	rkisp1->alloc_ctx = vb2_dma_contig_init_ctx(rkisp1->v4l2_dev.dev);
 	if (IS_ERR(rkisp1->alloc_ctx)) {
-		dev_err(dev, "Failed to init alloc ctx: %d\n",
+		dev_err(dev, "Failed to init alloc ctx: %ld\n",
 			PTR_ERR(rkisp1->alloc_ctx));
 		goto err_unreg_v4l2_dev;
 	}
