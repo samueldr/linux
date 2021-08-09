@@ -69,6 +69,12 @@ struct msm_rpmstats_kobj_attr {
 	struct msm_rpmstats_platform_data *pd;
 };
 
+static struct msm_rpmstats_platform_data *rpm_data = NULL;
+static u32 vmin_count = 0;
+extern void debug_suspend_enabled(void);
+extern void debug_suspend_disable(void);
+extern void pm_show_rpm_master_stat(void);
+
 static inline u64 get_time_in_sec(u64 counter)
 {
 	do_div(counter, MSM_ARCH_TIMER_FREQ);
@@ -173,7 +179,57 @@ static inline int msm_rpmstats_copy_stats(
 
 	return length;
 }
+/* add by ZTE show vdd_min and sleep clk ++++ */
+void pm_show_rpm_stats(void)
+{
+	struct msm_rpmstats_private_data powerdebug = {0};
+	struct msm_rpmstats_private_data *prvdata = NULL;
+	struct msm_rpmstats_platform_data *pdata = NULL;
+	static char buf[480] = {0};
+	char *temp = NULL;
+	u32 count = 0;
 
+	pdata = rpm_data;
+	prvdata = &powerdebug;
+	if (!pdata) {
+		pr_err("%s: ERROR rpm_data point is null\n", __func__);
+		return;
+	}
+
+	prvdata->reg_base = ioremap_nocache(pdata->phys_addr_base,
+					pdata->phys_size);
+	if (!prvdata->reg_base) {
+		pr_err("%s: ERROR could not ioremap start=%pa, len=%u\n",
+			__func__, &pdata->phys_addr_base,
+			pdata->phys_size);
+		return;
+	}
+
+	prvdata->read_idx = prvdata->len = 0;
+	prvdata->platform_data = pdata;
+	prvdata->num_records = pdata->num_records;
+
+	if (prvdata->read_idx < prvdata->num_records)
+		prvdata->len = msm_rpmstats_copy_stats(prvdata);
+
+	snprintf(buf, prvdata->len, prvdata->buf);
+	temp = strnstr(buf, "vmin\n\t count:", prvdata->len);
+	iounmap(prvdata->reg_base);
+	if (sscanf(temp+strlen("vmin\n\t count:"), "%d\n", &count) == 1) {
+		if (vmin_count != count) {
+			pr_info("count : last %d now %d\nenter vdd min success\n", vmin_count, count);
+			vmin_count = count;
+			debug_suspend_disable();
+		} else {
+			pr_info("count: last %d now %d\n enter vdd min failed\n", vmin_count, count);
+			debug_suspend_enabled();
+			pm_show_rpm_master_stat();
+		}
+	} else {
+		pr_err("%s: ERROR could not get vdd_min count\n", __func__);
+	}
+}
+/* add add by ZTE show vdd_min and sleep clk end */
 static ssize_t rpmstats_show(struct kobject *kobj,
 			struct kobj_attribute *attr, char *buf)
 {
@@ -276,6 +332,8 @@ static int msm_rpmstats_probe(struct platform_device *pdev)
 	key = "qcom,num-records";
 	if (of_property_read_u32(pdev->dev.of_node, key, &pdata->num_records))
 		pdata->num_records = RPM_STATS_NUM_REC;
+
+	rpm_data = pdata;
 
 	msm_rpmstats_create_sysfs(pdev, pdata);
 

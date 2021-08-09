@@ -1,0 +1,5 @@
+config ZTE_AW87359_SMART_PA_STEREO
+	tristate "SoC Audio for awinic AW87359 Smart K PA in stereo"
+	depends on I2C
+	help
+	  This option enables support for AW87359 Smart K PA in stereo.

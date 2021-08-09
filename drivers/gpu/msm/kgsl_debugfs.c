@@ -352,12 +352,23 @@ static int process_sparse_mem_open(struct inode *inode, struct file *file)
 
 	return ret;
 }
+static int process_sparse_mem_release(struct inode *inode, struct file *file)
+{
+	struct kgsl_process_private *private =
+		((struct seq_file *)file->private_data)->private;
+
+	if (private)
+		kgsl_process_private_put(private);
+
+	return single_release(inode, file);
+}
+
 
 static const struct file_operations process_sparse_mem_fops = {
 	.open = process_sparse_mem_open,
 	.read = seq_read,
 	.llseek = seq_lseek,
-	.release = process_mem_release,
+	.release = process_sparse_mem_release,
 };
 
 static int globals_print(struct seq_file *s, void *unused)

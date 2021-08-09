@@ -914,6 +914,7 @@ static struct  rcg_clk gfx3d_clk_src = {
 };
 
 static struct clk_freq_tbl ftbl_gcc_blsp1_2_qup1_4_i2c_apps_clk[] = {
+	F( 4800000,	xo,	4,	0,	0),
 	F( 19200000,	xo,	1,	0,	0),
 	F( 50000000,	gpll0,	16,	0,	0),
 	F_END
@@ -940,6 +941,7 @@ static struct clk_freq_tbl ftbl_gcc_blsp1_2_qup1_4_spi_apps_clk[] = {
 	F( 16000000,	gpll0,	10,	1,	5),
 	F( 19200000,	xo,	1,	0,	0),
 	F( 25000000,	gpll0,	16,	1,	2),
+	F( 40000000,	gpll0,	10,	1,	2),
 	F( 50000000,	gpll0,	16,	0,	0),
 	F_END
 };
@@ -1181,7 +1183,7 @@ static struct rcg_clk blsp2_qup3_spi_apps_clk_src = {
 	.c = {
 		.dbg_name = "blsp2_qup3_spi_apps_clk_src",
 		.ops = &clk_ops_rcg_mnd,
-		VDD_DIG_FMAX_MAP2(LOWER, 25000000, NOMINAL, 50000000),
+		VDD_DIG_FMAX_MAP2(LOWER, 4800000, NOMINAL, 50000000),
 		CLK_INIT(blsp2_qup3_spi_apps_clk_src.c),
 	},
 };
@@ -1309,6 +1311,10 @@ static struct rcg_clk cpp_clk_src = {
 };
 
 static struct clk_freq_tbl ftbl_gcc_camss_gp0_1_clk[] = {
+	F( 9600,	xo,	10,	1,	200),
+	F( 24000,	xo,	16,	1,	50),
+	F( 14400,	xo,	16,	3,	250),
+	F( 30000,	xo,	10,	1,	64),
 	F( 100000000,	gpll0,	8,	0,	0),
 	F( 160000000,	gpll0,	5,	0,	0),
 	F( 200000000,	gpll0,	4,	0,	0),
@@ -1324,7 +1330,7 @@ static struct rcg_clk camss_gp0_clk_src = {
 	.c = {
 		.dbg_name = "camss_gp0_clk_src",
 		.ops = &clk_ops_rcg_mnd,
-		VDD_DIG_FMAX_MAP3(LOWER, 100000000, LOW, 160000000,
+		VDD_DIG_FMAX_MAP3(LOWER, 9600, LOW, 160000000,
 				  NOMINAL, 200000000),
 		CLK_INIT(camss_gp0_clk_src.c),
 	},
@@ -4399,6 +4405,96 @@ static void get_speed_bin(struct platform_device *pdev, int *bin)
 
 	dev_info(&pdev->dev, "GPU speed bin: %d\n", *bin);
 }
+#ifdef TARGET_SECOND_SPI_PANEL
+unsigned int *gcc_mm_gp0_d_address = NULL;
+unsigned int *gcc_mm_gp0_cmd_rcgr  = NULL;
+unsigned int *gcc_mm_gp0_cbcr = NULL;
+struct clk *gpio_clk_struct = NULL;
+struct device *device_gpio = NULL;
+void zte_set_gpio_pwm_duty(int level)
+{
+	static int last_bl_levle = 0;
+	static int gpio_clk_enabled = 1;
+	struct rcg_clk *gp0_rcg_clk;
+
+
+	last_bl_levle = level;
+
+	if (gpio_clk_struct == NULL) {
+		gpio_clk_struct = devm_clk_get(device_gpio, "client_clk");
+		if (IS_ERR(gpio_clk_struct)) {
+			pr_err("get gpio_clk_struct Error: %lu\n", PTR_ERR(gpio_clk_struct));
+			gpio_clk_struct = NULL;
+			return;
+		}
+
+		clk_set_rate(gpio_clk_struct, 30000);
+	}
+
+	if (level == 0) {
+		if (gpio_clk_enabled == 1) {
+			clk_disable_unprepare(gpio_clk_struct);
+			gpio_clk_enabled = 0;
+			return;
+		}
+	} else {
+		if (level >= 98)
+		     level = 98;
+
+		if (gpio_clk_enabled == 0) {
+		   clk_prepare_enable(gpio_clk_struct);
+		   gpio_clk_enabled = 1;
+		}
+
+		gcc_mm_gp0_d_address[0] = (~(50 * level / 50)) & 0xff;
+		mb();/*mb*/
+		gcc_mm_gp0_cmd_rcgr[0] = 0x3;
+		mb();/*mb*/
+
+	}
+
+}
+
+static int client_clk_probe(struct platform_device *pdev)
+{
+	int ret = -1;
+
+	pr_info("zte client_clk_probe\n");
+	gcc_mm_gp0_d_address = (unsigned int *)(((unsigned char *)virt_bases[GCC_BASE]) + 0x54010);
+	gcc_mm_gp0_cmd_rcgr = (unsigned int *)(((unsigned char *)virt_bases[GCC_BASE]) + 0x54000);
+	gcc_mm_gp0_cbcr = (unsigned int *)(((unsigned char *)virt_bases[GCC_BASE])  + 0x54018);
+
+	device_gpio = &pdev->dev;
+	gpio_clk_struct = devm_clk_get(&pdev->dev, "client_clk");
+	if (IS_ERR(gpio_clk_struct)) {
+		pr_err("get gpio_clk_struct Error: %lu\n", PTR_ERR(gpio_clk_struct));
+		gpio_clk_struct = NULL;
+		return ret;
+	}
+
+
+	ret = clk_set_rate(gpio_clk_struct, 30000);
+	pr_info("%s:%i ret=%d\n", __func__, __LINE__, ret);
+	ret = clk_prepare_enable(gpio_clk_struct);
+	pr_info("%s:%i ret=%d\n", __func__, __LINE__, ret);
+	zte_set_gpio_pwm_duty(60);
+
+	return ret;
+}
+static const struct of_device_id client_clk_dt_match[] = {
+		{ .compatible = "qcom,client_clk",},
+		{}
+};
+static struct platform_driver client_clk_driver = {
+		.probe    = client_clk_probe,
+		.shutdown = NULL,
+		.driver = {
+				.name           = "client_clk",
+				.owner = THIS_MODULE,
+				.of_match_table = client_clk_dt_match,
+		},
+};
+#endif
 
 static int msm_gcc_probe(struct platform_device *pdev)
 {
@@ -4999,6 +5095,10 @@ static struct platform_driver msm_clock_gcc_mdss_driver = {
 
 static int __init msm_gcc_mdss_init(void)
 {
+#ifdef TARGET_SECOND_SPI_PANEL
+	platform_driver_register(&client_clk_driver);
+#endif
+
 	return platform_driver_register(&msm_clock_gcc_mdss_driver);
 }
 arch_initcall(msm_gcc_init);

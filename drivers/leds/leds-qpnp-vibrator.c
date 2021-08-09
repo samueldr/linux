@@ -68,6 +68,7 @@ struct qpnp_vib {
 	int state;
 	int vtg_level;
 	int timeout;
+	int min_duration_ms;
 	u32 vib_play_ms;
 	struct mutex lock;
 };
@@ -240,6 +241,15 @@ static int qpnp_vib_parse_dt(struct qpnp_vib *vib)
 		return rc;
 	}
 
+	rc = of_property_read_u32(node,
+			"min-duration-ms", &temp_val);
+	if (!rc) {
+		vib->min_duration_ms = temp_val;
+	} else if (rc != -EINVAL) {
+		dev_err(&pdev->dev, "Unable to read vib min-duration-ms\n");
+		return rc;
+	}
+
 	vib->vtg_level = QPNP_VIB_DEFAULT_VTG_LVL;
 	rc = of_property_read_u32(node,
 			"qcom,vib-vtg-level-mV", &temp_val);
@@ -357,6 +367,9 @@ static ssize_t qpnp_vib_set_duration(struct device *dev,
 	if (value > vib->timeout)
 		value = vib->timeout;
 
+	if (value < vib->min_duration_ms)
+		value = vib->min_duration_ms;
+
 	mutex_lock(&vib->lock);
 	vib->vib_play_ms = value;
 	mutex_unlock(&vib->lock);
@@ -388,7 +401,7 @@ static ssize_t qpnp_vib_set_activate(struct device *dev,
 		return count;
 
 	vib->state = value;
-	pr_debug("state = %d, time = %ums\n", vib->state,
+	pr_info("state = %d, time = %ums\n", vib->state,
 						vib->vib_play_ms);
 	mutex_lock(&vib->lock);
 	if (vib->state) {

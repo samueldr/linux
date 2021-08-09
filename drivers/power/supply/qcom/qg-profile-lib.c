@@ -16,7 +16,7 @@
 #include "qg-profile-lib.h"
 #include "qg-defs.h"
 
-static int linear_interpolate(int y0, int x0, int y1, int x1, int x)
+int linear_interpolate(int y0, int x0, int y1, int x1, int x)
 {
 	if (y0 == y1 || x == x0)
 		return y0;

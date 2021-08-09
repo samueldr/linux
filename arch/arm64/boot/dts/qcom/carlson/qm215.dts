@@ -1,0 +1,223 @@
+/*
+ * Copyright (c) 2018, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+/dts-v1/;
+
+#include "../qm215.dtsi"
+#include "../qm215-pm8916.dtsi"
+#include "../qm215-audio.dtsi"
+#include "qualcomm_base_diff.dtsi"
+#include "sar_carlson.dtsi"
+#include "../battery_protect_policy_080509200100.dtsi"
+
+/ {
+	model = "Qualcomm Technologies, Inc. QM215";
+	compatible = "qcom,qm215";
+	qcom,pmic-name = "PM8916";
+};
+
+&i2c_2 {
+	status = "ok";
+};
+
+&i2c_6 {
+	status = "ok";
+};
+
+&pm8916_bms {
+	status = "ok";
+	qcom,v-cutoff-uv = <3400000>;
+	qcom,max-voltage-uv = <4400000>;
+	qcom,r-conn-mohm = <0>;
+	qcom,shutdown-soc-valid-limit = <100>;
+	qcom,low-soc-calculate-soc-threshold = <15>;
+	qcom,low-voltage-calculate-soc-ms = <1000>;
+	qcom,low-soc-calculate-soc-ms = <5000>;
+	qcom,calculate-soc-ms = <20000>;
+	qcom,volatge-soc-timeout-ms = <60000>;
+	qcom,low-voltage-threshold = <3450000>;
+	qcom,s3-ocv-tolerence-uv = <1200>;
+	qcom,s2-fifo-length = <5>;
+	qcom,low-soc-fifo-length = <2>;
+	qcom,bms-vadc = <&pm8916_vadc>;
+	qcom,bms-adc_tm = <&pm8916_adc_tm>;
+	qcom,pmic-revid = <&pm8916_revid>;
+
+	qcom,force-s3-on-suspend;
+	qcom,force-s2-in-charging;
+	qcom,report-charger-eoc;
+	qcom,resume-soc = <99>;
+	qcom,use-reported-soc;
+};
+
+&soc {
+	usb@78db000 {
+		vbus_otg-supply;
+	};
+};
+
+&tlmm {
+	pmx_charger_pin_default {
+		int_pin_default: int_pin_default {
+			mux {
+				pins = "gpio1";
+				function = "gpio";
+			};
+
+			config {
+				pins = "gpio1";
+				drive-strength = <2>;
+				bias-disable;
+				input-enable;
+			};
+		};
+	};
+};
+
+
+&pm8916_gpios {
+	usb_id {
+		usb_id_default: usb_id_default {
+			pins = "gpio4";
+			function = "normal";
+			input-enable;
+			bias-pull-up;
+			power-source = <0>;
+		};
+	};
+};
+
+&usb_otg {
+	qcom,hsusb-otg-mode = <3>;
+	extcon = <&bq_charger>;
+	vbus_otg-supply = <&smbcharger_charger_otg>;
+};
+
+
+&i2c_2 {
+	bq_charger: bq24297-charger@6b {
+		compatible = "ti,charger,bq24297";
+		status = "ok";
+		reg = <0x6b>;
+		interrupt-parent = <&tlmm>;
+		interrupts = <1 0x0>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&int_pin_default>,<&usb_id_default>;
+		ti,irq-gpio = <&pm8916_gpios 4 0>;
+		ti,bq2429x,usb-vlim = <4520>;
+		ti,bq2429x,usb-ilim = <512>;
+		ti,bq2429x,usb-float-voltage-mv = <4400>;
+		ti,bq2429x,usb-ichg = <512>;
+
+		ti,bq2429x,cdp-vlim = <4520>;
+		ti,bq2429x,cdp-ilim = <1500>;
+		ti,bq2429x,cdp-ichg = <1216>;
+		ti,bq2429x,cdp-float-voltage-mv = <4352>;
+
+		ti,bq2429x,ta-vlim = <4520>;
+		ti,bq2429x,ta-ilim = <2000>;
+		ti,bq2429x,ta-ichg = <2048>;
+		ti,bq2429x,ta-float-voltage-mv = <4400>;
+
+		ti,recharge-mv = <300>;
+
+		ti,bq2429x,software-jeita-supported;
+		ti,bq2429x,jeita-hot-degc = <550>;
+		ti,bq2429x,jeita-warm-degc = <450>;
+		ti,bq2429x,jeita-cool-degc = <150>;
+		ti,bq2429x,jeita-cold-degc = <0>;
+		ti,bq2429x,jeita-cool-ma = <600>;
+		ti,bq2429x,jeita-cool-mv = <4400>;
+		ti,bq2429x,jeita-warm-ma = <600>;
+		ti,bq2429x,jeita-warm-mv = <4100>;
+		ti,bq2429x,jeita-cold-hysteresis = <20>;
+		ti,bq2429x,jeita-hot-hysteresis = <20>;
+		ti,bq2429x,thermal-mitigation = <2048 1408 1024 640>;
+
+		ti,bq2429x,precharge-current = <384>;
+		ti,bq2429x,termination-current = <128>;
+		ti,bq2429x,boost-volt = <4998>;
+		ti,bq2429x,boost-current = <1000>;
+		/* ti,bq2429x,enable_term; */
+
+		/* ----------fot ti bq25601 compatible---------- */
+		/* ti,charge_enable-gpio = <&tlmm 8 0x00>; */
+		/* light add note:*/
+		/* ichg:battery charging current */
+		/* vreg:battery float voltage */
+		/* ilim:charging input current */
+		/* vlim:input voltage */
+
+		ti,bq2560x,usb-vlim = <3900>;
+		ti,bq2560x,usb-ilim = <500>;
+		ti,bq2560x,usb-vreg = <4400>;
+		ti,bq2560x,usb-ichg = <1000>;
+
+		ti,bq2560x,cdp-vlim = <3900>;
+		ti,bq2560x,cdp-ilim = <1000>;
+		ti,bq2560x,cdp-vreg = <4400>;
+		ti,bq2560x,cdp-ichg = <1500>;
+
+		ti,bq2560x,ta-vlim = <3900>;
+		ti,bq2560x,ta-ilim = <1000>;
+		ti,bq2560x,ta-vreg = <4400>;
+		ti,bq2560x,ta-ichg = <1500>;
+
+		ti,bq2560x,precharge-current = <384>;
+		ti,bq2560x,termination-current = <128>;
+		ti,bq2560x,boost-voltage = <4998>;
+		ti,bq2560x,boost-current = <1200>;
+
+		ti,bq2560x,stat-pin-ctrl = <0>;
+		ti,bq2560x,vac-ovp-threshold = <6200>;
+
+		ti,bq2560x,jeita-hot-degc = <550>;
+		ti,bq2560x,jeita-warm-degc = <490>;
+		ti,bq2560x,jeita-cool-degc = <200>;
+		ti,bq2560x,jeita-cooler-degc = <100>;
+		ti,bq2560x,jeita-cold-degc = <10>;
+
+		ti,bq2560x,jeita-hot-hysteresis = <20>;
+		ti,bq2560x,jeita-cold-hysteresis = <20>;
+
+		ti,bq2560x,jeita-cooler-ma = <1000>;
+		ti,bq2560x,jeita-cool-ma = <1000>;
+		ti,bq2560x,jeita-cool-mv = <4400>;
+		ti,bq2560x,normal-step-mv = <4200>;
+		ti,bq2560x,normal-step-ma = <2200>;
+		ti,bq2560x,jeita-warm-ma = <1000>;
+		ti,bq2560x,jeita-warm-mv = <4100>;
+
+		ti,bq2560x,recharge-mv = <100>;
+
+		ti,bq2560x,enable_term;
+		/*ti,bq2560x,enable_soc_term_charge;*/
+		ti,bq2560x,software-jeita-supported;
+		ti,bq2560x,thermal-mitigation = <1000 800 450 100>;
+		smbcharger_charger_otg: qcom,smb358-boost-otg {
+				regulator-name = "smb358_charger_otg";
+		};
+	};
+};
+
+&charger_policy_service {
+		policy,timeout-seconds = <86400>;/* 24 hours */
+};
+
+&batt_cap_learn {
+	bcl,battery-current-polarity =  <0>;
+};
+
+&charge_arbitrate_service {
+		cas,normal-topoff = <3>;
+};

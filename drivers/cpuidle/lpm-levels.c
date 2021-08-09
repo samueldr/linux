@@ -1666,6 +1666,11 @@ static void lpm_suspend_wake(void)
 	lpm_stats_suspend_exit();
 }
 
+/* zte_pm */
+/*cat /d/zte_gpio/dump_sleep_gpios*/
+extern void zte_pm_vendor_before_powercollapse(void) __attribute__((weak));
+/* zte_pm */
+
 static int lpm_suspend_enter(suspend_state_t state)
 {
 	int cpu = raw_smp_processor_id();
@@ -1685,6 +1690,9 @@ static int lpm_suspend_enter(suspend_state_t state)
 	}
 	cpu_prepare(lpm_cpu, idx, false);
 	cluster_prepare(cluster, cpumask, idx, false, 0);
+
+	/*zte_pm  add:suspend->PC, dump sleep gpios*/
+	zte_pm_vendor_before_powercollapse();
 
 	success = psci_enter_sleep(lpm_cpu, idx, false);
 

@@ -20,6 +20,7 @@
 #include <linux/extcon.h>
 #include <linux/alarmtimer.h>
 #include "storm-watch.h"
+#include <vendor/common/zte_misc.h>
 
 enum print_reason {
 	PR_INTERRUPT	= BIT(0),
@@ -73,20 +74,26 @@ enum print_reason {
 #define USBOV_DBC_VOTER			"USBOV_DBC_VOTER"
 #define FCC_STEPPER_VOTER		"FCC_STEPPER_VOTER"
 #define CHG_TERMINATION_VOTER		"CHG_TERMINATION_VOTER"
+#define CAS_SETTING_VOTER		"CAS_SETTING_VOTER"
+#define POLICY_SETTING_VOTER		"POLICY_SETTING_VOTER"
+#define BMS_SETTING_VOTER		"BMS_SETTING_VOTER"
 
 #define BOOST_BACK_STORM_COUNT	3
 #define WEAK_CHG_STORM_COUNT	8
 
 #define VBAT_TO_VRAW_ADC(v)		div_u64((u64)v * 1000000UL, 194637UL)
 
+#define AUDIO_ADAPTER_CURRENT_UA			500000
 #define SDP_100_MA			100000
 #define SDP_CURRENT_UA			500000
 #define CDP_CURRENT_UA			1500000
 #define DCP_CURRENT_UA			1500000
-#define HVDCP_CURRENT_UA		3000000
+#define HVDCP_CURRENT_UA		1500000
 #define TYPEC_DEFAULT_CURRENT_UA	900000
 #define TYPEC_MEDIUM_CURRENT_UA		1500000
-#define TYPEC_HIGH_CURRENT_UA		3000000
+#define TYPEC_HIGH_CURRENT_UA		1500000
+
+#define JEITA_REG_LEN			2
 
 enum smb_mode {
 	PARALLEL_MASTER = 0,
@@ -310,6 +317,7 @@ struct smb_charger {
 	struct mutex		lock;
 	struct mutex		ps_change_lock;
 	struct mutex		vadc_lock;
+	struct mutex		jeita_lock;
 
 	/* power supplies */
 	struct power_supply		*batt_psy;
@@ -318,6 +326,7 @@ struct smb_charger {
 	struct power_supply		*bms_psy;
 	struct power_supply		*usb_main_psy;
 	struct power_supply		*usb_port_psy;
+	struct power_supply		*interface_psy;
 	enum power_supply_type		real_charger_type;
 
 	/* notifiers */
@@ -341,6 +350,7 @@ struct smb_charger {
 	struct votable		*chg_disable_votable;
 	struct votable		*pl_enable_votable_indirect;
 	struct votable		*usb_irq_enable_votable;
+	struct votable		*recharge_soc_votable;
 
 	/* work */
 	struct work_struct	bms_update_work;
@@ -355,6 +365,9 @@ struct smb_charger {
 	struct delayed_work	uusb_otg_work;
 	struct delayed_work	bb_removal_work;
 	struct delayed_work	usbov_dbc_work;
+	struct delayed_work	update_heartbeat_work;
+	struct delayed_work	zte_jeita_update_work;
+
 
 	/* alarm */
 	struct alarm		moisture_protection_alarm;
@@ -438,6 +451,20 @@ struct smb_charger {
 	u32			headroom_mode;
 	bool			flash_init_done;
 	bool			flash_active;
+	int			enable_to_dump_reg;
+	int			enable_to_shutdown;
+	bool			jeita_hysteresis_support;
+	bool			batt_hot;
+	bool			batt_cold;
+	bool			batt_warm;
+	bool			batt_cool;
+	int			health;
+	u32			jeita_hot_hysteresis_thresholds[JEITA_REG_LEN];
+	u32			jeita_cold_hysteresis_thresholds[JEITA_REG_LEN];
+	u32			jeita_warm_hysteresis_thresholds[JEITA_REG_LEN];
+	u32			jeita_cool_hysteresis_thresholds[JEITA_REG_LEN];
+	u32			jeita_soft_thresholds[JEITA_REG_LEN];
+	u32			jeita_hard_thresholds[JEITA_REG_LEN];
 };
 
 int smblib_read(struct smb_charger *chg, u16 addr, u8 *val);
@@ -570,6 +597,7 @@ int smblib_set_prop_pd_active(struct smb_charger *chg,
 				const union power_supply_propval *val);
 int smblib_set_prop_pd_in_hard_reset(struct smb_charger *chg,
 				const union power_supply_propval *val);
+int smblib_get_prop_ship_mode(struct smb_charger *chg);
 int smblib_set_prop_ship_mode(struct smb_charger *chg,
 				const union power_supply_propval *val);
 void smblib_suspend_on_debug_battery(struct smb_charger *chg);

@@ -742,3 +742,60 @@ exit:
 	kfree(data);
 }
 EXPORT_SYMBOL(sysmon_notifier_unregister);
+/* ZTE_MODIFY, modem control led, start */
+int sysmon_send_led_cmd(enum ssctl_ssr_event_enum_type event, const char *tx_buf)
+{
+	struct qmi_ssctl_subsys_event_req_msg req;
+	struct msg_desc req_desc, resp_desc;
+	struct qmi_ssctl_subsys_event_resp_msg resp = { { 0, 0 } };
+	struct sysmon_qmi_data *data = NULL, *temp;
+	int ret = 0;
+
+	if (event != SSCTL_SSR_EVENT_LEDS_SET)
+		return -EINVAL;
+	if (strlen(tx_buf) > QMI_SSCTL_SUBSYS_NAME_LENGTH - 1)
+		return  -EINVAL;
+
+	mutex_lock(&sysmon_list_lock);
+	list_for_each_entry(temp, &sysmon_list, list)
+		if (!strcmp(temp->name, "modem"))
+			data = temp;
+	mutex_unlock(&sysmon_list_lock);
+
+	if (!data || !data->clnt_handle)
+		return -EINVAL;
+
+	snprintf(req.subsys_name, ARRAY_SIZE(req.subsys_name), "%s", tx_buf);
+	req.subsys_name_len = strlen(req.subsys_name);
+	req.event = event;
+	req.evt_driven_valid = 1;
+	req.evt_driven = SSCTL_SSR_EVENT_FORCED;
+
+	req_desc.msg_id = QMI_SSCTL_SUBSYS_EVENT_REQ_V02;
+	req_desc.max_msg_len = QMI_SSCTL_SUBSYS_EVENT_REQ_LENGTH;
+	req_desc.ei_array = qmi_ssctl_subsys_event_req_msg_ei;
+
+	resp_desc.msg_id = QMI_SSCTL_SUBSYS_EVENT_RESP_V02;
+	resp_desc.max_msg_len = QMI_SSCTL_RESP_MSG_LENGTH;
+	resp_desc.ei_array = qmi_ssctl_subsys_event_resp_msg_ei;
+
+	mutex_lock(&sysmon_lock);
+	ret = qmi_send_req_wait(data->clnt_handle, &req_desc, &req,
+		sizeof(req), &resp_desc, &resp, sizeof(resp), SERVER_TIMEOUT);
+	if (ret < 0) {
+		pr_err("QMI send led cmd req to failed, ret - %d\n", ret);
+		goto out;
+	}
+
+	/* Check the response */
+	if (QMI_RESP_BIT_SHIFT(resp.resp.result) != QMI_RESULT_SUCCESS_V01) {
+		pr_err("QMI led request failed 0x%x\n",
+		QMI_RESP_BIT_SHIFT(resp.resp.error));
+		ret = -EREMOTEIO;
+	}
+out:
+	mutex_unlock(&sysmon_lock);
+	pr_info("%s event %d, ret = %d\n", __func__, event, ret);
+	return ret;
+}
+/* ZTE_MODIFY, modem control led, end */

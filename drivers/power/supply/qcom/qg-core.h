@@ -38,6 +38,7 @@ struct qg_dt {
 	int			vbatt_low_cold_mv;
 	int			vbatt_cutoff_mv;
 	int			iterm_ma;
+	int			iterm_ma_backup;
 	int			s2_fifo_length;
 	int			s2_vbat_low_fifo_length;
 	int			s2_acc_length;
@@ -57,6 +58,7 @@ struct qg_dt {
 	int			esr_disable_soc;
 	int			esr_min_ibat_ua;
 	int			shutdown_soc_threshold;
+	int			tcss_entry_soc;
 	bool			hold_soc_while_full;
 	bool			linearize_soc;
 	bool			cl_disable;
@@ -65,6 +67,7 @@ struct qg_dt {
 	bool			esr_discharge_enable;
 	bool			qg_ext_sense;
 	bool			qg_vbms_mode;
+	bool			tcss_enable;
 };
 
 struct qg_esr_data {
@@ -120,6 +123,7 @@ struct qpnp_qg {
 	bool			charge_done;
 	bool			parallel_enabled;
 	bool			usb_present;
+	bool			tcss_active;
 	bool			charge_full;
 	int			charge_status;
 	int			charge_type;
@@ -130,6 +134,13 @@ struct qpnp_qg {
 	int			soh;
 	int			soc_reporting_ready;
 	int			vbms_ibat_ua;
+	int			last_fifo_v_uv;
+	int			last_fifo_i_ua;
+	int			prev_fifo_i_ua;
+	int			soc_tcss_entry;
+	int			ibat_tcss_entry;
+	int			soc_tcss;
+	int			tcss_entry_count;
 	u32			fifo_done_count;
 	u32			wa_flags;
 	u32			seq_no;

@@ -1,0 +1,80 @@
+&spmi_bus {
+	qcom,pm8916@0 {
+		qcom,charger {
+			status = "disabled";
+		};
+	};
+};
+
+&pm8916_vib {
+	min-duration-ms = <70>;
+};
+
+&qrd_batterydata {
+	#include "zte-batterydata-4500mah.dtsi"
+};
+
+&i2c_6 {
+	aw87359@58 {
+		compatible = "awinic,aw87359_pa_l";
+		reg = <0x58>;
+		status = "ok";
+	};
+	aw87359@59 {
+		compatible = "awinic,aw87359_pa_r";
+		reg = <0x59>;
+		status = "ok";
+	};
+};
+
+#include "dsi-panel-zte-lead-ili9881c-hsd-800p-video.dtsi"
+#include "dsi-panel-zte-dijing-jd9366-boe-800p-video.dtsi"
+&pmx_mdss {
+	zte_mdss_dsi_active: zte_mdss_dsi_active {
+		mux {
+			pins = "gpio60";
+			function = "gpio";
+		};
+
+		config {
+			pins = "gpio60";
+			drive-strength = <8>; /* 8 mA */
+			bias-disable = <0>; /* no pull */
+			output-high;
+		};
+	};
+	zte_mdss_dsi_suspend: zte_mdss_dsi_suspend {
+		mux {
+			pins = "gpio60";
+			function = "gpio";
+		};
+
+		config {
+			pins = "gpio60";
+			drive-strength = <2>; /* 2 mA */
+			bias-disable = <0>; /* no pull */
+		};
+	};
+};
+
+&mdss_dsi0 {
+	qcom,regulator-ldo-mode;
+	qcom,dsi-pref-prim-pan = <&dsi_lead_ili9881c_hsd_800p_video>;
+	vddio-supply = <&pm8916_l6>;
+	zte,disp_vsp_en_gpio = <&tlmm 98 0>;
+	zte,disp_vsn_en_gpio = <&tlmm 99 0>;
+
+	pinctrl-names = "mdss_default", "mdss_sleep";
+	pinctrl-0 = <&zte_mdss_dsi_active &mdss_te_active>;
+	pinctrl-1 = <&zte_mdss_dsi_suspend &mdss_te_suspend>;
+};
+
+&i2c_2 {
+	ti65132b@3e {
+		compatible = "ti65132b";
+		status = "ok";
+		reg = <0x3e>;
+	};
+};
+
+

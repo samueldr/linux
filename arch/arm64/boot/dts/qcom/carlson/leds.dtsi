@@ -1,0 +1,37 @@
+&soc {
+	gpio-modem-leds {
+		compatible = "gpio-modem-leds";
+		status = "okay";
+		pinctrl-names = "default";
+		pinctrl-0 = <&gpio_led_off>;
+		red-backlight {
+			gpios = <&tlmm 47 0>;
+			label = "red";
+			linux,default-trigger = "none";
+			retain-state-suspended;
+		};
+		green-backlight {
+			gpios = <&tlmm 46 0>;
+			label = "green";
+			linux,default-trigger = "none";
+			retain-state-suspended;
+		};
+	};
+};
+&tlmm {
+	gpio_led_pins {
+		gpio_led_off: gpio_led_off {
+			mux {
+				pins = "gpio46", "gpio47";
+				function = "gpio";
+			};
+
+			config {
+				pins = "gpio46", "gpio47";
+				drive-strength = <2>;
+				bias-disable;
+				output-low;
+			};
+		};
+	};
+};

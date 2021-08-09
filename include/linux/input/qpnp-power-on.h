@@ -59,6 +59,11 @@ enum pon_restart_reason {
 	PON_RESTART_REASON_DMVERITY_CORRUPTED	= 0x04,
 	PON_RESTART_REASON_DMVERITY_ENFORCE	= 0x05,
 	PON_RESTART_REASON_KEYS_CLEAR		= 0x06,
+	PON_RESTART_REASON_FTM			= 0x10,
+	PON_RESTART_REASON_DISEMMCWP		= 0x11,
+	PON_RESTART_REASON_EMMCWPENAB		= 0x12,
+	PON_RESTART_REASON_PIL_UNAUTH		= 0x13,
+	PON_RESTART_REASON_PANIC		= 0x14,
 
 	/* 32 ~ 63 for OEMs/ODMs secific features */
 	PON_RESTART_REASON_OEM_MIN		= 0x20,
@@ -71,6 +76,7 @@ int qpnp_pon_is_warm_reset(void);
 int qpnp_pon_trigger_config(enum pon_trigger_source pon_src, bool enable);
 int qpnp_pon_wd_config(bool enable);
 int qpnp_pon_set_restart_reason(enum pon_restart_reason reason);
+int qpnp_pon_read_restart_reason(void);
 bool qpnp_pon_check_hard_reset_stored(void);
 
 #else

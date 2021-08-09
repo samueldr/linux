@@ -163,8 +163,11 @@ static int mdss_wb_probe(struct platform_device *pdev)
 	pdata->panel_info.type = WRITEBACK_PANEL;
 	pdata->panel_info.clk_rate = 74250000;
 	pdata->panel_info.pdest = DISPLAY_4;
+#ifdef TARGET_SECOND_SPI_PANEL
+	pdata->panel_info.out_format = MDP_RGB_565;
+#else
 	pdata->panel_info.out_format = MDP_Y_CBCR_H2V2_VENUS;
-
+#endif
 	pdata->event_handler = mdss_wb_event_handler;
 	pdev->dev.platform_data = pdata;
 
@@ -218,5 +221,8 @@ static int __init mdss_wb_driver_init(void)
 	rc = platform_driver_register(&mdss_wb_driver);
 	return rc;
 }
-
-module_init(mdss_wb_driver_init);
+#ifdef TARGET_SECOND_SPI_PANEL
+device_initcall(mdss_wb_driver_init);
+#else
+late_initcall(mdss_wb_driver_init);
+#endif

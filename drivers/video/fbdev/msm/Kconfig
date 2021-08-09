@@ -143,5 +143,49 @@ config FB_MSM_MDSS_FRC_DEBUG
 	frame rate control (FRC) debugging features to: Collect video frame
 	statistics and check whether its output pattern matches expected
 	cadence.
+#/*zte add for lcd common function begin */
+config ZTE_LCD_COMMON_FUNCTION
+	bool "Support for ZTE lcd common function"
+	default y
+
+config ZTE_LCD_BACKLIGHT_LEVEL_CURVE
+	depends on ZTE_LCD_COMMON_FUNCTION
+	bool "Support for ZTE lcd backlight curve"
+
+config ZTE_LCD_VDDIO_ALWAYS_ON
+	depends on ZTE_LCD_COMMON_FUNCTION
+	bool "Support for ZTE lcd vddio always on"
+
+config ZTE_LCD_REG_DEBUG
+	depends on ZTE_LCD_COMMON_FUNCTION
+	bool "Support lcd register debug in root version"
+
+config ZTE_LCD_GPIO_CTRL_POWER
+	depends on ZTE_LCD_COMMON_FUNCTION
+	bool "Support for ZTE gpio power ctrl"
+
+config ZTE_LCDBL_I2C_CTRL_VSP_VSN
+	depends on ZTE_LCD_COMMON_FUNCTION
+	bool "Support for ZTE vsp vsn power ctrl"
+
+config ZTE_LCDBL_I2C_CTRL_VSP_VSN_ENHANCE
+	depends on ZTE_LCDBL_I2C_CTRL_VSP_VSN
+	bool "Support for ZTE vsp vsn power enhance ctrl"
+
+config ZTE_LCD_RESET_PIN_CTRL
+	depends on ZTE_LCD_COMMON_FUNCTION
+	bool "Support for lcd reset pin ctrl"
+
+config ZTE_LCD_DCSBL_CABC_GRADIENT
+	depends on ZTE_LCD_COMMON_FUNCTION
+	bool "Support for ZTE dcs bl cabc gradient effect"
+
+config ZTE_LCD_CABC3_EXTREME_POWER_SAVE
+	depends on ZTE_LCD_COMMON_FUNCTION
+	bool "Support for ZTE extreme power save modem cabc"
+
+config ZTE_LCD_ESD_ERROR_CTRL
+	bool "Support for lcd esd check error ctrl"
+	default n
 
 endif

@@ -1097,6 +1097,14 @@ config SND_SOC_AW8896
 	help
 	  Enables support for aw8896 series Smart PA.
 
+#zte add begin
+config ZTE_USE_HEADPHONE_SWITCH
+        bool "zte add headphone switch"
+
+source "sound/soc/codecs/tfa9890/Kconfig"
+source "sound/soc/codecs/aw87359_stereo/Kconfig"
+#zte add  end
+
 config SND_SOC_TFA98XX
 	tristate "NXP Semiconductors TFA98XX amplifier"
 	depends on I2C

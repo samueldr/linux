@@ -351,13 +351,13 @@ int notrace persistent_ram_write_user(struct persistent_ram_zone *prz,
 	start = buffer_start_add(prz, c);
 
 	rem = prz->buffer_size - start;
-	if (unlikely(rem < c)) {
+	if (unlikely(rem < c) && rem > 0) {
 		ret = persistent_ram_update_user(prz, s, start, rem);
 		s += rem;
 		c -= rem;
 		start = 0;
 	}
-	if (likely(!ret))
+	if (likely(!ret) && rem > 0)
 		ret = persistent_ram_update_user(prz, s, start, c);
 
 	persistent_ram_update_header_ecc(prz);
@@ -480,7 +480,9 @@ static int persistent_ram_post_init(struct persistent_ram_zone *prz, u32 sig,
 				    struct persistent_ram_ecc_info *ecc_info)
 {
 	int ret;
-
+#ifdef CONFIG_ZTE_RAM_CONSOLE
+	bool have_old_log = false;
+#endif
 	ret = persistent_ram_init_ecc(prz, ecc_info);
 	if (ret)
 		return ret;
@@ -501,6 +503,9 @@ static int persistent_ram_post_init(struct persistent_ram_zone *prz, u32 sig,
 			pr_debug("found existing buffer, size %zu, start %zu\n",
 				 buffer_size(prz), buffer_start(prz));
 			persistent_ram_save_old(prz);
+#ifdef CONFIG_ZTE_RAM_CONSOLE
+			have_old_log = true;
+#endif
 			return 0;
 		}
 	} else {
@@ -510,8 +515,13 @@ static int persistent_ram_post_init(struct persistent_ram_zone *prz, u32 sig,
 
 	/* Rewind missing or invalid memory area. */
 	prz->buffer->sig = sig;
+#ifdef CONFIG_ZTE_RAM_CONSOLE
+	if (!have_old_log) {
+#endif
 	persistent_ram_zap(prz);
-
+#ifdef CONFIG_ZTE_RAM_CONSOLE
+	}
+#endif
 	return 0;
 }
 

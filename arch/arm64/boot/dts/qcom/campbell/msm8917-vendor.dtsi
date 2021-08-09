@@ -1,0 +1,570 @@
+/* Copyright (c) 2014-2017, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+
+/ {
+	  reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+
+		modem_mem: modem_region@0 {
+			compatible = "removed-dma-pool";
+			no-map;
+			reg = <0x0 0x86800000 0x0 0x4800000>;
+		};
+
+		adsp_fw_mem: adsp_fw_region@0 {
+			compatible = "removed-dma-pool";
+			no-map;
+			reg = <0x0 0x8b000000 0x0 0x1100000>;
+		};
+
+		wcnss_fw_mem: wcnss_fw_region@0 {
+			compatible = "removed-dma-pool";
+			no-map;
+			reg = <0x0 0x8c100000 0x0 0x700000>;
+		};
+
+		ramoops_men: ramoops_region@0 {
+			compatible = "removed-dma-pool";
+			no-map;
+			reg = <0 0x8FE00000 0 0x100000>;
+		};
+	};
+	aliases {
+		/* smdtty devices */
+		smd1 = &smdtty_apps_fm;
+		smd2 = &smdtty_apps_riva_bt_acl;
+		smd3 = &smdtty_apps_riva_bt_cmd;
+		smd4 = &smdtty_mbalbridge;
+		smd5 = &smdtty_apps_riva_ant_cmd;
+		smd6 = &smdtty_apps_riva_ant_data;
+		smd7 = &smdtty_data1;
+		smd8 = &smdtty_data4;
+		smd11 = &smdtty_data11;
+		smd21 = &smdtty_data21;
+		smd36 = &smdtty_loopback;
+		sdhc1 = &sdhc_1; /* SDC1 eMMC slot */
+		sdhc2 = &sdhc_2; /* SDC2 for SD card */
+		spi3 = &spi_3;
+		spi6 = &spi_6;
+		spi5 = &spi_5;
+		spi7 = &spi_7;
+		i2c2 = &i2c_2;
+		i2c5 = &i2c_5;
+		i2c3 = &i2c_3;
+		i2c4 = &i2c_4;
+		i2c6 = &i2c_6;
+	};
+};
+
+&soc {
+	qcom,msm-vendor-imem@8600b1c {
+		reg = <0x8600b1c 0x480>; /* Address and size of IMEM */
+		ranges = <0x0 0x8600b1c 0x480>;
+		#address-cells = <1>;
+		#size-cells = <1>;
+		efs_golden_copy@04 {
+			compatible = "qcom,msm-imem-efs-golden-copy";
+			reg = <0x04 8>;
+		};
+
+		pm-count-time@0c {
+			compatible = "qcom,msm-vendor-imem-pm-count-time";
+			reg = <0x0c 24>;
+		};
+
+		sd_dump_mode@2c {
+			compatible = "qcom,msm-vendor-imem-sd_dump_mode";
+			reg = <0x2c 4>;
+		};
+
+		vlog_memory_cookie@64 {
+			compatible = "qcom,msm-vendor-imem-vlog_memory_cookie";
+			reg = <0x64 4>;
+		};
+
+		vlog_memory_addr@68 {
+			compatible = "qcom,msm-vendor-imem-vlog_memory_addr";
+			reg = <0x68 4>;
+		};
+
+		vlog_memory_size@6c {
+			compatible = "qcom,msm-vendor-imem-vlog_memory_size";
+			reg = <0x6c 4>;
+		};
+	};
+
+	vendor,f3mem{
+		compatible = "vendor,f3mem";
+	};
+	zte_pm_debug {
+		compatible = "zte_pm_debug_vendor";
+	};
+
+	ramoops {
+		compatible = "ramoops";
+		reg = <0x8FE00000 0x100000>;
+		memory-region = <&ramoops_men>;
+		unbuffered;
+		no-dump-oops;
+		record-size = <0x1000>;
+		console-size = <0x80000>;
+		ftrace-size = <0x20000>;
+		pmsg-size = <0x20000>;
+		ecc-size = <0>;
+		flags = <1>;
+	};
+};
+&tlmm {
+	/delete-node/ pri-tlmm-lines;
+	/delete-node/ pri-tlmm-ws-lines;
+
+	spi5 {
+		spi5_default: spi5_default {
+			mux {
+				pins = "gpio16", "gpio17", "gpio19";
+				function = "blsp_spi5";
+			};
+
+			config {
+				pins = "gpio16", "gpio17", "gpio19";
+				drive-strength = <4>;
+				bias-disable = <0>;
+			};
+		};
+
+		spi5_sleep: spi5_sleep {
+			mux {
+				pins = "gpio16", "gpio17", "gpio19";
+				function = "gpio";
+			};
+
+			config {
+				pins = "gpio16", "gpio17", "gpio19";
+				drive-strength = <4>;
+				bias-disable = <0>;
+			};
+		};
+		spi5_cs0_active: spi5_cs0_active {
+			mux {
+				pins = "gpio18";
+				function = "blsp_spi5";
+			};
+
+			config {
+				pins = "gpio18";
+				drive-strength = <2>;
+				bias-disable = <0>;
+			};
+		};
+		spi5_cs0_sleep: spi5_cs0_sleep {
+			   mux {
+					   pins = "gpio18";
+					   function = "gpio";
+			   };
+			   config {
+					   pins = "gpio18";
+					   drive-strength = <2>;
+					   bias-pull-up;
+			   };
+		};
+
+		first_panel_dc {
+		   first_panel_dc_high: first_panel_dc_high {
+			   mux {
+				   pins = "gpio20";
+				   function = "gpio";
+				   output-high;
+			   };
+			   configs {
+				   pins = "gpio20";
+				   drive-strength = <8>;
+				   bias-disable;
+			   };
+		   };
+
+		   first_panel_dc_low: first_panel_dc_low {
+			   mux {
+				   pins = "gpio20";
+				   function = "gpio";
+			   };
+			   configs {
+				   pins = "gpio20";
+				   drive-strength = <2>;
+				   bias-disable;
+				   output-low;
+			   };
+		   };
+		};
+		first_panel_rst{
+		   first_panel_rst_high: first_panel_rst_high {
+			   mux {
+				   pins = "gpio60";
+				   function = "gpio";
+				   output-high;
+			   };
+			   configs {
+				   pins = "gpio60";
+				   drive-strength = <8>;
+				   bias-disable;
+			   };
+		   };
+
+		   first_panel_rst_low: first_panel_rst_low {
+			   mux {
+				   pins = "gpio60";
+				   function = "gpio";
+			   };
+			   configs {
+				   pins = "gpio60";
+				   drive-strength = <2>;
+				   bias-disable;
+				   output-low;
+			   };
+		   };
+		};
+		first_panel_backlight{
+		   first_panel_backlight_high: first_panel_backlight_high {
+			   mux {
+				   pins = "gpio98";
+				   function = "gpio";
+				   output-high;
+			   };
+			   configs {
+				   pins = "gpio98";
+				   drive-strength = <8>;
+				   bias-disable;
+			   };
+		   };
+
+		   first_panel_backlight_low: first_panel_backlight_low {
+			   mux {
+				   pins = "gpio98";
+				   function = "gpio";
+			   };
+			   configs {
+				   pins = "gpio98";
+				   drive-strength = <2>;
+				   bias-disable;
+				   output-low;
+			   };
+		   };
+		};
+
+
+	};
+
+
+	spi7 {
+		spi7_default: spi7_default {
+		   mux {
+			   pins = "gpio85", "gpio88";
+			   function = "blsp_spi7";
+		   };
+
+		   config {
+			   pins = "gpio85", "gpio88";
+			   drive-strength = <16>;
+			   bias-disable = <0>;
+		   };
+		};
+
+		spi7_sleep: spi7_sleep {
+		   mux {
+			   pins = "gpio85", "gpio88";
+			   function = "gpio";
+		   };
+
+		   config {
+			   pins = "gpio85", "gpio88";
+			   drive-strength = <16>;
+			   bias-disable = <0>;
+		   };
+		};
+		spi7_cs0_active: spi7_cs0_active {
+		   mux {
+			   pins = "gpio87";
+			   function = "blsp_spi7";
+		   };
+
+		   config {
+			   pins = "gpio87";
+			   drive-strength = <2>;
+			   bias-pull-up;
+		   };
+		};
+
+		spi7_cs0_sleep: spi7_cs0_sleep {
+		   mux {
+				   pins = "gpio87";
+				   function = "gpio";
+		   };
+		   config {
+				   pins = "gpio87";
+				   drive-strength = <2>;
+				   bias-pull-up;
+		   };
+		};
+		second_panel_dc {
+		   second_panel_dc_high: second_panel_dc_high {
+			   mux {
+				   pins = "gpio38";
+				   function = "gpio";
+				   output-high;
+			   };
+			   configs {
+				   pins = "gpio38";
+				   drive-strength = <8>;
+				   bias-disable;
+			   };
+		   };
+
+		   second_panel_dc_low: second_panel_dc_low {
+			   mux {
+				   pins = "gpio38";
+				   function = "gpio";
+			   };
+			   configs {
+				   pins = "gpio38";
+				   drive-strength = <2>;
+				   bias-disable;
+				   output-low;
+			   };
+		   };
+		};
+		second_panel_rst{
+		   second_panel_rst_high: second_panel_rst_high {
+			   mux {
+				   pins = "gpio47";
+				   function = "gpio";
+				   output-high;
+			   };
+			   configs {
+				   pins = "gpio47";
+				   drive-strength = <8>;
+				   bias-disable;
+			   };
+		   };
+
+		   second_panel_rst_low: second_panel_rst_low {
+			   mux {
+				   pins = "gpio47";
+				   function = "gpio";
+			   };
+			   configs {
+				   pins = "gpio47";
+				   drive-strength = <2>;
+				   bias-disable;
+				   output-low;
+			   };
+		   };
+		};
+	};
+	client_clk {
+
+		client_clk_default: client_clk_default {
+			mux {
+				label = "client_clk";
+				pins = "gpio46";
+				function = "gcc_gp1_clk_a";
+			};
+
+			config {
+				pins = "gpio46";
+				drive-strength = <2>;
+				bias-disable;
+			};
+	};
+
+		client_clk_sleep: client_clk_sleep {
+			mux {
+				pins = "gpio46";
+				function = "gcc_gp1_clk_a";
+			};
+
+				config {
+				pins = "gpio46";
+				drive-strength = <2>;
+				bias-disable;
+			};
+		};
+	};
+
+};
+&spmi_bus {
+	pm8916_0: pm8916@0 {
+		qcom,leds@a100 {
+			compatible = "qcom,leds-qpnp";
+			status = "okay";
+			qcom,led_mpp_2 {
+				label = "mpp";
+				linux,name = "second_spi-backlight-1";
+				linux,default-trigger = "none";
+				qcom,default-state = "off";
+				qcom,max-current = <40>;
+				qcom,current-setting = <40>;
+				qcom,id = <6>;
+				qcom,mode = "manual";
+				qcom,source-sel = <1>;
+				qcom,mode-ctrl = <0x60>;
+			};
+		};
+
+		qcom,leds@a300 {
+			compatible = "qcom,leds-qpnp";
+			status = "okay";
+			reg = <0xa300 0x100>;
+			label = "mpp";
+
+			qcom,led_mpp_4 {
+				label = "mpp";
+				linux,name = "second_spi-backlight";
+				linux,default-trigger = "none";
+				qcom,default-state = "off";
+				qcom,max-current = <40>;
+				qcom,current-setting = <40>;
+				qcom,id = <6>;
+				qcom,mode = "manual";
+				qcom,source-sel = <1>;
+				qcom,mode-ctrl = <0x60>;
+			};
+		};
+	};
+};
+&soc {
+	/delete-node/ msm_cdc_pinctrl_quin;
+
+	client@client{
+		compatible = "qcom,client_clk";
+		clocks = <&clock_gcc clk_gcc_camss_gp0_clk>;
+		clock-names = "client_clk";
+		pinctrl-names = "default", "sleep";
+		pinctrl-0 = <&client_clk_default>;
+		pinctrl-1 = <&client_clk_sleep>;
+	};
+	spi_5: spi@7af5000 { /* BLSP2 QUP1 */
+		compatible = "qcom,spi-qup-v2";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg-names = "spi_physical", "spi_bam_physical";
+		reg = <0x7af5000 0x600>,
+			<0x7ac4000 0x1f000>;
+		interrupt-names = "spi_irq", "spi_bam_irq";
+		interrupts = <0 299 0>, <0 239 0>;
+		spi-max-frequency = <50000000>;
+		pinctrl-names = "spi_default", "spi_sleep";
+		pinctrl-0 = <&spi5_default &spi5_cs0_active >;
+		pinctrl-1 = <&spi5_sleep &spi5_cs0_sleep >;
+		clocks = <&clock_gcc clk_gcc_blsp2_ahb_clk>,
+			<&clock_gcc clk_gcc_blsp2_qup1_spi_apps_clk>;
+		clock-names = "iface_clk", "core_clk";
+		qcom,infinite-mode = <0>;
+		qcom,use-bam;
+		qcom,use-pinctrl;
+		qcom,ver-reg-exists;
+		qcom,bam-consumer-pipe-index = <4>;
+		qcom,bam-producer-pipe-index = <5>;
+		qcom,master-id = <84>;
+		spi_clent: qcom,mdss_spi_client {
+			reg = <0>;
+			compatible = "qcom,mdss-spi-first-panel";
+			label = "MDSS SPI QUP5 CLIENT";
+			spi-max-frequency = <40000000>;
+			pinctrl-names =  "first_panel_dc_high", "first_panel_dc_low", "first_panel_rst_high",
+					"first_panel_rst_low","first_panel_backlight_high","first_panel_backlight_low";
+
+			pinctrl-0 = <&first_panel_dc_high>;
+			pinctrl-1 = <&first_panel_dc_low>;
+			pinctrl-2 = <&first_panel_rst_high>;
+			pinctrl-3 = <&first_panel_rst_low>;
+			pinctrl-4 = <&first_panel_backlight_high>;
+			pinctrl-5 = <&first_panel_backlight_low>;
+			zte,platform-te-gpio = <&tlmm 24 0>;
+		};
+	};
+
+
+	spi_7: spi@7af7000 { /* BLSP2 QUP3 */
+		compatible = "qcom,spi-qup-v2";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg-names = "spi_physical", "spi_bam_physical";
+		reg = <0x7af7000 0x600>,
+			<0x7ac4000 0x1f000>;
+		interrupt-names = "spi_irq", "spi_bam_irq";
+		interrupts = <0 301 0>, <0 239 0>;
+		spi-max-frequency = <9600000>;
+		pinctrl-names = "spi_default", "spi_sleep";
+		pinctrl-0 = <&spi7_default &spi7_cs0_active>;
+		pinctrl-1 = <&spi7_sleep &spi7_cs0_sleep>;
+		clocks = <&clock_gcc clk_gcc_blsp2_ahb_clk>,
+			<&clock_gcc clk_gcc_blsp2_qup3_spi_apps_clk>;
+		clock-names = "iface_clk", "core_clk";
+		qcom,infinite-mode = <0>;
+		qcom,use-bam;
+		qcom,use-pinctrl;
+		qcom,ver-reg-exists;
+		qcom,bam-consumer-pipe-index = <8>;
+		qcom,bam-producer-pipe-index = <9>;
+		qcom,master-id = <84>;
+		second_panel_spi: qcom,mdss_second_spi_client {
+			reg = <0>;
+			compatible = "qcom,mdss-spi-second-panel";
+			label = "MDSS SPI QUP6 CLIENT";
+			spi-max-frequency = <4800000>;
+
+			pinctrl-names = "second_panel_dc_high", "second_panel_dc_low", "second_panel_rst_high",
+					"second_panel_rst_low";
+			pinctrl-0 = <&second_panel_dc_high>;
+			pinctrl-1 = <&second_panel_dc_low>;
+			pinctrl-2 = <&second_panel_rst_high>;
+			pinctrl-3 = <&second_panel_rst_low>;
+		};
+	};
+
+	spi_wb_panel: qcom,mdss_wb_panel {
+		compatible = "qcom,mdss_wb";
+		qcom,mdss_pan_res = <128 160>;
+		qcom,mdss_pan_bpp = <16>;
+		qcom,mdss-fb-map = <&mdss_fb1>;
+	};
+
+	i2c_6: i2c@7af6000 { /* BLSP2 QUP2 */
+		compatible = "qcom,i2c-msm-v2";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg-names = "qup_phys_addr";
+		reg = <0x7af6000 0x600>;
+		interrupt-names = "qup_irq";
+		interrupts = <0 300 0>;
+		clock-names = "iface_clk", "core_clk";
+		clocks = <&clock_gcc clk_gcc_blsp2_ahb_clk>,
+			 <&clock_gcc clk_gcc_blsp2_qup2_i2c_apps_clk>;
+		qcom,clk-freq-out = <400000>;
+		qcom,clk-freq-in  = <19200000>;
+		pinctrl-names = "i2c_active", "i2c_sleep";
+		pinctrl-0 = <&i2c_6_active>;
+		pinctrl-1 = <&i2c_6_sleep>;
+		qcom,noise-rjct-scl = <0>;
+		qcom,noise-rjct-sda = <0>;
+		dmas = <&dma_blsp2 6 64 0x20000020 0x20>,
+		<&dma_blsp2 7 32 0x20000020 0x20>;
+		dma-names = "tx", "rx";
+		qcom,master-id = <84>;
+		status = "disabled";
+	};
+};
+
+&int_codec {
+	/delete-property/ qcom,quin-mi2s-gpios;
+};

@@ -798,7 +798,11 @@ static const char * const accel_int_groups[] = {
 	"gpio42",
 };
 static const char * const gcc_gp1_clk_a_groups[] = {
+#ifdef TARGET_SECOND_SPI_PANEL
+	"gpio42", "gpio46",
+#else
 	"gpio42",
+#endif
 };
 static const char * const alsp_int_groups[] = {
 	"gpio43",
@@ -1311,8 +1315,13 @@ static const struct msm_pingroup msm8917_groups[] = {
 		 atest_combodac_to_gpio_native, NA, NA, NA, NA, NA),
 	PINGROUP(45, NA, NA, atest_combodac_to_gpio_native, NA, NA, NA, NA, NA,
 		 NA),
+#ifdef TARGET_SECOND_SPI_PANEL
+	PINGROUP(46, gcc_gp1_clk_a, NA, atest_combodac_to_gpio_native, NA, NA, NA, NA, NA,
+		 NA),
+#else
 	PINGROUP(46, NA, NA, atest_combodac_to_gpio_native, NA, NA, NA, NA, NA,
 		 NA),
+#endif
 	PINGROUP(47, blsp6_spi, NA, qdss_tracedata_b, NA,
 		 atest_combodac_to_gpio_native, NA, NA, NA, NA),
 	PINGROUP(48, NA, qdss_cti_trig_in_b1, NA,

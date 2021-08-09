@@ -40,7 +40,8 @@
 #include "qg-battery-profile.h"
 #include "qg-defs.h"
 
-static int qg_debug_mask;
+static int qg_debug_mask = QG_DEBUG_PROFILE | QG_DEBUG_STATUS | QG_DEBUG_IRQ
+	| QG_DEBUG_SOC | QG_DEBUG_ALG_CL | QG_DEBUG_PON;
 module_param_named(
 	debug_mask, qg_debug_mask, int, 0600
 );
@@ -231,6 +232,7 @@ static void qg_notify_charger(struct qpnp_qg *chip)
 		return;
 	}
 	chip->chg_iterm_ma = prop.intval;
+	pr_info("Notified charger on float voltage and FCC chg_iterm_ma = %d\n", chip->chg_iterm_ma);
 }
 
 static bool is_batt_available(struct qpnp_qg *chip)
@@ -350,6 +352,9 @@ static int qg_process_fifo(struct qpnp_qg *chip, u32 fifo_length)
 		chip->kdata.fifo[j].interval = sample_interval;
 		chip->kdata.fifo[j].count = sample_count;
 
+		chip->last_fifo_v_uv = chip->kdata.fifo[j].v;
+		chip->last_fifo_i_ua = chip->kdata.fifo[j].i;
+
 		qg_dbg(chip, QG_DEBUG_FIFO, "FIFO %d raw_v=%d uV=%d raw_i=%d uA=%d interval=%d count=%d\n",
 					j, fifo_v,
 					chip->kdata.fifo[j].v,
@@ -411,6 +416,8 @@ static int qg_process_accumulator(struct qpnp_qg *chip)
 	chip->kdata.fifo[index].interval = sample_interval;
 	chip->kdata.fifo[index].count = count;
 	chip->kdata.fifo_length++;
+	chip->last_fifo_v_uv = chip->kdata.fifo[index].v;
+	chip->last_fifo_i_ua = chip->kdata.fifo[index].i;
 
 	if (chip->kdata.fifo_length == 1)	/* Only accumulator data */
 		chip->kdata.seq_no = chip->seq_no++ % U32_MAX;
@@ -1421,6 +1428,10 @@ static int qg_store_learned_capacity(void *data, int64_t learned_cap_uah)
 		return rc;
 	}
 
+	if (chip->qg_psy) {
+		power_supply_changed(chip->qg_psy);
+		qg_dbg(chip, QG_DEBUG_ALG_CL, "Notify battery daemon, capacity learned\n");
+	}
 	qg_dbg(chip, QG_DEBUG_ALG_CL, "Stored learned capacity %llduah\n",
 					learned_cap_uah);
 	return 0;
@@ -1518,6 +1529,7 @@ static const char *qg_get_battery_type(struct qpnp_qg *chip)
 #define BATT_MISSING_SOC	50
 #define EMPTY_SOC		0
 #define FULL_SOC		100
+#define FG_DIFF_CHG_TOPOFF_CUR_MA		30
 static int qg_get_battery_capacity(struct qpnp_qg *chip, int *soc)
 {
 	if (is_debug_batt_id(chip)) {
@@ -1619,6 +1631,7 @@ static int qg_get_ttf_param(void *data, enum ttf_param param, int *val)
 			*val = 0;
 		else
 			*val = chip->chg_iterm_ma;
+		pr_info("CAS: chg_iterm_ma %d\n", chip->chg_iterm_ma);
 		break;
 	case TTF_RBATT:
 		rc = qg_sdam_read(SDAM_RBAT_MOHM, val);
@@ -1696,6 +1709,13 @@ static int qg_psy_set_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_ESR_NOMINAL:
 		chip->esr_nominal = pval->intval;
 		break;
+	case POWER_SUPPLY_PROP_CHARGE_TERM_CURRENT:
+		if (pval->intval)
+			chip->dt.iterm_ma = pval->intval + FG_DIFF_CHG_TOPOFF_CUR_MA;
+		else
+			chip->dt.iterm_ma = chip->dt.iterm_ma_backup;
+		pr_info("CAS: iterm_ma %d\n", chip->dt.iterm_ma);
+		break;
 	default:
 		break;
 	}
@@ -1762,6 +1782,7 @@ static int qg_psy_get_property(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_BATT_FULL_CURRENT:
 		pval->intval = chip->dt.iterm_ma * 1000;
+		pr_info("CAS: iterm_ma %d\n", chip->dt.iterm_ma);
 		break;
 	case POWER_SUPPLY_PROP_BATT_PROFILE_VERSION:
 		pval->intval = chip->bp.qg_profile_version;
@@ -1829,6 +1850,7 @@ static int qg_property_is_writeable(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_ESR_ACTUAL:
 	case POWER_SUPPLY_PROP_ESR_NOMINAL:
 	case POWER_SUPPLY_PROP_SOH:
+	case POWER_SUPPLY_PROP_CHARGE_TERM_CURRENT:
 		return 1;
 	default:
 		break;
@@ -1866,6 +1888,7 @@ static enum power_supply_property qg_psy_props[] = {
 	POWER_SUPPLY_PROP_SOH,
 	POWER_SUPPLY_PROP_CC_SOC,
 	POWER_SUPPLY_PROP_QG_VBMS_MODE,
+	POWER_SUPPLY_PROP_CHARGE_TERM_CURRENT,
 };
 
 static const struct power_supply_desc qg_psy_desc = {
@@ -2581,6 +2604,8 @@ static int qg_determine_pon_soc(struct qpnp_qg *chip)
 	u32 ocv_uv = 0, soc = 0, pon_soc = 0, full_soc = 0, cutoff_soc = 0;
 	u32 shutdown[SDAM_MAX] = {0};
 	char ocv_type[20] = "NONE";
+	int vbat_uv = 0;
+	int is_ocv_valid = 0;
 
 	if (!chip->profile_loaded) {
 		qg_dbg(chip, QG_DEBUG_PON, "No Profile, skipping PON soc\n");
@@ -2640,17 +2665,17 @@ static int qg_determine_pon_soc(struct qpnp_qg *chip)
 	if (!shutdown[SDAM_VALID])
 		goto use_pon_ocv;
 
+	if ((chip->dt.shutdown_soc_threshold != -EINVAL) &&
+			!is_between(0, chip->dt.shutdown_soc_threshold,
+			abs(pon_soc - shutdown[SDAM_SOC])))
+		goto use_pon_ocv;
+
 	if (!is_between(0, chip->dt.ignore_shutdown_soc_secs,
 			(rtc_sec - shutdown[SDAM_TIME_SEC])))
 		goto use_pon_ocv;
 
 	if (!is_between(0, chip->dt.shutdown_temp_diff,
 			abs(shutdown[SDAM_TEMP] -  batt_temp)))
-		goto use_pon_ocv;
-
-	if ((chip->dt.shutdown_soc_threshold != -EINVAL) &&
-			!is_between(0, chip->dt.shutdown_soc_threshold,
-			abs(pon_soc - shutdown[SDAM_SOC])))
 		goto use_pon_ocv;
 
 	use_pon_ocv = false;
@@ -2726,6 +2751,19 @@ done:
 	if (rc < 0) {
 		pr_err("Failed to get %s @ PON, rc=%d\n", ocv_type, rc);
 		return rc;
+	}
+
+	if (!shutdown[SDAM_VALID] && !shutdown[SDAM_OCV_UV]) {
+		qg_get_battery_voltage(chip, &vbat_uv);
+		is_ocv_valid = abs(vbat_uv - ocv_uv) < 250000 ? 1 : 0;  /* 250mV is a experience value */
+		pr_info("ocv_uv =%d, vbat_uv= %d is_ocv_valid=%d\n", ocv_uv, vbat_uv, is_ocv_valid);
+		if (!is_ocv_valid) {
+			ocv_uv = vbat_uv;
+			rc = lookup_soc_ocv(&soc, ocv_uv, batt_temp, false);
+			if (rc < 0) {
+				pr_err("failed to lookup SOC@VOL rc=%d\n", rc);
+			}
+		}
 	}
 
 	chip->last_adj_ssoc = chip->catch_up_soc = chip->msoc = soc;
@@ -3218,6 +3256,8 @@ static int qg_alg_init(struct qpnp_qg *chip)
 #define DEFAULT_ESR_QUAL_VBAT_UV	7000
 #define DEFAULT_ESR_DISABLE_SOC		1000
 #define ESR_CHG_MIN_IBAT_UA		(-450000)
+#define DEFAULT_TCSS_ENTRY_SOC		90
+
 static int qg_parse_dt(struct qpnp_qg *chip)
 {
 	int rc = 0;
@@ -3387,6 +3427,9 @@ static int qg_parse_dt(struct qpnp_qg *chip)
 	else
 		chip->dt.iterm_ma = temp;
 
+	chip->dt.iterm_ma_backup = chip->dt.iterm_ma;
+	pr_info("qg-iterm-ma set to %d\n", chip->dt.iterm_ma);
+
 	rc = of_property_read_u32(node, "qcom,delta-soc", &temp);
 	if (rc < 0)
 		chip->dt.delta_soc = DEFAULT_DELTA_SOC;
@@ -3407,9 +3450,11 @@ static int qg_parse_dt(struct qpnp_qg *chip)
 
 	chip->dt.hold_soc_while_full = of_property_read_bool(node,
 					"qcom,hold-soc-while-full");
+	pr_info("hold-soc-while-full set to %d\n", chip->dt.hold_soc_while_full);
 
 	chip->dt.linearize_soc = of_property_read_bool(node,
 					"qcom,linearize-soc");
+	pr_info("linearize-soc set to %d\n", chip->dt.linearize_soc);
 
 	rc = of_property_read_u32(node, "qcom,rbat-conn-mohm", &temp);
 	if (rc < 0)
@@ -3455,6 +3500,20 @@ static int qg_parse_dt(struct qpnp_qg *chip)
 		chip->dt.shutdown_soc_threshold = temp;
 
 	chip->dt.qg_ext_sense = of_property_read_bool(node, "qcom,qg-ext-sns");
+
+	if (of_property_read_bool(node, "qcom,tcss-enable")) {
+
+		chip->dt.tcss_enable = true;
+
+		rc = of_property_read_u32(node,
+				"qcom,tcss-entry-soc", &temp);
+		if (rc < 0)
+			chip->dt.tcss_entry_soc = DEFAULT_TCSS_ENTRY_SOC;
+		else
+			chip->dt.tcss_entry_soc = temp;
+	}
+	qg_dbg(chip, QG_DEBUG_PON, "tcss_enable=%d, tcss_entry_soc=%d\n",
+				chip->dt.tcss_enable, chip->dt.tcss_entry_soc);
 
 	/* Capacity learning params*/
 	if (!chip->dt.cl_disable) {
@@ -3514,6 +3573,10 @@ static int qg_parse_dt(struct qpnp_qg *chip)
 		qg_dbg(chip, QG_DEBUG_PON, "DT: cl_min_start_soc=%d cl_max_start_soc=%d cl_min_temp=%d cl_max_temp=%d\n",
 			chip->cl->dt.min_start_soc, chip->cl->dt.max_start_soc,
 			chip->cl->dt.min_temp, chip->cl->dt.max_temp);
+
+		qg_dbg(chip, QG_DEBUG_PON, "DT: cl_feedback_on=%d max_cap_inc=%d max_cap_dec=%d min_cap_limit=%d max_cap_limit=%d\n",
+			chip->dt.cl_feedback_on, chip->cl->dt.max_cap_inc, chip->cl->dt.max_cap_dec,
+			chip->cl->dt.min_cap_limit, chip->cl->dt.max_cap_limit);
 	}
 
 	chip->dt.qg_vbms_mode = of_property_read_bool(node,

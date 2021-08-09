@@ -1,0 +1,2 @@
+config ZTE_NXP9890_SMART_PA_USE_QUIN
+	bool "ZTE ADDED NXP TFA9890 SmartPA uses quinary mi2s"

@@ -25,6 +25,7 @@
 #include <linux/posix-timers.h>
 #include <linux/workqueue.h>
 #include <linux/freezer.h>
+#include <linux/module.h>
 
 /**
  * struct alarm_base - Alarm timer bases
@@ -356,6 +357,20 @@ void alarm_init(struct alarm *alarm, enum alarmtimer_type type,
 }
 EXPORT_SYMBOL_GPL(alarm_init);
 
+void alarm_log_zte(struct alarm *alarm, long start, long interval, int abs_time)
+{
+	struct alarm_base *base = &alarm_bases[alarm->type];
+
+	if (abs_time) {
+		pr_info("ZTE_ALARM set alarm at %ld s(elapsed time), period %ld s at %lld s\n",
+			start, interval, div_s64(ktime_to_ms(base->gettime()), 1000));
+	} else {
+		pr_info("ZTE_ALARM set alarm %ld s(elapsed time) later, period %ld s at %lld s\n",
+			start, interval, div_s64(ktime_to_ms(base->gettime()), 1000));
+	}
+}
+EXPORT_SYMBOL_GPL(alarm_log_zte);
+
 /**
  * alarm_start - Sets an absolute alarm to fire
  * @alarm: ptr to alarm to set
@@ -365,8 +380,12 @@ void alarm_start(struct alarm *alarm, ktime_t start)
 {
 	struct alarm_base *base = &alarm_bases[alarm->type];
 	unsigned long flags;
+	ktime_t relative_expiry_time;
 
 	spin_lock_irqsave(&base->lock, flags);
+	relative_expiry_time = ktime_sub(start, base->gettime());
+	pr_info("ZTE_ALARM set alarm %lld s later at %lld s in alarm_start...\n",
+		div_s64(ktime_to_ms(relative_expiry_time), 1000), div_s64(ktime_to_ms(base->gettime()), 1000));
 	alarm->node.expires = start;
 	alarmtimer_enqueue(base, alarm);
 	hrtimer_start(&alarm->timer, alarm->node.expires, HRTIMER_MODE_ABS);

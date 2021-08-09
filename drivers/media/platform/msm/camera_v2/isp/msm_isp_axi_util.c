@@ -626,7 +626,7 @@ static void msm_isp_update_framedrop_reg(struct msm_vfe_axi_stream *stream_info,
 				MSM_VFE_STREAM_STOP_PERIOD;
 	}
 
-	if (stream_info->undelivered_request_cnt > 0)
+	if (stream_info->undelivered_request_cnt > 0 && drop_reconfig != 1)
 		stream_info->current_framedrop_period =
 			MSM_VFE_STREAM_STOP_PERIOD;
 	/*
@@ -3849,6 +3849,9 @@ static int msm_isp_request_frame(struct vfe_device *vfe_dev,
 			}
 			pr_err_ratelimited("%s:%d fail to cfg HAL buffer\n",
 				__func__, __LINE__);
+			queue_req->cmd_used = 0;
+			list_del(&queue_req->list);
+			stream_info->request_q_cnt--;
 			return rc;
 		}
 	} else {

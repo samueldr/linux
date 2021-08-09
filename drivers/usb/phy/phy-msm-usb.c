@@ -1900,6 +1900,61 @@ static int msm_otg_notify_chg_type(struct msm_otg *motg)
 	return ret;
 }
 
+/* Usb online lpm test requirement, 2/5 */
+
+static void msm_otg_set_vbus_state(int online);
+static int forge_usb_offline = 0;
+
+static ssize_t set_usb_online_fn(struct device *dev, struct device_attribute *attr,
+								const char *buf, size_t count)
+{
+	int online;
+
+	if (kstrtoint(buf, 10, &online) < 0)
+		return -EINVAL;
+
+	online = !!online;
+	pr_info("%s, online : %d\n", __func__, online);
+	msm_otg_set_vbus_state(online);
+	forge_usb_offline = !online;
+	return 1;
+}
+
+static DEVICE_ATTR(set_usb_online, S_IWUSR, NULL, set_usb_online_fn);
+
+static struct device_attribute *lpm_test_attributes[] = {
+	&dev_attr_set_usb_online,
+	NULL
+};
+
+static int lpm_test_create_device(struct msm_otg *motg)
+{
+	struct device_attribute **attrs = lpm_test_attributes;
+	struct device_attribute *attr;
+	int err;
+
+	pr_debug("%s\n", __func__);
+	motg->lpm_test_class = class_create(THIS_MODULE, "charger");
+	if (IS_ERR(motg->lpm_test_class))
+		return PTR_ERR(motg->lpm_test_class);
+
+	motg->lpm_test_dev = device_create(motg->lpm_test_class, NULL, 0, NULL, "test");
+	if (IS_ERR(motg->lpm_test_dev))
+		return PTR_ERR(motg->lpm_test_dev);
+
+	dev_set_drvdata(motg->lpm_test_dev, motg);
+
+	while ((attr = *attrs++)) {
+		err = device_create_file(motg->lpm_test_dev, attr);
+		if (err) {
+			device_destroy(motg->lpm_test_class, 0);
+			return err;
+		}
+	}
+	return 0;
+}
+
+
 static void msm_otg_notify_charger(struct msm_otg *motg, unsigned int mA)
 {
 	struct usb_gadget *g = motg->phy.otg->gadget;
@@ -1907,6 +1962,10 @@ static void msm_otg_notify_charger(struct msm_otg *motg, unsigned int mA)
 	int psy_type;
 
 	if (g && g->is_a_peripheral)
+		return;
+
+	/* Usb online lpm test requirement, 3/5 */
+	if (forge_usb_offline)
 		return;
 
 	dev_dbg(motg->phy.dev, "Requested curr from USB = %u\n", mA);
@@ -2195,6 +2254,20 @@ static int msm_otg_set_host(struct usb_otg *otg, struct usb_bus *host)
 	return 0;
 }
 
+static void motg_uevent(struct msm_otg *motg, int state)
+{
+	char *online[2] = { "USB_STATE=ONLINE", NULL };
+	char *offline[2] = { "USB_STATE=OFFLINE", NULL };
+	char **uevent_envp = NULL;
+
+	uevent_envp = state ? online : offline;
+
+	if (uevent_envp) {
+		kobject_uevent_env(&motg->lpm_test_dev->kobj, KOBJ_CHANGE, uevent_envp);
+		pr_info("%s: sent uevent %s\n", __func__, uevent_envp[0]);
+	}
+}
+
 static void msm_otg_start_peripheral(struct usb_otg *otg, int on)
 {
 	struct msm_otg *motg = container_of(otg->usb_phy, struct msm_otg, phy);
@@ -2269,6 +2342,8 @@ static void msm_otg_start_peripheral(struct usb_otg *otg, int on)
 			}
 		}
 	}
+
+	motg_uevent(motg, on);
 	msm_otg_dbg_log_event(&motg->phy, "PM RT: StartPeri PUT",
 				     get_pm_runtime_counter(motg->phy.dev), 0);
 	pm_runtime_mark_last_busy(otg->usb_phy->dev);
@@ -2670,10 +2745,11 @@ static void msm_chg_detect_work(struct work_struct *w)
 			msm_chg_block_off(motg);
 			pm_runtime_mark_last_busy(phy->dev);
 			pm_runtime_put_autosuspend(phy->dev);
-			if (queue_sm_work)
-				queue_work(motg->otg_wq, &motg->sm_work);
-			else
-				return;
+
+				if (queue_sm_work)
+					queue_work(motg->otg_wq, &motg->sm_work);
+				else
+					return;
 		}
 
 		if (motg->chg_type == USB_CDP_CHARGER ||
@@ -2849,6 +2925,12 @@ static void msm_otg_sm_work(struct work_struct *w)
 			otg->state = OTG_STATE_A_HOST;
 		} else if (test_bit(B_SESS_VLD, &motg->inputs)) {
 			pr_debug("b_sess_vld\n");
+
+			#ifdef ZTE_CHARGER_OTG_TIMING
+				if ((motg->chg_type != USB_SDP_CHARGER) && (motg->chg_type != USB_CDP_CHARGER))
+					break;
+			#endif
+
 			msm_otg_dbg_log_event(phy, "B_SESS_VLD",
 					motg->inputs, otg->state);
 			if (!otg->gadget) {
@@ -3708,6 +3790,9 @@ static DEVICE_ATTR(dpdm_pulldown_enable, 0644,
 static int msm_otg_vbus_notifier(struct notifier_block *nb, unsigned long event,
 				void *ptr)
 {
+	/* Usb online lpm test requirement, 4/5 */
+	if (forge_usb_offline)
+		forge_usb_offline = 0;
 	msm_otg_set_vbus_state(!!event);
 
 	return NOTIFY_DONE;
@@ -4638,6 +4723,12 @@ static int msm_otg_probe(struct platform_device *pdev)
 	register_pm_notifier(&motg->pm_notify);
 	msm_otg_dbg_log_event(phy, "OTG PROBE", motg->caps, motg->lpm_flags);
 
+	/* Usb online lpm test requirement, 5/5 */
+	ret = lpm_test_create_device(motg);
+	if (ret) {
+		dev_dbg(&pdev->dev, "fail to setup lpm_test_device\n");
+	}
+
 	return 0;
 
 remove_cdev:
@@ -4899,7 +4990,21 @@ static struct platform_driver msm_otg_driver = {
 	},
 };
 
+/*modify for timing problem, cannot enum usb, usb=1500, cannot sleep*/
+#ifdef ZTE_CHARGER_OTG_TIMING
+static int __init msm_otg_driver_init(void)
+{
+	return platform_driver_register(&msm_otg_driver);
+}
+device_initcall_sync(msm_otg_driver_init);
+static void __exit msm_otg_driver_exit(void)
+{
+	platform_driver_unregister(&msm_otg_driver);
+}
+module_exit(msm_otg_driver_exit);
+#else
 module_platform_driver(msm_otg_driver);
+#endif
 
 MODULE_LICENSE("GPL v2");
 MODULE_DESCRIPTION("MSM USB transceiver driver");

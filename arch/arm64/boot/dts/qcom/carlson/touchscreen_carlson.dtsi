@@ -1,0 +1,64 @@
+/*for touchscreen config*/
+&tlmm {
+	gpio-controller;
+	#gpio-cells = <2>;
+
+	pmx_ts_int_init {
+		ts_int_init: ts_int_init {
+			mux {
+				pins = "gpio65";
+				function = "gpio";
+				};
+			config {
+				pins = "gpio65";
+				drive-strength = <2>;
+				bias-disable;
+			};
+		};
+	};
+
+	pmx_ts_reset_init {
+		ts_reset_init: ts_reset_init {
+			mux {
+				pins = "gpio64";
+				function = "gpio";
+			};
+				config {
+				pins = "gpio64";
+				drive-strength = <2>;
+				bias-disable;
+			};
+		};
+	};
+};
+
+&i2c_3 { /* BLSP1 QUP3 */
+	status = "okay";
+	qcom,disable-dma;
+
+	focaltech@38 {
+		compatible = "focaltech,fts";
+		reg = <0x38>;
+		interrupt-parent = <&tlmm>;
+		pinctrl-names = "pmx_ts_active", "pmx_ts_suspend";
+		pinctrl-0 = <&ts_int_init &ts_reset_init>;
+		pinctrl-1 = <&ts_int_init &ts_reset_init>;
+		focaltech,reset-gpio = <&tlmm 64 0x00>;
+		focaltech,irq-gpio = <&tlmm 65 0x00>;
+		vdd-supply = <&pm8916_l17>;
+		focaltech,display-coords = <0 0 799 1279>;
+		focaltech,max-touch-number = <10>;
+	};
+
+	chipone_ts@48 {
+		compatible = "chipone-ts";
+		reg = <0x48>;
+		interrupt-parent = <&tlmm>;
+		interrupts = <65 0x2008>;
+		chipone,rst-gpio = <&tlmm 64 0x00>;
+		chipone,irq-gpio = <&tlmm 65 0x00>;
+		vdd_ana-supply = <&pm8916_l17>;
+		chipone,x-res = <799>;
+		chipone,y-res = <1279>;
+	};
+};

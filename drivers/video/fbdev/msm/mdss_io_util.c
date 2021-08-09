@@ -264,6 +264,10 @@ int msm_mdss_enable_vreg(struct mdss_vreg *in_vreg, int num_vreg, int enable)
 	int i = 0, rc = 0;
 	bool need_sleep;
 
+	#if defined(CONFIG_ZTE_LCD_VDDIO_ALWAYS_ON)
+	static int vddio_is_enabled = false;
+	#endif
+
 	if (enable) {
 		for (i = 0; i < num_vreg; i++) {
 			rc = PTR_RET(in_vreg[i].vreg);
@@ -273,6 +277,19 @@ int msm_mdss_enable_vreg(struct mdss_vreg *in_vreg, int num_vreg, int enable)
 					in_vreg[i].vreg_name, rc);
 				goto vreg_set_opt_mode_fail;
 			}
+
+			#if defined(CONFIG_ZTE_LCD_VDDIO_ALWAYS_ON)
+			if (!strcmp(in_vreg[i].vreg_name, "vddio")) {
+				if (vddio_is_enabled == true) {
+					pr_info("%s: vddio already enabled, don't open powerL6\n", __func__);
+					continue;
+				} else {
+					pr_info("%s: vddio(powerL6) enable\n", __func__);
+					vddio_is_enabled = true;
+				}
+			}
+			#endif
+
 			need_sleep = !regulator_is_enabled(in_vreg[i].vreg);
 			if (in_vreg[i].pre_on_sleep && need_sleep)
 				usleep_range((in_vreg[i].pre_on_sleep * 1000),
@@ -298,6 +315,16 @@ int msm_mdss_enable_vreg(struct mdss_vreg *in_vreg, int num_vreg, int enable)
 		}
 	} else {
 		for (i = num_vreg-1; i >= 0; i--) {
+#ifdef TARGET_SECOND_SPI_PANEL
+				return 0;
+#endif
+
+			#if defined(CONFIG_ZTE_LCD_VDDIO_ALWAYS_ON)
+				if (!strcmp(in_vreg[i].vreg_name, "vddio")) {
+					pr_info("%s: disable,don't close powerL6\n", __func__);
+					continue;
+				}
+			#endif
 			if (in_vreg[i].pre_off_sleep)
 				usleep_range((in_vreg[i].pre_off_sleep * 1000),
 					(in_vreg[i].pre_off_sleep * 1000) + 10);

@@ -1,0 +1,32 @@
+&soc {
+/*for hall sensor*/
+	ah188a:hall_sensor{
+		compatible = "ah,hall_ic";
+		pinctrl-names = "zte_hall_gpio_active";
+		pinctrl-0 = <&zte_hall_gpio_active>;
+		vddio-supply = <&pm8916_l6>;
+		linux,min-uv = <1800000>;
+		linux,max-uv = <1800000>;
+		ah,gpio_irq = <&tlmm 41 0x00>;
+		linux,name = "hall_sensor";
+	};
+};
+
+&tlmm {
+/*added by chenhui for hall gpio for no pull*/
+	zte_hall: zte_hall {
+		zte_hall_gpio_active: zte_hall_gpio_active {
+			mux {
+				pins = "gpio41";
+				function = "gpio";
+			};
+			config {
+				pins = "gpio41";
+				drive-strength = <2>; /* 2 mA */
+				bias-pull-up;
+				input-enable; /* input */
+			};
+		};
+	};
+/*end*/
+};

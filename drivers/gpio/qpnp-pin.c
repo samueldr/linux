@@ -28,6 +28,10 @@
 #include <linux/module.h>
 #include <linux/export.h>
 #include <linux/qpnp/pin.h>
+/*zte_pm add +++*/
+#include <linux/seq_file.h>
+#define GPIO_SNP_SIZE 50
+/*zte_pm add ---*/
 
 #define Q_REG_ADDR(q_spec, reg_index)	\
 		((q_spec)->offset + reg_index)
@@ -1706,6 +1710,272 @@ static void __exit qpnp_pin_exit(void)
 #endif
 	platform_driver_unregister(&qpnp_pin_driver);
 }
+
+/*zte_pm ++++ PMIC LOG, begin*/
+int pmic_dump_pins(struct seq_file *m, int curr_len, char *gpio_buffer)
+{
+	char read_buf[256];
+	static const char * const cmode_gpio[] = { "In", "Out", "In/Out", "Reserved"};
+	static const char * const cmode_mpp[] = { "Digital In", "Digital Out",
+		"Digital In/Out", "bid", "Analog In", "Analog Out", "I Sink", "Reserved"};
+	int rc = 0;
+	struct qpnp_pin_chip *q_chip;
+	struct qpnp_pin_spec *q_spec = NULL;
+	u8 type;
+	int gpios;
+	int i, len;
+	struct qpnp_pin_cfg param;
+
+	mutex_lock(&qpnp_pin_chips_lock);
+	list_for_each_entry(q_chip, &qpnp_pin_chips, chip_list) {
+		type = q_chip->chip_gpios[0]->type;
+		gpios = q_chip->gpio_chip.ngpio;
+
+		/*printk("%s, %s, numbers: %d\n", __func__, q_chip->gpio_chip.label, gpios);*/
+		if (m) {
+			seq_printf(m, "%s\n", q_chip->gpio_chip.label);
+		} else {
+			pr_info("%s\n", q_chip->gpio_chip.label);
+			curr_len += snprintf(gpio_buffer + curr_len, GPIO_SNP_SIZE*2,
+				"%s, numbers: %d, pin lowest: %d, pin highest: %d,\n", q_chip->gpio_chip.label, gpios,
+				q_chip->pmic_pin_lowest, q_chip->pmic_pin_highest);
+		}
+
+		for (i = 0; i < gpios; i++) {
+			len = 0;
+			q_spec = qpnp_chip_gpio_get_spec(q_chip, i);
+			rc = qpnp_pin_read_regs(q_chip, q_spec);
+
+			param.mode = q_reg_get(&q_spec->regs[Q_REG_I_MODE_CTL],
+						Q_REG_MODE_SEL_SHIFT, Q_REG_MODE_SEL_MASK);
+			param.output_type = q_reg_get(&q_spec->regs[Q_REG_I_DIG_OUT_CTL],
+						Q_REG_OUT_TYPE_SHIFT, Q_REG_OUT_TYPE_MASK);
+			param.invert = q_reg_get(&q_spec->regs[Q_REG_I_MODE_CTL],
+						Q_REG_OUT_INVERT_SHIFT, Q_REG_OUT_INVERT_MASK);
+			param.pull = q_reg_get(&q_spec->regs[Q_REG_I_DIG_PULL_CTL],
+						Q_REG_PULL_SHIFT, Q_REG_PULL_MASK);
+			param.vin_sel = q_reg_get(&q_spec->regs[Q_REG_I_DIG_VIN_CTL],
+						Q_REG_VIN_SHIFT, Q_REG_VIN_MASK);
+			param.out_strength = q_reg_get(&q_spec->regs[Q_REG_I_DIG_OUT_CTL],
+						Q_REG_OUT_STRENGTH_SHIFT, Q_REG_OUT_STRENGTH_MASK);
+			param.src_sel = q_reg_get(&q_spec->regs[Q_REG_I_MODE_CTL],
+						Q_REG_SRC_SEL_SHIFT, Q_REG_SRC_SEL_MASK);
+			param.master_en = q_reg_get(&q_spec->regs[Q_REG_I_EN_CTL],
+						Q_REG_MASTER_EN_SHIFT, Q_REG_MASTER_EN_MASK);
+			param.aout_ref = q_reg_get(&q_spec->regs[Q_REG_I_AOUT_CTL],
+						Q_REG_AOUT_REF_SHIFT, Q_REG_AOUT_REF_MASK);
+			param.ain_route = q_reg_get(&q_spec->regs[Q_REG_I_AIN_CTL],
+						Q_REG_AIN_ROUTE_SHIFT, Q_REG_AIN_ROUTE_MASK);
+			param.cs_out = q_reg_get(&q_spec->regs[Q_REG_I_SINK_CTL],
+						Q_REG_CS_OUT_SHIFT, Q_REG_CS_OUT_MASK);
+
+			if (type == Q_GPIO_TYPE) {
+				len += snprintf(read_buf + len, GPIO_SNP_SIZE,
+						"PM_GPIO[%-2d]: ", i + q_chip->pmic_pin_lowest);
+				len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[DIR]%-6.6s, ", cmode_gpio[param.mode]);
+				len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[INVERT] %d, ", param.invert);
+
+				switch (param.output_type) {
+				case QPNP_PIN_OUT_BUF_CMOS:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[OUTPUT_TYPE]CMOS, ");
+					break;
+				case QPNP_PIN_OUT_BUF_OPEN_DRAIN_NMOS:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[OUTPUT_TYPE]NMOS, ");
+					break;
+				case QPNP_PIN_OUT_BUF_OPEN_DRAIN_PMOS:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[OUTPUT_TYPE]PMOS, ");
+					break;
+				default:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[OUTPUT_TYPE]unknown, ");
+					break;
+				}
+				switch (param.pull) {
+				case QPNP_PIN_GPIO_PULL_UP_30:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[PULL]pull-up 30uA, ");
+					break;
+				case QPNP_PIN_GPIO_PULL_UP_1P5:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[PULL]pull-up 1.5uA, ");
+					break;
+				case QPNP_PIN_GPIO_PULL_UP_31P5:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[PULL]pull-up 31.5uA, ");
+					break;
+				case QPNP_PIN_GPIO_PULL_UP_1P5_30:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE,
+							"[PULL]pull-up 1.5uA + 30uA boost, ");
+					break;
+				case QPNP_PIN_GPIO_PULL_DN:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[PULL]pull-down 10uA, ");
+					break;
+				case QPNP_PIN_GPIO_PULL_NO:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[PULL]no pull, ");
+					break;
+				default:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[PULL]unknown, ");
+					break;
+				}
+				switch (param.vin_sel) {
+				case QPNP_PIN_VIN0:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[VIN]VIN0, ");
+					break;
+				case QPNP_PIN_VIN1:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[VIN]VIN1, ");
+					break;
+				case QPNP_PIN_VIN2:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[VIN]VIN2, ");
+					break;
+				case QPNP_PIN_VIN3:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[VIN]VIN3, ");
+					break;
+				case QPNP_PIN_VIN4:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[VIN]VIN4, ");
+					break;
+				case QPNP_PIN_VIN5:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[VIN]VIN5, ");
+					break;
+				case QPNP_PIN_VIN6:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[VIN]VIN6, ");
+					break;
+				case QPNP_PIN_VIN7:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[VIN]VIN7, ");
+					break;
+				default:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[VIN]unknown, ");
+					break;
+
+				}
+				switch (param.out_strength) {
+				case QPNP_PIN_OUT_STRENGTH_LOW:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[DRV]Low, ");
+					break;
+				case QPNP_PIN_OUT_STRENGTH_MED:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[DRV]Medium, ");
+					break;
+				case QPNP_PIN_OUT_STRENGTH_HIGH:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[DRV]High, ");
+					break;
+				default:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[DRV]unknown, ");
+					break;
+				}
+			} else if (type == Q_MPP_TYPE) {
+				len += snprintf(read_buf + len, GPIO_SNP_SIZE,
+						"PM_MPP[%-2d]: ", i + q_chip->pmic_pin_lowest);
+				len += snprintf(read_buf + len, GPIO_SNP_SIZE,
+						"[DIR]%-14.14s, ", cmode_mpp[param.mode]);
+				len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[INVERT] %d, ", param.invert);
+
+				switch (param.pull) {
+				case QPNP_PIN_MPP_PULL_UP_0P6KOHM:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE,  "[PULL]0.6k, ");
+					break;
+				case QPNP_PIN_MPP_PULL_UP_OPEN:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[PULL]open, ");
+					break;
+				case QPNP_PIN_MPP_PULL_UP_10KOHM:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[PULL]10K, ");
+					break;
+				case QPNP_PIN_MPP_PULL_UP_30KOHM:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[PULL]30K, ");
+					break;
+				default:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[PULL]unknown, ");
+					break;
+				}
+
+				switch (param.vin_sel) {
+				case QPNP_PIN_VIN0:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[VIN]VIN0, ");
+					break;
+				case QPNP_PIN_VIN1:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[VIN]VIN1, ");
+					break;
+				case QPNP_PIN_VIN2:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[VIN]VIN2, ");
+					break;
+				case QPNP_PIN_VIN3:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[VIN]VIN3, ");
+					break;
+				default:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[VIN]VIN0, ");
+					break;
+				}
+
+				len += snprintf(read_buf + len, GPIO_SNP_SIZE,
+						"[EN]%s, ", param.master_en ? "Enabled " : "Disabled ");
+				switch (param.aout_ref) {
+				case QPNP_PIN_AOUT_1V25:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[REF]1V25, ");
+					break;
+				default:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[REF]unknown, ");
+					break;
+				}
+
+				switch (param.ain_route) {
+				case QPNP_PIN_AIN_AMUX_CH5:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[Route]hkadc5, ");
+					break;
+				case QPNP_PIN_AIN_AMUX_CH6:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[Route]hkadc6, ");
+					break;
+				case QPNP_PIN_AIN_AMUX_CH7:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[Route]hkadc7, ");
+					break;
+				case QPNP_PIN_AIN_AMUX_CH8:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[Route]hkadc8, ");
+					break;
+				default:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[Route]unknown, ");
+					break;
+				}
+
+				switch (param.cs_out) {
+				case QPNP_PIN_CS_OUT_5MA:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[I_Sink]5 mA, ");
+					break;
+				case QPNP_PIN_CS_OUT_10MA:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[I_Sink]10 mA, ");
+					break;
+				case QPNP_PIN_CS_OUT_15MA:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[I_Sink]15 mA, ");
+					break;
+				case QPNP_PIN_CS_OUT_20MA:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[I_Sink]20 mA, ");
+					break;
+				case QPNP_PIN_CS_OUT_25MA:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[I_Sink]25 mA, ");
+					break;
+				case QPNP_PIN_CS_OUT_30MA:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[I_Sink]30 mA, ");
+					break;
+				case QPNP_PIN_CS_OUT_35MA:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[I_Sink]35 mA, ");
+					break;
+				case QPNP_PIN_CS_OUT_40MA:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[I_Sink]40 mA, ");
+					break;
+				default:
+					len += snprintf(read_buf + len, GPIO_SNP_SIZE, "[I_Sink]unknown, ");
+					break;
+				}
+			}
+
+			read_buf[len] = '\0';
+			if (m) {
+				seq_printf(m, "%s\n", read_buf);
+			} else {
+				pr_info("%s\n", read_buf);
+				curr_len += snprintf(gpio_buffer + curr_len, GPIO_SNP_SIZE, "%s\n", read_buf);
+			}
+		}
+	}
+	mutex_unlock(&qpnp_pin_chips_lock);
+
+	if (rc)
+		pr_err("Failed on %s() rc=%d\n", __func__, rc);
+	return rc;
+}
+/*zte_pm ---- PMIC LOG, end*/
 
 MODULE_DESCRIPTION("QPNP PMIC gpio driver");
 MODULE_LICENSE("GPL v2");

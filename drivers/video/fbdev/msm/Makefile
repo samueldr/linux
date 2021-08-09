@@ -45,10 +45,20 @@ mdss-dsi-objs += mdss_dsi_phy_12nm.o
 mdss-dsi-objs += mdss_dsi_clk.o
 obj-$(CONFIG_FB_MSM_MDSS) += mdss-dsi.o
 obj-$(CONFIG_FB_MSM_MDSS) += mdss_panel.o
-
+ifeq ($(CONFIG_ZTE_LCD_COMMON_FUNCTION),y)
+obj-$(CONFIG_ZTE_LCD_COMMON_FUNCTION) += zte_lcd_common.o
+ifeq ($(CONFIG_ZTE_LCD_REG_DEBUG),y)
+obj-$(CONFIG_ZTE_LCD_REG_DEBUG) += zte_lcd_reg_debug.o
+endif
+obj-$(CONFIG_ZTE_LCDBL_I2C_CTRL_VSP_VSN) += zte_lcdbl_tps65132b.o
+endif
 ifeq ($(CONFIG_SPI_QUP), y)
 obj-$(CONFIG_FB_MSM_MDSS_SPI_PANEL) += mdss_spi_client.o
 obj-$(CONFIG_FB_MSM_MDSS_SPI_PANEL) += mdss_spi_panel.o
+ifeq ($(TARGET_SECOND_SPI_PANEL), true)
+obj-y	  += mdss_spi_second_panel.o
+obj-y	  += mdss_spi_first_panel.o
+endif
 endif
 
 ifneq ($(CONFIG_FB_MSM_MDSS_MDP3), y)

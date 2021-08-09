@@ -1,0 +1,39 @@
+/* Copyright (c) 2014-2017, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+/*
+ *This file is only used on projects that ddr size is 512MB or less than 512MB
+ */
+
+&ramoops_mem {
+	compatible = "removed-dma-pool";
+	no-map;
+	reg = <0 0x8FE00000 0 0x100000>;
+};
+
+
+&soc {
+	ramoops {
+		compatible = "ramoops";
+		reg = <0x8FE00000 0x100000>;
+		memory-region = <&ramoops_men>;
+		unbuffered;
+		no-dump-oops;
+		record-size = <0x1000>;
+		console-size = <0x80000>;
+		ftrace-size = <0x20000>;
+		pmsg-size = <0x20000>;
+		ecc-size = <0>;
+		flags = <1>;
+	};
+};
+

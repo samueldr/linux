@@ -3643,6 +3643,11 @@ err_invalid_target_handle:
 		     (u64)tr->data_size, (u64)tr->offsets_size,
 		     return_error_line);
 
+	if (target_proc && target_thread)
+		binder_debug(BINDER_DEBUG_FAILED_TRANSACTION,
+		     "target_proc:%d, target_thread:%d\n",
+		     target_proc->pid, target_thread->pid);
+
 	{
 		struct binder_transaction_log_entry *fe;
 

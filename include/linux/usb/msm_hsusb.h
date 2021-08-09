@@ -320,6 +320,10 @@ struct msm_otg {
 	struct work_struct extcon_register_work;
 	struct notifier_block psy_nb;
 	bool enable_sdp_check_timer;
+
+	/* Usb online lpm test requirement, 1/5 */
+	struct class *lpm_test_class;
+	struct device *lpm_test_dev;
 };
 
 struct ci13xxx_platform_data {

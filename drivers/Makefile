@@ -181,3 +181,6 @@ obj-$(CONFIG_ESOC)              += esoc/
 obj-$(CONFIG_FPGA)		+= fpga/
 obj-$(CONFIG_SENSORS_SSC)		+= sensors/
 obj-$(CONFIG_TEE)		+= tee/
+
+obj-$(CONFIG_VENDOR_COMMON_COMPILE)	+= vendor/common/
+obj-$(CONFIG_VENDOR_SOC_QCOM_COMPILE)	+= vendor/soc/qcom/
