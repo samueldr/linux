@@ -1,0 +1,9 @@
+config S5K3L6_047_EEPROM
+	bool "ZTE S5K3L6_047 Calibration support"
+	depends on MSMB_CAMERA
+	default n
+	help
+	  Enable support for ROM Interface for Calibration
+	  Provides interface for reading the Claibration data.
+	  and also provides support for writing data in case of FLASH ROM.
+	  Currently supports CCI  protocol

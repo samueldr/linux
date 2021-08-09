@@ -49,6 +49,7 @@ config MSMB_CAMERA_DEBUG
 
 if MSMB_CAMERA
 source "drivers/media/platform/msm/camera_v2/Kconfig"
+source "drivers/media/platform/msm/camera_v2/sensor/zte_eeprom/Kconfig"
 endif # MSMB_CAMERA
 
 menuconfig SPECTRA2_CAMERA
