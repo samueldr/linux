@@ -1,0 +1,7 @@
+#
+# Fpc Fingerprint driver configuration
+#
+
+config QCOM_FINGERPRINT_FPC
+	tristate "fpc fingerprint driver"
+	default n
