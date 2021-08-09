@@ -163,4 +163,16 @@ config SMB1390_CHARGE_PUMP
 	  SMB1390 is a div2 charge pump capable of delivering 6A charge current
 	  with very high efficiency.
 
+config BQ25601_CHARGER
+	tristate "BQ25601 Battery Charger"
+	depends on I2C
+	default n
+	help
+	  Say Y to include support for BQ25601 Battery Charger.
+	  BQ25601 is a single path switching mode charger capable of charging
+	  the battery with 3Amps of current.
+	  The driver supports charger enable/disable.
+	  The driver reports the charger status via the power supply framework.
+	  A charger status change triggers an IRQ via the device STAT pin.
+
 endmenu
