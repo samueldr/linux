@@ -7,3 +7,4 @@ obj-$(CONFIG_ANDROID_LOW_MEMORY_KILLER)	+= lowmemorykiller.o
 obj-$(CONFIG_ANDROID_VSOC)		+= vsoc.o
 obj-$(CONFIG_ANDROID_TIMED_OUTPUT)	+= timed_output.o
 obj-$(CONFIG_ANDROID_TIMED_GPIO)	+= timed_gpio.o
+obj-$(CONFIG_ZTE_VIBRATOR)		+= zte_vibrator.o

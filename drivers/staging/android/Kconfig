@@ -23,6 +23,12 @@ config ANDROID_TIMED_GPIO
 	depends on GPIOLIB && ANDROID_TIMED_OUTPUT
 	default n
 
+config ZTE_VIBRATOR
+	bool "zte virator timed gpio driver"
+	default n
+	help
+	  Say 'Y' here to enable it.
+
 config ANDROID_LOW_MEMORY_KILLER
 	bool "Android Low Memory Killer"
 	---help---
