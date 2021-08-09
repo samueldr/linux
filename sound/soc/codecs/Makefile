@@ -450,4 +450,7 @@ obj-$(CONFIG_SND_SOC_AW8896)	+= snd-soc-aw8896.o
 # for NXP TFA98xx Smart PA
 obj-$(CONFIG_ZTE_NXP9890_SMART_PA_USE_QUIN) += tfa9890/
 
+# for AWINIC AW87359 sterro Smart PA
+obj-$(CONFIG_ZTE_AW87359_SMART_PA_STEREO) += aw87359_stereo/
+
 obj-$(CONFIG_SND_SOC_TFA98XX)	+= snd-soc-tfa98xx.o
