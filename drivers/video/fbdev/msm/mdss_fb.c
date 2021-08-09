@@ -54,6 +54,7 @@
 #include "mdss_mdp.h"
 #include "mdp3_ctrl.h"
 #include "mdss_sync.h"
+#include "zte_lcd_common.h"
 
 #ifdef CONFIG_FB_MSM_TRIPLE_BUFFER
 #define MDSS_FB_NUM 3
@@ -121,6 +122,7 @@ static int mdss_fb_send_panel_event(struct msm_fb_data_type *mfd,
 					int event, void *arg);
 static void mdss_fb_set_mdp_sync_pt_threshold(struct msm_fb_data_type *mfd,
 		int type);
+extern struct mdss_dsi_ctrl_pdata *g_zte_ctrl_pdata;
 void mdss_fb_no_update_notify_timer_cb(unsigned long data)
 {
 	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)data;
@@ -980,7 +982,16 @@ static void mdss_fb_shutdown(struct platform_device *pdev)
 	wake_up_all(&mfd->kickoff_wait_q);
 
 	lock_fb_info(mfd->fbi);
+#ifdef CONFIG_ZTE_LCD_COMMON_FUNCTION
+	g_zte_ctrl_pdata->zte_lcd_ctrl->lcd_powerdown_for_shutdown = true;
+#endif
+
 	mdss_fb_release_all(mfd->fbi, true);
+
+#ifdef CONFIG_ZTE_LCD_COMMON_FUNCTION
+	g_zte_ctrl_pdata->zte_lcd_ctrl->lcd_powerdown_for_shutdown = false;
+#endif
+
 	sysfs_notify(&mfd->fbi->dev->kobj, NULL, "show_blank_event");
 	unlock_fb_info(mfd->fbi);
 }
@@ -1309,6 +1320,9 @@ static int mdss_fb_probe(struct platform_device *pdev)
 			}
 		}
 	mfd->split_fb_left = mfd->split_fb_right = 0;
+#ifdef TARGET_SECOND_SPI_PANEL
+	mfd->fb_imgType = MDP_RGB_565;
+#endif
 
 	mdss_fb_set_split_mode(mfd, pdata);
 	pr_info("fb%d: split_mode:%d left:%d right:%d\n", mfd->index,
@@ -1714,7 +1728,7 @@ void mdss_fb_set_backlight(struct msm_fb_data_type *mfd, u32 bkl_lvl)
 	bool ad_bl_notify_needed = false;
 	bool bl_notify_needed = false;
 	bool twm_en = false;
-
+#ifndef TARGET_SECOND_SPI_PANEL
 	if ((((mdss_fb_is_power_off(mfd) && mfd->dcm_state != DCM_ENTER)
 		|| !mfd->allow_bl_update) && !IS_CALIB_MODE_BL(mfd) &&
 		!mfd->allow_secure_bl_update) ||
@@ -1726,7 +1740,9 @@ void mdss_fb_set_backlight(struct msm_fb_data_type *mfd, u32 bkl_lvl)
 	} else if (!mfd->allow_secure_bl_update) {
 		mfd->unset_bl_level = U32_MAX;
 	}
-
+#else
+	mfd->unset_bl_level = bkl_lvl;
+#endif
 	pdata = dev_get_platdata(&mfd->pdev->dev);
 
 	if ((pdata) && (pdata->set_backlight)) {
@@ -3336,7 +3352,6 @@ static int mdss_fb_pan_display_ex(struct fb_info *info,
 	mfd->msm_fb_backup.info = *info;
 	mfd->msm_fb_backup.disp_commit = *disp_commit;
 
-	atomic_inc(&mfd->mdp_sync_pt_data.commit_cnt);
 	atomic_inc(&mfd->commits_pending);
 	atomic_inc(&mfd->kickoff_pending);
 	wake_up_all(&mfd->commit_wait_q);
@@ -4440,7 +4455,7 @@ static int mdss_fb_handle_buf_sync_ioctl(struct msm_sync_pt_data *sync_pt_data,
 	if (IS_ERR_OR_NULL(retire_fence)) {
 		val += sync_pt_data->retire_threshold;
 		retire_fence = mdss_fb_sync_get_fence(
-			sync_pt_data->timeline_retire, "mdp-retire", val);
+					sync_pt_data->timeline, "mdp-retire", val);
 	}
 
 	if (IS_ERR_OR_NULL(retire_fence)) {

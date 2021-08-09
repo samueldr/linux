@@ -1783,6 +1783,197 @@ static int qpnp_rgb_set(struct qpnp_led_data *led)
 	return 0;
 }
 
+#ifdef TARGET_SECOND_SPI_PANEL
+struct qpnp_led_data *second_spi_backlight = NULL;
+struct qpnp_led_data *second_spi_backlight_1 = NULL;
+
+int set_second_spi_backlight_1(int enable)
+{
+	int rc;
+	u8 val;
+
+	struct qpnp_led_data *led = second_spi_backlight_1;
+
+	pr_info("SPI %s %d\n", __func__, enable);
+
+	if (led == NULL) {
+		pr_err("%s  NULL point!\n", __func__);
+		return -EINVAL;
+	}
+
+	if (enable)
+		led->cdev.brightness = 20;
+	else
+		led->cdev.brightness = 0;
+
+	if (led->cdev.brightness) {
+
+		if (led->cdev.brightness < LED_MPP_CURRENT_MIN)
+			led->cdev.brightness = LED_MPP_CURRENT_MIN;
+		else if (led->cdev.brightness > LED_MPP_CURRENT_MAX)
+			led->cdev.brightness = LED_MPP_CURRENT_MAX;
+		else {
+			/*
+			 * PMIC supports LED intensity from 5mA - 40mA
+			 * in steps of 5mA. Brightness is rounded to
+			 * 5mA or nearest lower supported values
+			 */
+			led->cdev.brightness /= LED_MPP_CURRENT_MIN;
+			led->cdev.brightness *= LED_MPP_CURRENT_MIN;
+		}
+
+		val = (led->cdev.brightness / LED_MPP_CURRENT_MIN) - 1;
+
+		rc = qpnp_led_masked_write(led,
+				LED_MPP_SINK_CTRL(led->base),
+				LED_MPP_SINK_MASK, val);
+		if (rc) {
+			pr_err("Failed to write sink control reg\n");
+			goto err_mpp_reg_write;
+		}
+
+		val = (led->mpp_cfg->source_sel & LED_MPP_SRC_MASK) |
+			(led->mpp_cfg->mode_ctrl & LED_MPP_MODE_CTRL_MASK);
+
+		rc = qpnp_led_masked_write(led,
+			LED_MPP_MODE_CTRL(led->base), LED_MPP_MODE_MASK,
+			val);
+		if (rc) {
+			pr_err("Failed to write led mode reg\n");
+			goto err_mpp_reg_write;
+		}
+
+		rc = qpnp_led_masked_write(led,
+				LED_MPP_EN_CTRL(led->base), LED_MPP_EN_MASK,
+				LED_MPP_EN_ENABLE);
+		if (rc) {
+			pr_err("Failed to write led enable reg\n");
+			goto err_mpp_reg_write;
+		}
+	} else {
+
+		rc = qpnp_led_masked_write(led,
+					LED_MPP_MODE_CTRL(led->base),
+					LED_MPP_MODE_MASK,
+					LED_MPP_MODE_DISABLE);
+		if (rc) {
+			pr_err("Failed to write led mode reg\n");
+			goto err_mpp_reg_write;
+		}
+
+		rc = qpnp_led_masked_write(led,
+					LED_MPP_EN_CTRL(led->base),
+					LED_MPP_EN_MASK,
+					LED_MPP_EN_DISABLE);
+		if (rc) {
+			pr_err("Failed to write led enable reg\n");
+			goto err_mpp_reg_write;
+		}
+	}
+
+
+	return 0;
+
+err_mpp_reg_write:
+	return rc;
+
+}
+
+
+
+int set_second_spi_backlight(int enable)
+{
+	int rc;
+	u8 val;
+
+	struct qpnp_led_data *led = second_spi_backlight;
+
+	pr_info("SPI %s %d\n", __func__, enable);
+	if (led == NULL) {
+		pr_err("%s  NULL point!\n", __func__);
+		return -EINVAL;
+	}
+
+	if (enable)
+		led->cdev.brightness = 20;
+	else
+		led->cdev.brightness = 0;
+
+	if (led->cdev.brightness) {
+
+		if (led->cdev.brightness < LED_MPP_CURRENT_MIN)
+			led->cdev.brightness = LED_MPP_CURRENT_MIN;
+		else if (led->cdev.brightness > LED_MPP_CURRENT_MAX)
+			led->cdev.brightness = LED_MPP_CURRENT_MAX;
+		else {
+			/*
+			 * PMIC supports LED intensity from 5mA - 40mA
+			 * in steps of 5mA. Brightness is rounded to
+			 * 5mA or nearest lower supported values
+			 */
+			led->cdev.brightness /= LED_MPP_CURRENT_MIN;
+			led->cdev.brightness *= LED_MPP_CURRENT_MIN;
+		}
+
+		val = (led->cdev.brightness / LED_MPP_CURRENT_MIN) - 1;
+
+		rc = qpnp_led_masked_write(led,
+				LED_MPP_SINK_CTRL(led->base),
+				LED_MPP_SINK_MASK, val);
+		if (rc) {
+			pr_err("Failed to write sink control reg\n");
+			goto err_mpp_reg_write;
+		}
+
+		val = (led->mpp_cfg->source_sel & LED_MPP_SRC_MASK) |
+			(led->mpp_cfg->mode_ctrl & LED_MPP_MODE_CTRL_MASK);
+
+		rc = qpnp_led_masked_write(led,
+			LED_MPP_MODE_CTRL(led->base), LED_MPP_MODE_MASK,
+			val);
+		if (rc) {
+			pr_err("Failed to write led mode reg\n");
+			goto err_mpp_reg_write;
+		}
+
+		rc = qpnp_led_masked_write(led,
+				LED_MPP_EN_CTRL(led->base), LED_MPP_EN_MASK,
+				LED_MPP_EN_ENABLE);
+		if (rc) {
+			pr_err("Failed to write led enable reg\n");
+			goto err_mpp_reg_write;
+		}
+	} else {
+
+		rc = qpnp_led_masked_write(led,
+					LED_MPP_MODE_CTRL(led->base),
+					LED_MPP_MODE_MASK,
+					LED_MPP_MODE_DISABLE);
+		if (rc) {
+			pr_err("Failed to write led mode reg\n");
+			goto err_mpp_reg_write;
+		}
+
+		rc = qpnp_led_masked_write(led,
+					LED_MPP_EN_CTRL(led->base),
+					LED_MPP_EN_MASK,
+					LED_MPP_EN_DISABLE);
+		if (rc) {
+			pr_err("Failed to write led enable reg\n");
+			goto err_mpp_reg_write;
+		}
+	}
+
+	set_second_spi_backlight_1(enable);
+	return 0;
+
+err_mpp_reg_write:
+	return rc;
+
+}
+#endif
+
+
 static void qpnp_led_set(struct led_classdev *led_cdev,
 				enum led_brightness value)
 {
@@ -1798,10 +1989,28 @@ static void qpnp_led_set(struct led_classdev *led_cdev,
 		value = led->cdev.max_brightness;
 
 	led->cdev.brightness = value;
+
+#ifdef TARGET_SECOND_SPI_PANEL
+	if (!strcmp(led->cdev.name, "second_spi-backlight") || !strcmp(led->cdev.name, "second_spi-backlight-1")) {
+		if (value > 0)
+			set_second_spi_backlight(true);
+		else
+			set_second_spi_backlight(false);
+	} else {
+		if (led->in_order_command_processing)
+			queue_work(led->workqueue, &led->work);
+		else
+			schedule_work(&led->work);
+	}
+#else
 	if (led->in_order_command_processing)
 		queue_work(led->workqueue, &led->work);
 	else
 		schedule_work(&led->work);
+
+#endif
+
+
 }
 
 static void __qpnp_led_work(struct qpnp_led_data *led,
@@ -3917,6 +4126,13 @@ static int qpnp_leds_probe(struct platform_device *pdev)
 
 		rc = of_property_read_string(temp, "linux,name",
 			&led->cdev.name);
+#ifdef TARGET_SECOND_SPI_PANEL
+		if (!strcmp(led->cdev.name, "second_spi-backlight"))
+			second_spi_backlight = led;
+		if (!strcmp(led->cdev.name, "second_spi-backlight-1"))
+			second_spi_backlight_1 = led;
+#endif
+
 		if (rc < 0) {
 			dev_err(&led->pdev->dev,
 				"Failure reading led name, rc = %d\n", rc);

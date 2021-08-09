@@ -1059,12 +1059,26 @@ fb_set_var(struct fb_info *info, struct fb_var_screeninfo *var)
 }
 EXPORT_SYMBOL(fb_set_var);
 
+#ifdef TARGET_SECOND_SPI_PANEL
+extern int second_panel_blank(int blank_mode, struct fb_info *info);
+extern int first_panel_blank(int blank_mode, struct fb_info *info);
+
+#endif
+
 int
 fb_blank(struct fb_info *info, int blank)
-{	
+{
 	struct fb_event event;
 	int ret = -EINVAL, early_ret;
 
+#ifdef TARGET_SECOND_SPI_PANEL
+	pr_info("spi_fb_blank: index %d blank %d\n", info->node, blank);
+	if (info->node == 1) {
+		second_panel_blank(blank, info);
+	} else if (info->node == 0) {
+		first_panel_blank(blank, info);
+	}
+#endif
  	if (blank > FB_BLANK_POWERDOWN)
  		blank = FB_BLANK_POWERDOWN;
 
