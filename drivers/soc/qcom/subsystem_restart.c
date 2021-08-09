@@ -813,6 +813,13 @@ static struct subsys_device *find_subsys(const char *str)
 	return dev ? to_subsys(dev) : NULL;
 }
 
+/*ZTE_MODIFY, get modem status before sending qmi command, start*/
+#ifdef CONFIG_LEDS_MSM_QMI
+extern void set_modem_online_value(int v);
+#endif
+/*ZTE_MODIFY, get modem status before sending qmi command, end*/
+
+
 static int subsys_start(struct subsys_device *subsys)
 {
 	int ret;
@@ -849,12 +856,29 @@ static int subsys_start(struct subsys_device *subsys)
 
 	notify_each_subsys_device(&subsys, 1, SUBSYS_AFTER_POWERUP,
 								NULL);
+
+	/*ZTE_MODIFY, get modem status before sending qmi command, start */
+	#ifdef CONFIG_LEDS_MSM_QMI
+	pr_info("[%s]: subsys_stop %s\n", current->comm, subsys->desc->name);
+	if (!strcmp(subsys->desc->name, "modem"))
+		set_modem_online_value(1);
+	#endif
+	/*ZTE_MODIFY, get modem status before sending qmi command, end */
+
 	return ret;
 }
 
 static void subsys_stop(struct subsys_device *subsys)
 {
 	const char *name = subsys->desc->name;
+
+	/*ZTE_MODIFY, get modem status before sending qmi command, start */
+	#ifdef CONFIG_LEDS_MSM_QMI
+	pr_info("[%s]: subsys_stop %s\n", current->comm, name);
+	if (!strcmp(name, "modem"))
+		set_modem_online_value(0);
+	#endif
+	/*ZTE_MODIFY, get modem status before sending qmi command, end */
 
 	notify_each_subsys_device(&subsys, 1, SUBSYS_BEFORE_SHUTDOWN, NULL);
 	if (!of_property_read_bool(subsys->desc->dev->of_node,
