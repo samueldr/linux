@@ -1100,6 +1100,8 @@ config SND_SOC_AW8896
 #zte add begin
 config ZTE_USE_HEADPHONE_SWITCH
         bool "zte add headphone switch"
+
+source "sound/soc/codecs/tfa9890/Kconfig"
 #zte add  end
 
 config SND_SOC_TFA98XX
