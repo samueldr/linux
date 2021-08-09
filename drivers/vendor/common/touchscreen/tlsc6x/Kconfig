@@ -1,0 +1,20 @@
+#
+# tlsc6x touchscreen driver configuration
+#
+
+config TOUCHSCREEN_TLSC6X
+	bool "Focaltech Touchscreen"
+		depends on I2C
+		default n
+		help
+		  Say Y here if you have tlsc6x touch panel.
+		  If unsure, say N.
+
+if TOUCHSCREEN_TLSC6X
+config TS_TLSC6X_MTK_INTERFACE
+	tristate "tlsc6x driver test over Dragon Board"
+	depends on TOUCHSCREEN_TLSC6X
+	help
+	  This enables support for tlsc6x driver in MTK platform.
+
+endif
