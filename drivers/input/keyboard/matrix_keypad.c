@@ -54,7 +54,7 @@ static void __activate_col(const struct matrix_keypad_platform_data *pdata,
 	if (on) {
 		gpio_direction_output(pdata->col_gpios[col], level_on);
 	} else {
-		gpio_set_value_cansleep(pdata->col_gpios[col], !level_on);
+		/*gpio_set_value_cansleep(pdata->col_gpios[col], !level_on);*/
 		gpio_direction_input(pdata->col_gpios[col]);
 	}
 }
@@ -89,11 +89,14 @@ static void enable_row_irqs(struct matrix_keypad *keypad)
 	const struct matrix_keypad_platform_data *pdata = keypad->pdata;
 	int i;
 
-	if (pdata->clustered_irq > 0)
+	if (pdata->clustered_irq > 0) {
 		enable_irq(pdata->clustered_irq);
-	else {
-		for (i = 0; i < pdata->num_row_gpios; i++)
+		enable_irq_wake(pdata->clustered_irq);
+	} else {
+		for (i = 0; i < pdata->num_row_gpios; i++) {
 			enable_irq(gpio_to_irq(pdata->row_gpios[i]));
+			enable_irq_wake(gpio_to_irq(pdata->row_gpios[i]));
+		}
 	}
 }
 
@@ -121,35 +124,25 @@ static void matrix_keypad_scan(struct work_struct *work)
 	const unsigned short *keycodes = input_dev->keycode;
 	const struct matrix_keypad_platform_data *pdata = keypad->pdata;
 	uint32_t new_state[MATRIX_MAX_COLS];
-	int row, col, code, count_state = 0;
+	int row, col, code;
 
 	/* de-activate all columns for scanning */
 	activate_all_cols(pdata, false);
-
+	udelay(100);
 	memset(new_state, 0, sizeof(new_state));
 
 	/* assert each column and read the row status out */
 	for (col = 0; col < pdata->num_col_gpios; col++) {
 
-		for (row = 0; row < pdata->num_row_gpios; row++) {
-			activate_col(pdata, col, true);
+		activate_col(pdata, col, true);
+
+		for (row = 0; row < pdata->num_row_gpios; row++)
 			new_state[col] |=
 				row_asserted(pdata, row) ? (1 << row) : 0;
-			gpio_direction_output(pdata->col_gpios[col], 0);
-			new_state[col] &=
-				row_asserted(pdata, row) ? ~(1 << row) : ~(0);
-		}
-		if (new_state[col])
-			count_state++;
-		activate_col(pdata, col, false);
-		for (row = 0; row < pdata->num_row_gpios; row++) {
-			gpio_direction_output(pdata->row_gpios[row], 0);
-			gpio_direction_input(pdata->row_gpios[row]);
-		}
-	}
 
-	if (count_state == 5)
-		goto out;
+		activate_col(pdata, col, false);
+		udelay(50);
+	}
 
 	for (col = 0; col < pdata->num_col_gpios; col++) {
 		uint32_t bits_changed;
@@ -173,7 +166,6 @@ static void matrix_keypad_scan(struct work_struct *work)
 
 	memcpy(keypad->last_key_state, new_state, sizeof(new_state));
 
-out:
 	activate_all_cols(pdata, true);
 
 	/* Enable IRQs again */
