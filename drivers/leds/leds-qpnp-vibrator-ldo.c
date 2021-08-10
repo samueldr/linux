@@ -335,7 +335,7 @@ static ssize_t qpnp_vib_store_activate(struct device *dev,
 	mutex_lock(&chip->lock);
 	hrtimer_cancel(&chip->stop_timer);
 	chip->state = val;
-	pr_debug("state = %d, time = %llums\n", chip->state, chip->vib_play_ms);
+	pr_info("state = %d, time = %llums\n", chip->state, chip->vib_play_ms);
 	mutex_unlock(&chip->lock);
 	schedule_work(&chip->vib_work);
 
