@@ -167,6 +167,12 @@
 			size = <0 0x1400000>;
 			linux,cma-default;
 		};
+
+		tz_mem: tz_region@0 {
+			compatible = "removed-dma-pool";
+			no-map;
+			reg = <0x0 0x92000000 0x0 0x1900000>;
+		};
 	};
 
 	aliases {
@@ -433,9 +439,9 @@
 		#thermal-sensor-cells = <1>;
 	};
 
-	qcom_seecom: qseecom@85b00000 {
+	qcom_seecom: qseecom@92000000 {
 		compatible = "qcom,qseecom";
-		reg = <0x85b00000 0x800000>;
+		reg = <0x92000000 0x1900000>;
 		reg-names = "secapp-region";
 		qcom,hlos-num-ce-hw-instances = <1>;
 		qcom,hlos-ce-hw-instance = <0>;
