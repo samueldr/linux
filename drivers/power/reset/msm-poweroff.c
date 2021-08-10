@@ -35,6 +35,11 @@
 #include <soc/qcom/watchdog.h>
 #include <soc/qcom/minidump.h>
 
+#include <vendor/soc/qcom/debug_policy.h>
+
+/* zte use ftmmode check function */
+#include <soc/qcom/socinfo.h>
+
 #define EMERGENCY_DLOAD_MAGIC1    0x322A4F99
 #define EMERGENCY_DLOAD_MAGIC2    0xC67E4350
 #define EMERGENCY_DLOAD_MAGIC3    0x77777777
@@ -68,13 +73,16 @@ static int download_mode = 1;
 #else
 static const int download_mode;
 #endif
-
+#ifdef CONFIG_ENABLE_POWER_REASON_NODE
+void *zte_restart_reason;
+#endif
 #ifdef CONFIG_QCOM_DLOAD_MODE
 #define EDL_MODE_PROP "qcom,msm-imem-emergency_download_mode"
 #define DL_MODE_PROP "qcom,msm-imem-download_mode"
 #ifdef CONFIG_RANDOMIZE_BASE
 #define KASLR_OFFSET_PROP "qcom,msm-imem-kaslr_offset"
 #endif
+#define SDDUMP_MODE_PROP "qcom,msm-vendor-imem-sd_dump_mode"
 
 static int in_panic;
 static int dload_type = SCM_DLOAD_FULLDUMP;
@@ -87,6 +95,9 @@ static void *kaslr_imem_addr;
 static bool scm_dload_supported;
 static struct kobject dload_kobj;
 static void *dload_type_addr;
+
+static void *sd_dump_mode_addr;
+static int ignore_sd_dump = 0;
 
 static int dload_set(const char *val, const struct kernel_param *kp);
 /* interface for exporting attributes */
@@ -105,6 +116,38 @@ struct reset_attribute {
 
 module_param_call(download_mode, dload_set, param_get_int,
 			&download_mode, 0644);
+
+static int dload_ignore_sd_dump_set(const char *val, const struct kernel_param *kp);
+module_param_call(ignore_sd_dump, dload_ignore_sd_dump_set, param_get_int,
+			&ignore_sd_dump, 0644);
+
+static int dload_ignore_sd_dump_set(const char *val, const struct kernel_param *kp)
+{
+	int ret;
+	int old_val = ignore_sd_dump;
+
+	pr_err("dload_ignore_sd_dump_set old ignore_sd_dump %d\n", ignore_sd_dump);
+
+	ret = param_set_int(val, kp);
+	pr_err("dload_ignore_sd_dump_set new ignore_sd_dump %d\n", ignore_sd_dump);
+
+	if (ret)
+		return ret;
+
+	/* If ignor_sd_dump is not zero or one, ignore. */
+	if (ignore_sd_dump >> 1) {
+		ignore_sd_dump = old_val;
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+void msm_ignore_sd_dump(int enable)
+{
+	ignore_sd_dump = !!enable;
+}
+EXPORT_SYMBOL(msm_ignore_sd_dump);
 
 static int panic_prep_restart(struct notifier_block *this,
 			      unsigned long event, void *ptr)
@@ -149,6 +192,8 @@ static void set_dload_mode(int on)
 		__raw_writel(on ? 0xCE14091A : 0,
 		       dload_mode_addr + sizeof(unsigned int));
 		/* Make sure the download cookie is updated */
+		if (sd_dump_mode_addr)
+			__raw_writel((on && !ignore_sd_dump) ? 0x20121221 : 0, sd_dump_mode_addr);
 		mb();
 	}
 
@@ -282,7 +327,7 @@ static void halt_spmi_pmic_arbiter(void)
 static void msm_restart_prepare(const char *cmd)
 {
 	bool need_warm_reset = false;
-#ifdef CONFIG_QCOM_DLOAD_MODE
+#if defined(CONFIG_QCOM_DLOAD_MODE) && !defined(ZTE_FEATURE_TF_SECURITY_SYSTEM)
 	/* Write download mode flags if we're panic'ing
 	 * Write download mode flags if restart_mode says so
 	 * Kill download mode if master-kill switch is set
@@ -291,6 +336,12 @@ static void msm_restart_prepare(const char *cmd)
 	set_dload_mode(download_mode &&
 			(in_panic || restart_mode == RESTART_DLOAD));
 #endif
+/* Get restart reason start */
+#ifdef CONFIG_ENABLE_POWER_REASON_NODE
+	qpnp_pon_set_restart_reason(PON_RESTART_REASON_UNKNOWN);
+	__raw_writel(0x0, restart_reason);
+#endif
+/* Get restart reason end */
 
 	if (qpnp_pon_check_hard_reset_stored()) {
 		/* Set warm reset as true when device is in dload mode */
@@ -364,9 +415,33 @@ static void msm_restart_prepare(const char *cmd)
 			}
 		} else if (!strncmp(cmd, "edl", 3)) {
 			enable_emergency_dload_mode();
+		} else if (!strncmp(cmd, "ftmmode", 7)) {
+			qpnp_pon_set_restart_reason(
+				PON_RESTART_REASON_FTM);
+			__raw_writel(0x776655ee, restart_reason);
+		} else if (!strncmp(cmd, "disemmcwp", 9)) {
+			/*Add interface to enable/disable emmc write protct function */
+			qpnp_pon_set_restart_reason(
+				PON_RESTART_REASON_DISEMMCWP);
+			__raw_writel(0x776655aa, restart_reason);
+		} else if (!strncmp(cmd, "emmcwpenab", 10)) {
+			qpnp_pon_set_restart_reason(
+				PON_RESTART_REASON_EMMCWPENAB);
+			__raw_writel(0x776655bb, restart_reason);
+#ifdef CONFIG_ZTE_PIL_AUTH_ERROR_DETECTION
+		} else if (!strncmp(cmd, "unauth", 6)) {
+			qpnp_pon_set_restart_reason(
+				PON_RESTART_REASON_PIL_UNAUTH);
+			__raw_writel(0x776655cc, restart_reason);
+#endif
 		} else {
 			__raw_writel(0x77665501, restart_reason);
 		}
+	} else if (in_panic && socinfo_get_ftm_flag() == 1) {
+		/* zte copy from above cmd=ftmmode branch */
+		qpnp_pon_set_restart_reason(
+			PON_RESTART_REASON_FTM);
+		__raw_writel(0x776655ee, restart_reason);
 	}
 
 	flush_cache_all();
@@ -408,7 +483,7 @@ static void do_msm_restart(enum reboot_mode reboot_mode, const char *cmd)
 
 	msm_restart_prepare(cmd);
 
-#ifdef CONFIG_QCOM_DLOAD_MODE
+#if defined(CONFIG_QCOM_DLOAD_MODE) && !defined(ZTE_FEATURE_TF_SECURITY_SYSTEM)
 	/*
 	 * Trigger a watchdog bite here and if this fails,
 	 * device will take the usual restart path.
@@ -573,12 +648,21 @@ static struct attribute_group reset_attr_group = {
 };
 #endif
 
+#ifdef CONFIG_ENABLE_POWER_REASON_NODE
+int zte_power_panic;
+#endif
+
 static int msm_restart_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct resource *mem;
 	struct device_node *np;
 	int ret = 0;
+
+#ifdef CONFIG_ENABLE_POWER_REASON_NODE
+	int restart_panic_1, restart_panic_2;
+#endif
+	int zte_boot_reason;
 
 #ifdef CONFIG_QCOM_DLOAD_MODE
 	if (scm_is_call_available(SCM_SVC_BOOT, SCM_DLOAD_CMD) > 0)
@@ -603,6 +687,15 @@ static int msm_restart_probe(struct platform_device *pdev)
 			pr_err("unable to map imem EDLOAD mode offset\n");
 	}
 
+	/* Add by ruijiagui, map sddump flag address */
+	np = of_find_compatible_node(NULL, NULL, SDDUMP_MODE_PROP);
+	if (!np) {
+		pr_err("unable to find DT imem sd dump mode node\n");
+	} else {
+		sd_dump_mode_addr = of_iomap(np, 0);
+		if (!sd_dump_mode_addr)
+			pr_err("unable to map imem sddump mode offset\n");
+	}
 #ifdef CONFIG_RANDOMIZE_BASE
 #define KASLR_OFFSET_BIT_MASK	0x00000000FFFFFFFF
 	np = of_find_compatible_node(NULL, NULL, KASLR_OFFSET_PROP);
@@ -657,14 +750,35 @@ skip_sysfs_create:
 	if (!np) {
 		pr_err("unable to find DT imem restart reason node\n");
 	} else {
+		#ifdef CONFIG_ENABLE_POWER_REASON_NODE
+		zte_restart_reason = of_iomap(np, 0);
+		#endif
 		restart_reason = of_iomap(np, 0);
 		if (!restart_reason) {
 			pr_err("unable to map imem restart reason offset\n");
 			ret = -ENOMEM;
 			goto err_restart_reason;
+		} else {
+			/* #define FTM_MODE_FROM_FIREHOSE 0x776655ee */
+			zte_boot_reason = __raw_readl(restart_reason);
+			pr_notice("zte_boot reason %x\n",
+				zte_boot_reason);
+			/* then clean the reason instead of lk for ftm only */
+			if (zte_boot_reason == 0x776655ee) {
+				__raw_writel(0x0, restart_reason);
+				pr_notice("zte_boot reason cleared\n");
+			}
 		}
 	}
-
+/* Get restart reason start */
+#ifdef CONFIG_ENABLE_POWER_REASON_NODE
+	restart_panic_1 = qpnp_pon_read_restart_reason();
+	restart_panic_2 = __raw_readl(zte_restart_reason);
+	if (restart_panic_1 == PON_RESTART_REASON_PANIC || restart_panic_2 == 0x776655ff) {
+		zte_power_panic = PON_RESTART_REASON_PANIC;
+	}
+#endif
+/* Get restart reason end */
 	mem = platform_get_resource_byname(pdev, IORESOURCE_MEM, "pshold-base");
 	msm_ps_hold = devm_ioremap_resource(dev, mem);
 	if (IS_ERR(msm_ps_hold))
@@ -684,6 +798,15 @@ skip_sysfs_create:
 	if (scm_is_call_available(SCM_SVC_PWR, SCM_IO_DEASSERT_PS_HOLD) > 0)
 		scm_deassert_ps_hold_supported = true;
 
+
+#ifdef CONFIG_ANDROID_ZLOG
+#ifdef CONFIG_ANDROID_ZLOG_BUFFER
+	if (!is_kernel_log_driver_enabled())
+		download_mode = 0;
+#endif
+#endif
+
+
 	set_dload_mode(download_mode);
 	if (!download_mode)
 		scm_disable_sdi();
@@ -697,7 +820,14 @@ err_restart_reason:
 #ifdef CONFIG_QCOM_DLOAD_MODE
 	iounmap(emergency_dload_mode_addr);
 	iounmap(dload_mode_addr);
+	iounmap(sd_dump_mode_addr);
 #endif
+/* Set restart register start */
+#ifdef CONFIG_ENABLE_POWER_REASON_NODE
+	qpnp_pon_set_restart_reason(PON_RESTART_REASON_PANIC);
+	__raw_writel(0x776655ff, zte_restart_reason);
+#endif
+/* Set restart register end */
 	return ret;
 }
 
