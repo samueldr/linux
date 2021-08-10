@@ -1,0 +1,58 @@
+/*
+ * Copyright (c) 2018, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+/dts-v1/;
+
+#include "../qm215.dtsi"
+#include "../qm215-pm8916.dtsi"
+#include "../qm215-audio.dtsi"
+#include "qualcomm_base_diff.dtsi"
+#include "touchscreen_campbell.dtsi"
+#include "zte-qm215-camera-sensor-qrd.dtsi"
+#include "../battery_protect_policy_080500100321.dtsi"
+
+/ {
+	model = "Qualcomm Technologies, Inc. QM215";
+	compatible = "qcom,qm215";
+	qcom,pmic-name = "PM8916";
+};
+
+&i2c_2 {
+	status = "ok";
+};
+
+&i2c_6 {
+	status = "ok";
+};
+
+&pm8916_bms {
+	status = "ok";
+};
+
+&charge_arbitrate_service {
+	/* age, fcv, fcc, rech_soc_1st, rech_soc_2st rech_vol_1st, rech_vol_2st **/
+	cas,age-data = <100 4350000 1000000 98 94 0 0
+			95 4330000 900000 97 93 0 0
+			90 4310000 800000 96 92 0 0
+			85 4290000 800000 95 91 0 0
+			80 4270000 700000 94 90 0 0
+			75 4250000 700000 93 89 0 0>;
+};
+
+&batt_cap_learn {
+	bcl,battery-current-polarity =  <0>;
+};
+
+&usb_otg {
+	qcom,hsusb-otg-mode = <1>;
+};

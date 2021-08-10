@@ -1,0 +1,99 @@
+/*
+ * this file is ued to change qualcomm dtsi which can't be changed by overlay
+ * such as /delete-node/ /delete-property/ and alises
+ */
+#include "msm8917-vendor.dtsi"
+
+&soc {
+	matrix_keypad: matrix_keypad@0 {
+			compatible = "gpio-matrix-keypad";
+			debounce-delay-ms = <15>;
+			col-scan-delay-us = <2>;
+			gpio-activelow;
+			pinctrl-names = "default";
+			pinctrl-0 = <&matrix_keypad_gpio_active>;
+			row-gpios = <&tlmm 1 0x0
+					&tlmm 21 0x0
+					&tlmm 42 0x0
+					&tlmm 43 0x0
+					&tlmm 48 0x0
+					&tlmm 50 0x0>;
+			col-gpios = <&tlmm 25  0x0
+					&tlmm 39 0x0
+					&tlmm 40 0x0
+					&tlmm 62 0x0>;
+			linux,keymap = <0x00000067 0x00010038 0x0002001C
+					0x0100020B 0x0101000A 0x01020007 0x01030004
+					0x0200000b 0x02010009 0x02020006 0x02030003
+					0x0300020A 0x03010008 0x03020005 0x03030002
+					0x0400000E 0x04010071 0x040200D4 0x040300A9
+					0x0500006C 0x05010069 0x05020064 0x0503006A>;
+		};
+};
+
+&tlmm {
+		matrix_keypad_gpio_active {
+			matrix_keypad_gpio_active: matrix_keypad_gpio_active {
+				mux {
+					pins = "gpio1", "gpio21", "gpio42", "gpio43", "gpio48", "gpio50",
+					"gpio25", "gpio39", "gpio40", "gpio62";
+					function = "gpio";
+				};
+
+				config {
+					pins = "gpio1", "gpio21", "gpio42", "gpio43", "gpio48", "gpio50",
+					"gpio25", "gpio39", "gpio40", "gpio62";
+					drive-strength = <2>;
+					bias-pull-up;
+				};
+			};
+		};
+};
+
+&soc {
+	leds {
+		compatible = "gpio-leds";
+		pinctrl-names = "default";
+		pinctrl-0 = <&button_backlight_gpio_active>;
+		button-backlight {
+			label = "button-backlight";
+			gpios = <&tlmm 45 0>;
+			linux,default-trigger = "none";
+		};
+	};
+/*for hall sensor*/
+	ah188a:hall_sensor{
+		compatible = "ah,hall_ic";
+		vddio-supply = <&pm8916_l6>;
+		linux,min-uv = <1800000>;
+		linux,max-uv = <1800000>;
+		ah,gpio_irq = <&tlmm 41 0x00>;
+		linux,name = "hall_sensor";
+	};
+};
+
+&tlmm {
+		button_backlight_gpio_active {
+			button_backlight_gpio_active: button_backlight_gpio_active {
+				mux {
+					pins = "gpio45";
+					function = "gpio";
+				};
+
+				config {
+					pins = "gpio45";
+					output-low;
+					drive-strength = <2>;
+					bias-disable;
+				};
+			};
+		};
+};
+
+&sdc2_cd_on {
+	config {
+		/delete-property/ bias-pull-up;
+		bias-disable;
+	};
+};
+

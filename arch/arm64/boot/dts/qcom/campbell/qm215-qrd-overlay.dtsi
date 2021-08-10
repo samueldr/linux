@@ -1,0 +1,226 @@
+
+&mdss_dsi_active {
+	mux {
+		pins = "gpio93", "gpio94";
+		function = "gpio";
+	};
+
+	config {
+		pins = "gpio93", "gpio94";
+		drive-strength = <8>; /* 8 mA */
+		bias-disable = <0>; /* no pull */
+		output-high;
+	};
+};
+
+&mdss_dsi_suspend {
+	mux {
+		pins = "gpio93", "gpio94";
+		function = "gpio";
+	};
+
+	config {
+		pins = "gpio93", "gpio94";
+		drive-strength = <2>; /* 2 mA */
+		bias-pull-down; /* pull down */
+	};
+
+};
+
+&pm8916_vib {
+	min-duration-ms = <70>;
+};
+
+&qrd_batterydata {
+	#include "zte-batterydata-1600mAh-byd.dtsi"
+	#include "zte-batterydata-1600mAh-jiade.dtsi"
+};
+
+&pm8916_bms {
+	status = "ok";
+	qcom,battery-data = <&qrd_batterydata>;
+	qcom,v-cutoff-uv = <3400000>;
+	qcom,max-voltage-uv = <4350000>;
+	qcom,r-conn-mohm = <0>;
+	qcom,shutdown-soc-valid-limit = <100>;
+	qcom,low-soc-calculate-soc-threshold = <15>;
+	qcom,low-voltage-calculate-soc-ms = <1000>;
+	qcom,low-soc-calculate-soc-ms = <5000>;
+	qcom,calculate-soc-ms = <20000>;
+	qcom,volatge-soc-timeout-ms = <60000>;
+	qcom,low-voltage-threshold = <3450000>;
+	qcom,s3-ocv-tolerence-uv = <1200>;
+	qcom,s2-fifo-length = <5>;
+	qcom,low-soc-fifo-length = <2>;
+	qcom,bms-vadc = <&pm8916_vadc>;
+	qcom,bms-adc_tm = <&pm8916_adc_tm>;
+	qcom,pmic-revid = <&pm8916_revid>;
+
+	qcom,force-s3-on-suspend;
+	qcom,force-s2-in-charging;
+	qcom,report-charger-eoc;
+	qcom,resume-soc = <97>;
+	qcom,use-reported-soc;
+};
+
+&pm8916_chg {
+	status = "ok";
+	qcom,vddmax-mv = <4350>;
+	qcom,vddsafe-mv = <4380>;
+	qcom,vinmin-mv = <4308>;
+	qcom,ibatsafe-ma = <1000>;/*for p890a12/13 as ibat_max*/
+	qcom,thermal-mitigation = <1000 700 400 0>;
+	qcom,cold-bat-decidegc = <10>;
+	qcom,cool-bat-decidegc = <100>;
+	qcom,warm-bat-decidegc = <450>;
+	qcom,hot-bat-decidegc   = <580>;
+	qcom,cool-bat-mv = <4350>;
+	qcom,warm-bat-mv = <4100>;
+	qcom,ibatmax-warm-ma = <500>;
+	qcom,ibatmax-cool-ma = <450>;
+	qcom,batt-hot-percentage = <25>;  /*0-60 DegC */
+	qcom,batt-cold-percentage = <80>; /*0-60 DegC */
+	qcom,tchg-mins = <232>;
+	qcom,chg-vadc = <&pm8916_vadc>;
+	qcom,chg-adc_tm = <&pm8916_adc_tm>;
+	qcom,bpd-detection = "bpd_thm";
+};
+
+&dsi_panel_pwr_supply {
+	qcom,panel-supply-entry@0 {
+		reg = <0>;
+		qcom,supply-name = "vdd";
+		qcom,supply-min-voltage = <3000000>;
+		qcom,supply-max-voltage = <3000000>;
+		qcom,supply-enable-load = <100000>;
+		qcom,supply-disable-load = <100>;
+	};
+	qcom,panel-supply-entry@1 {
+		reg = <1>;
+		qcom,supply-name = "vddio";
+		qcom,supply-min-voltage = <1800000>;
+		qcom,supply-max-voltage = <3000000>;
+		qcom,supply-enable-load = <100000>;
+		qcom,supply-disable-load = <100>;
+	};
+
+
+};
+
+
+
+#include "dsi-panel-zte-lead-hx83112a-jdi-720p-video.dtsi"
+#include "dsi-panel-zte-lcetron-hx83104a-inn-720p-video.dtsi"
+
+&mdss_dsi0 {
+	qcom,regulator-ldo-mode;
+	qcom,dsi-pref-prim-pan = <&dsi_lcetron_hx83104a_inn_720p_video>;
+	pinctrl-names = "mdss_default", "mdss_sleep";
+	pinctrl-0 = <&mdss_dsi_active &mdss_te_active>;
+	pinctrl-1 = <&mdss_dsi_suspend &mdss_te_suspend>;
+
+	qcom,platform-te-gpio = <&tlmm 98 0>;
+	qcom,platform-reset-gpio = <&tlmm 98 0>;
+	vdd-supply = <&pm8916_l17>;
+	vddio-supply = <&pm8916_l6>;
+
+	qcom,panel-supply-entries {
+		qcom,panel-supply-entry@0 {
+			reg = <0>;
+			qcom,supply-name = "vdd";
+			qcom,supply-min-voltage = <3000000>;
+			qcom,supply-max-voltage = <3000000>;
+			qcom,supply-enable-load = <100000>;
+			qcom,supply-disable-load = <100>;
+		};
+		qcom,panel-supply-entry@1 {
+			reg = <1>;
+			qcom,supply-name = "vddio";
+			qcom,supply-min-voltage = <1800000>;
+			qcom,supply-max-voltage = <3000000>;
+			qcom,supply-enable-load = <100000>;
+			qcom,supply-disable-load = <100>;
+		};
+	};
+
+
+};
+
+
+&cont_splash_mem {
+	reg = <0x0 0x90000000 0x0 0x400000>;
+};
+&spi_5 {
+	status = "ok";
+};
+&spi_7 {
+	status = "ok";
+};
+&spi_clent {
+	status = "ok";
+};
+&second_panel_spi {
+	status = "ok";
+};
+
+&soc {
+	fpc1020 {
+		status = "disabled";
+	};
+};
+
+&cci {
+	qcom,eeprom@0 {
+		status = "disabled";
+	};
+	qcom,eeprom@2 {
+		status = "disabled";
+	};
+	qcom,camera@0 {
+		status = "disabled";
+	};
+	qcom,camera@2 {
+		status = "disabled";
+	};
+};
+
+&i2c_5 {
+	reg = <0x7af8000 0x000>;
+	status = "disabled";
+};
+
+&i2c_6 {
+	aw87359@58 {
+		compatible = "awinic,aw87359_pa_l";
+		reg = <0x58>;
+		status = "ok";
+	};
+};
+
+&int_codec {
+	qcom,msm-hs-micbias-type = "internal";
+	qcom,audio-routing =
+					"RX_BIAS", "MCLK",
+					"SPK_RX_BIAS", "MCLK",
+					"INT_LDO_H", "MCLK",
+					"RX_I2S_CLK", "MCLK",
+					"TX_I2S_CLK", "MCLK",
+					"MIC BIAS External", "Handset Mic",
+					"MIC BIAS Internal2", "Headset Mic",
+					"MIC BIAS External", "Secondary Mic",
+					"AMIC1", "MIC BIAS External",
+					"AMIC2", "MIC BIAS Internal2",
+					"AMIC3", "MIC BIAS External",
+					"ADC1_IN", "ADC1_OUT",
+					"ADC2_IN", "ADC2_OUT",
+					"ADC3_IN", "ADC3_OUT",
+					"PDM_IN_RX1", "PDM_OUT_RX1",
+					"PDM_IN_RX2", "PDM_OUT_RX2",
+					"PDM_IN_RX3", "PDM_OUT_RX3";
+};
+
+&sdhc_2 {
+	cd-gpios = <&tlmm 67 0x1>;
+};
+
+

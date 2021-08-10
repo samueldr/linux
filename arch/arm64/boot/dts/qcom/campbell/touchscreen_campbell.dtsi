@@ -1,0 +1,53 @@
+
+
+/*for touchscreen config*/
+&tlmm {
+	gpio-controller;
+	#gpio-cells = <2>;
+
+	pmx_ts_int_init {
+		ts_int_init: ts_int_init {
+			mux {
+				pins = "gpio65";
+				function = "gpio";
+				};
+			config {
+				pins = "gpio65";
+				drive-strength = <2>;
+				bias-disable;
+			};
+		};
+	};
+
+	pmx_ts_reset_init {
+		ts_reset_init: ts_reset_init {
+			mux {
+				pins = "gpio64";
+				function = "gpio";
+			};
+				config {
+				pins = "gpio64";
+				drive-strength = <2>;
+				bias-disable;
+			};
+		};
+	};
+};
+
+&i2c_3 {  /* BLSP1 QUP3 */
+	status = "okay";
+
+	himax-ts@48 {
+		compatible = "himax,hxcommon";
+		reg = <0x48>;
+		interrupt-parent = <&tlmm>;
+		interrupts = <65 0x2>;
+		pinctrl-names = "pmx_ts_init";
+		pinctrl-0 = <&ts_int_init &ts_reset_init>;
+		himax,panel-coords = <0 719 0 1439>;
+		himax,display-coords = <0 719 0 1439>;
+		himax,irq-gpio = <&tlmm 65 0x00>;
+		himax,rst-gpio = <&tlmm 64 0x00>;
+		report_type = <1>;
+	};
+};
