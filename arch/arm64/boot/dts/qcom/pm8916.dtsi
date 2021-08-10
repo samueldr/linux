@@ -78,6 +78,14 @@
 				     <0 0xa3 0 IRQ_TYPE_NONE>;
 			interrupt-names = "pm8916_mpp1", "pm8916_mpp2",
 					  "pm8916_mpp3", "pm8916_mpp4";
+			skin_therm {
+					skin_therm_default: skin_therm_default {
+					pins = "mpp2";
+					function = "analog";
+					input-enable;
+					qcom,amux-route = <1>;
+					};
+				};
 		};
 
 		pm8916_coincell: qcom,coincell@2800 {
@@ -113,6 +121,8 @@
 			qcom,vadc-poll-eoc;
 			qcom,pmic-revid = <&pm8916_revid>;
 			#thermal-sensor-cells = <1>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&skin_therm_default>;
 
 			chan@8 {
 				label = "die_temp";
