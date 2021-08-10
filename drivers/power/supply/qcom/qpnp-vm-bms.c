@@ -37,6 +37,12 @@
 #include <linux/batterydata-interface.h>
 #include <linux/qpnp/qpnp-revid.h>
 #include <uapi/linux/vm_bms.h>
+#include <soc/qcom/socinfo.h>
+
+#ifdef pr_debug
+#undef pr_debug
+#define pr_debug pr_info
+#endif
 
 #define _BMS_MASK(BITS, POS) \
 	((unsigned char)(((1 << (BITS)) - 1) << (POS)))
@@ -125,6 +131,8 @@
 
 #define DEBUG_BATT_ID_LOW	6500
 #define DEBUG_BATT_ID_HIGH	8500
+
+#define ZTE_CHG_BATTERY_CAPCITY_CORRECT
 /* indicates the state of BMS */
 enum {
 	IDLE_STATE,
@@ -220,6 +228,7 @@ struct qpnp_bms_chip {
 	int				charge_start_tm_sec;
 	int				catch_up_time_sec;
 	int				delta_time_s;
+	int				update_delta_time_s;
 	int				uuc_delta_time_s;
 	int				ocv_at_100;
 	int				last_ocv_uv;
@@ -229,6 +238,7 @@ struct qpnp_bms_chip {
 	unsigned int			vadc_v0625;
 	unsigned int			vadc_v1250;
 	unsigned long			tm_sec;
+	unsigned long			update_tm_sec;
 	unsigned long			workaround_flag;
 	unsigned long			uuc_tm_sec;
 	u32				seq_num;
@@ -286,6 +296,9 @@ struct qpnp_bms_chip {
 	int				reported_soc_change_sec;
 	int				reported_soc_delta;
 	int				batt_id_ohm;
+#ifdef ZTE_CHG_BATTERY_CAPCITY_CORRECT
+	struct wakeup_source *charger_wake_lock;
+#endif
 };
 
 static struct qpnp_bms_chip *the_chip;
@@ -481,6 +494,31 @@ static int calculate_delta_time(unsigned long *time_stamp, int *delta_time_s)
 	*time_stamp = now_tm_sec;
 	return 0;
 }
+
+static bool zte_calculate_delta_time_is_discard(struct qpnp_bms_chip *chip, int *delta_time_s)
+{
+	unsigned long now_tm_sec = 0;
+
+	/* default to delta time = 0 if anything fails */
+	*delta_time_s = 0;
+
+	if (get_current_time(&now_tm_sec)) {
+		pr_err("RTC read failed\n");
+		return false;
+	}
+
+	*delta_time_s = (now_tm_sec - chip->update_tm_sec);
+
+	if (chip->calculated_soc < chip->dt.cfg_low_soc_calc_threshold) {
+		if (*delta_time_s < 5)
+			return true;
+	} else {
+		if (*delta_time_s < 10)
+			return true;
+	}
+	return false;
+}
+
 
 static bool is_debug_batt_id(struct qpnp_bms_chip *chip)
 {
@@ -1478,6 +1516,36 @@ static int report_eoc(struct qpnp_bms_chip *chip)
 	return rc;
 }
 
+static void voltage_base_soc_check_recharge_condition(struct qpnp_bms_chip *chip)
+{
+	int rc;
+	union power_supply_propval ret = {0,};
+	int status = get_battery_status(chip);
+
+	if (chip->prev_voltage_based_soc > chip->dt.cfg_soc_resume_limit)
+		return;
+
+	if (status == POWER_SUPPLY_STATUS_UNKNOWN) {
+		pr_debug("Unable to read battery status\n");
+		return;
+	}
+
+	/* Report recharge to charger for SOC based resume of charging */
+	if ((status != POWER_SUPPLY_STATUS_CHARGING) && chip->eoc_reported) {
+		ret.intval = POWER_SUPPLY_STATUS_CHARGING;
+		rc = power_supply_set_property(chip->batt_psy,
+				POWER_SUPPLY_PROP_STATUS, &ret);
+		if (rc < 0) {
+			pr_err("Unable to set battery property rc=%d\n", rc);
+		} else {
+			pr_info("soc dropped below resume_soc soc=%d resume_soc=%d, restart charging\n",
+					chip->last_soc,
+					chip->dt.cfg_soc_resume_limit);
+			chip->eoc_reported = false;
+		}
+	}
+}
+
 static void check_recharge_condition(struct qpnp_bms_chip *chip)
 {
 	int rc;
@@ -1512,6 +1580,8 @@ static void check_eoc_condition(struct qpnp_bms_chip *chip)
 {
 	int rc;
 	int status = get_battery_status(chip);
+	int ocv_now = estimate_ocv(chip);
+	static int full_count = 0;
 	union power_supply_propval ret = {0,};
 
 	if (status == POWER_SUPPLY_STATUS_UNKNOWN) {
@@ -1534,30 +1604,35 @@ static void check_eoc_condition(struct qpnp_bms_chip *chip)
 	 * if the SOC drops, reset ocv_at_100.
 	 */
 	if (chip->ocv_at_100 == -EINVAL) {
-		if (chip->last_soc == 100) {
-			if (chip->dt.cfg_report_charger_eoc) {
-				rc = report_eoc(chip);
-				if (!rc) {
-					/*
-					 * update ocv_at_100 only if EOC is
-					 * reported successfully.
-					 */
-					chip->ocv_at_100 = chip->last_ocv_uv;
-					pr_debug("Battery FULL\n");
-				} else {
-					pr_err("Unable to report eoc rc=%d\n",
-							rc);
-					chip->ocv_at_100 = -EINVAL;
+		if ((chip->last_soc == 100) && (ocv_now >= (chip->dt.cfg_max_voltage_uv - 20000))) {
+			full_count = full_count + 1;
+			if (full_count >= 5) {
+				if (chip->dt.cfg_report_charger_eoc) {
+					rc = report_eoc(chip);
+					if (!rc) {
+						/*
+						 * update ocv_at_100 only if EOC is
+						 * reported successfully.
+						 */
+						chip->ocv_at_100 = chip->last_ocv_uv;
+						pr_debug("Battery FULL\n");
+					} else {
+						pr_err("Unable to report eoc rc=%d\n",
+								rc);
+						chip->ocv_at_100 = -EINVAL;
+					}
+				}
+				if (chip->dt.cfg_use_reported_soc) {
+					/* begin reported_soc process */
+					chip->reported_soc_in_use = true;
+					chip->charger_removed_since_full = false;
+					chip->charger_reinserted = false;
+					chip->reported_soc = 100;
+					pr_debug("Begin reported_soc process\n");
 				}
 			}
-			if (chip->dt.cfg_use_reported_soc) {
-				/* begin reported_soc process */
-				chip->reported_soc_in_use = true;
-				chip->charger_removed_since_full = false;
-				chip->charger_reinserted = false;
-				chip->reported_soc = 100;
-				pr_debug("Begin reported_soc process\n");
-			}
+		} else {
+			full_count = 0;
 		}
 	} else {
 		if (chip->last_ocv_uv >= chip->ocv_at_100) {
@@ -1773,9 +1848,257 @@ static int report_vm_bms_soc(struct qpnp_bms_chip *chip)
 	return chip->last_soc;
 }
 
+#ifdef ZTE_CHG_BATTERY_CAPCITY_CORRECT
+static DEFINE_MUTEX(filter_mutex);
+/*Description:  Sometimes the charging current is less than the terminal current,but capacity is less than 100%,
+ * so correct the capacity according with charging status, increase 1% every 1 min,
+ * and decrease to the level, which is calculate by BMS, in 10 minutes.
+ * Report 0% if the battery voltage is less than 3V.
+ */
+struct zte_chg_capacity_filter_data_type {
+	struct timespec pre_change_ts;
+	int last_soc;
+	int soc;
+	int batt_voltage;
+};
+struct zte_chg_capacity_filter_data_type zte_chg_capacity_filter_data = {
+	.batt_voltage = 4000,
+};
+static struct zte_chg_capacity_filter_data_type *ztefilterP = NULL;
+/* Description: with some batttery, the capacity is 98 or 99 after charging for 4 hours,
+*so correct the capacity if the battery is nearly fully charged.
+*/
+static int zte_correct_soc_for_nearly_fully_charged_battery(struct qpnp_bms_chip *chip, int soc, struct timespec *ts)
+{
+	static int last_returned_soc = 0;
+	static int last_soc = 0;
+	static struct timespec last_change_time = {0, 0};
+	/*	don't correct battery level if soc < 95
+	  *	don't correct battery level without charger
+	  *	don't correct battery level if soc inscreases automatic
+	*/
+	if (soc < 95 || last_returned_soc < soc || !is_battery_charging(chip)) {
+		last_change_time.tv_sec = ts->tv_sec;
+		last_returned_soc = soc;
+	} else if (last_soc > soc) { /*decrease battery level if bms decreased soc*/
+		if (last_returned_soc > soc && soc < 97)
+			last_returned_soc--;
+		last_change_time.tv_sec = ts->tv_sec;
+	} else if (ts->tv_sec - last_change_time.tv_sec > 600) { /*add battery level every 500s with charger*/
+			if (last_returned_soc < 100)
+				last_returned_soc++;
+			last_change_time.tv_sec = ts->tv_sec;
+	}
+	last_soc = soc;
+	pr_info("soc=%d, last_returned_soc=%d\n", soc, last_returned_soc);
+	return last_returned_soc;
+}
+/*Description:  1)Sometimes the charging current is less than the terminal current, but capacity is less than 100%,
+ * so correct the capacity according with charging status, increase 1% every 1 min,
+ * and decrease to the level, which is calculate by BMS, in 10 minutes.
+ * 2) Report 0% if the battery voltage is less than 3V.
+ * 3) with some batttery, the capacity is 98 or 99 after charging for 4 hours,
+ *so correct the capacity if the battery is nearly fully charged.
+ */
+static int zte_chg_capacity_filter(struct qpnp_bms_chip *chip, int percent_soc)
+{
+	int battery_status;
+	int soc;
+	struct timespec ts = {0, 0};
+	int allow_jump_len = 1;
+	int battery_voltage_mv;
+	static unsigned long last_tick = 0;
+	unsigned long tick_period;
+
+	soc = percent_soc > 100 ? 100 : percent_soc;
+
+	if (ztefilterP == NULL)
+		return soc;
+
+	if (chip == NULL) {
+		ztefilterP->soc = soc;
+		return soc;
+	}
+	get_battery_voltage(chip, &battery_voltage_mv);
+	battery_voltage_mv /= 1000;
+	/*correct soc while charging full.*/
+	get_monotonic_boottime(&ts);
+
+	/*Report 0% if the battery voltage is less than 3.2V for 8 seconds*/
+	/*spin_lock(&ztefilterP->lock);*/
+	tick_period = jiffies - last_tick;
+
+	pr_err("battery_voltage_mv=%d\n", battery_voltage_mv);
+
+	if ((soc == 0 && battery_voltage_mv > 3400))
+		soc = 1;
+
+	/*correct soc while charging full.*/
+	battery_status = get_battery_status(chip);
+	if (battery_status == POWER_SUPPLY_STATUS_FULL) {
+		/* for different battery, use max votage uv - 50000 uv */
+		if (battery_voltage_mv > (chip->dt.cfg_max_voltage_uv - 50000) / 1000) {
+			soc = 100;
+			ztefilterP->soc = soc;
+		}
+	}
+
+	 if (ztefilterP->pre_change_ts.tv_sec == 0) {
+		ztefilterP->soc = soc;
+		ztefilterP->pre_change_ts.tv_sec = ts.tv_sec;
+	 }
+	 soc = zte_correct_soc_for_nearly_fully_charged_battery(chip, soc, &ts);
+	if (ztefilterP->soc != soc) {
+		pr_info("(ts.ts_sec - pre_change_ts.ts_sec)=%ld\n", (ts.tv_sec - ztefilterP->pre_change_ts.tv_sec));
+		if ((ts.tv_sec - ztefilterP->pre_change_ts.tv_sec) > (soc > 60?60:(soc < 20?20:soc))) {
+			/*allow change 1 level every 5mins without charger, 1min with charger plugged in*/
+			if (is_battery_charging(chip))
+				allow_jump_len = (ts.tv_sec - ztefilterP->pre_change_ts.tv_sec)/60 + 1;
+			else
+				allow_jump_len = (ts.tv_sec - ztefilterP->pre_change_ts.tv_sec)/300 + 1;
+
+			if (allow_jump_len <= 0)
+				allow_jump_len = 1;
+
+			if ((soc > ztefilterP->soc) && is_battery_charging(chip)) {
+				if ((ztefilterP->soc + allow_jump_len) < soc)
+					ztefilterP->soc = ztefilterP->soc + allow_jump_len;
+				else
+					ztefilterP->soc = soc;
+				ztefilterP->pre_change_ts.tv_sec = ts.tv_sec;
+			} else if (soc < ztefilterP->soc) {
+				if ((ztefilterP->soc - allow_jump_len) > soc)
+					ztefilterP->soc = ztefilterP->soc - allow_jump_len;
+				else
+					ztefilterP->soc = soc;
+				ztefilterP->pre_change_ts.tv_sec = ts.tv_sec;
+			}
+		}
+	}
+	if ((ztefilterP->soc == 100) && (ztefilterP->last_soc != ztefilterP->soc))
+			__pm_wakeup_event(chip->charger_wake_lock, 3 * HZ);
+	ztefilterP->last_soc = ztefilterP->soc;
+	return ztefilterP->soc;
+}
+
+/* From the capacity enlarge, the capaciy have two jumps point, one is 33%, the trans_soc is 34%,
+there is no 33%, the function is process the battery jumps. another is 64%, the trans_soc is 65%,
+there is no 66% */
+#define THE_RAW_CAPACITY_33 33
+#define THE_RAW_CAPACITY_65 65
+#define THE_RAW_CAPACITY_FULL 100
+#define THE_ENLARGE_TO_FULL_DIV 97
+#define  THE_CAPACITY_DISPLAY_TIME_SEC 40
+static int zte_chg_capacity_trans(struct qpnp_bms_chip *chip, int raw_soc)
+{
+	static struct timespec ts = {0, 0};
+	static struct timespec ts_temp = {0, 0};
+	int soc_trans;
+	static int last_soc_trans = 0;
+
+	soc_trans = raw_soc * THE_RAW_CAPACITY_FULL/THE_ENLARGE_TO_FULL_DIV;
+	pr_info("raw_soc = %d, soc_trans = %d\n", raw_soc, soc_trans);
+
+	if (raw_soc <= 32 || (raw_soc > THE_RAW_CAPACITY_33 && raw_soc <= 64)
+		|| (raw_soc > THE_RAW_CAPACITY_65 && raw_soc <= THE_RAW_CAPACITY_FULL)) {
+		ts_temp.tv_sec = 0;
+		ts.tv_sec = 0;
+	} else {
+		if (is_battery_charging(chip)) {
+			if (raw_soc == THE_RAW_CAPACITY_33  && ts.tv_sec == 0) {
+				get_monotonic_boottime(&ts);
+				soc_trans = raw_soc;
+				pr_info("charging soc_trans = %d first***\n", soc_trans);
+			} else if (raw_soc == THE_RAW_CAPACITY_33 && ts.tv_sec > 0) {
+				get_monotonic_boottime(&ts_temp);
+				if (ts_temp.tv_sec - ts.tv_sec >= THE_CAPACITY_DISPLAY_TIME_SEC) {
+					soc_trans = raw_soc + 1;
+					pr_info("charging soc_trans  = %d end\n", soc_trans);
+				} else {
+					soc_trans = raw_soc;
+					pr_info("charging soc_trans  = %d continue\n", soc_trans);
+				}
+			} else if (raw_soc == THE_RAW_CAPACITY_65  && ts.tv_sec == 0) {
+				get_monotonic_boottime(&ts);
+				soc_trans = raw_soc + 1;
+				pr_info("charging soc_trans = %d first***\n", soc_trans);
+			} else if (raw_soc == THE_RAW_CAPACITY_65 && ts.tv_sec > 0) {
+				get_monotonic_boottime(&ts_temp);
+				if (ts_temp.tv_sec - ts.tv_sec >= THE_CAPACITY_DISPLAY_TIME_SEC) {
+					soc_trans = raw_soc + 2;
+					pr_info("charging soc_trans  = %d end\n", soc_trans);
+				} else {
+					soc_trans = raw_soc + 1;
+					pr_info("charging soc_trans  = %d continue\n", soc_trans);
+				}
+			} else {
+				ts_temp.tv_sec = 0;
+				ts.tv_sec = 0;
+			}
+			/* for example the discharging capacity is 34%, but chrging trans is 33%,
+			because the battery status is charging ,thus to report 34%,not report to 33% */
+			if (last_soc_trans > 0 && last_soc_trans > soc_trans) {
+				soc_trans = last_soc_trans;
+				pr_info("discharging to charging the capacity not decreasing soc_trans = %d\n",
+					soc_trans);
+			}
+		} else {
+			if (raw_soc == THE_RAW_CAPACITY_33 && ts.tv_sec == 0) {
+				get_monotonic_boottime(&ts);
+				soc_trans = raw_soc + 1;
+				pr_info("discharging soc_trans = %d first***\n", soc_trans);
+			} else if (raw_soc == THE_RAW_CAPACITY_33 && ts.tv_sec > 0) {
+				get_monotonic_boottime(&ts_temp);
+				if (ts_temp.tv_sec - ts.tv_sec >= THE_CAPACITY_DISPLAY_TIME_SEC) {
+					soc_trans = raw_soc;
+					pr_info("discharging soc_trans = %d end\n", soc_trans);
+				} else {
+					soc_trans = raw_soc + 1;
+					pr_info("discharging soc_trans = %d continue\n", soc_trans);
+				}
+			} else if (raw_soc == THE_RAW_CAPACITY_65 && ts.tv_sec == 0) {
+				get_monotonic_boottime(&ts);
+				soc_trans = raw_soc + 2;
+				pr_info("discharging soc_trans = %d first***\n", soc_trans);
+			} else if (raw_soc == THE_RAW_CAPACITY_65 && ts.tv_sec > 0) {
+				get_monotonic_boottime(&ts_temp);
+				if (ts_temp.tv_sec - ts.tv_sec >= THE_CAPACITY_DISPLAY_TIME_SEC) {
+					soc_trans = raw_soc + 1;
+					pr_info("discharging soc_trans = %d end\n", soc_trans);
+				} else {
+					soc_trans = raw_soc + 2;
+					pr_info("discharging soc_trans = %d continue\n", soc_trans);
+				}
+			} else {
+				ts_temp.tv_sec = 0;
+				ts.tv_sec = 0;
+			}
+			/* for example the charging capacity is 33%, but dischrging trans is 34%,
+			because the battery status is charging, thus to report 33%,not report to 34% */
+			if (last_soc_trans > 0 && last_soc_trans < soc_trans) {
+				soc_trans = last_soc_trans;
+				pr_info("charging to discharging the capacity not increasing soc_trans = %d\n",
+					soc_trans);
+			}
+		}
+	}
+
+	if (soc_trans == THE_RAW_CAPACITY_FULL)
+		soc_trans = 99;
+	else if (soc_trans > THE_RAW_CAPACITY_FULL)
+		soc_trans = THE_RAW_CAPACITY_FULL;
+	last_soc_trans = soc_trans;
+	return soc_trans;
+}
+#endif
+
+
 static int report_state_of_charge(struct qpnp_bms_chip *chip)
 {
 	int soc;
+#ifdef ZTE_CHG_BATTERY_CAPCITY_CORRECT
+	int zte_soc = 0;
+#endif
 
 	mutex_lock(&chip->last_soc_mutex);
 
@@ -1784,9 +2107,17 @@ static int report_state_of_charge(struct qpnp_bms_chip *chip)
 	else
 		soc = report_vm_bms_soc(chip);
 
+#ifdef ZTE_CHG_BATTERY_CAPCITY_CORRECT
+	soc = zte_chg_capacity_trans(chip, soc);
+	zte_soc = zte_chg_capacity_filter(chip, soc);
+	pr_info("soc = %d, zte_soc = %d, chip->last_soc = %d\n", soc, zte_soc, chip->last_soc);
+#endif
 	mutex_unlock(&chip->last_soc_mutex);
-
+#ifdef ZTE_CHG_BATTERY_CAPCITY_CORRECT
+	return zte_soc;
+#else
 	return soc;
+#endif
 }
 
 static void btm_notify_vbat(enum qpnp_tm_state state, void *ctx)
@@ -2011,9 +2342,12 @@ static int calculate_soc_from_voltage(struct qpnp_bms_chip *chip)
 	pr_debug("vbat used = %duv\n", vbat_uv);
 	pr_debug("Calculated voltage based soc=%d\n", voltage_based_soc);
 
-	if (voltage_based_soc == 100)
+	if (voltage_based_soc == 100) {
 		if (chip->dt.cfg_report_charger_eoc)
 			report_eoc(chip);
+	} else if (chip->eoc_reported) {
+		voltage_base_soc_check_recharge_condition(chip);
+	}
 
 	return 0;
 }
@@ -2105,15 +2439,24 @@ static void monitor_soc_work(struct work_struct *work)
 				struct qpnp_bms_chip,
 				monitor_soc_work.work);
 	int rc, new_soc = 0, batt_temp;
+	int zte_delta_time_s;
+	bool is_discard = false;
 
 	/*skip if its a debug-board */
 	if (is_debug_batt_id(chip))
 		return;
 
+	is_discard = zte_calculate_delta_time_is_discard(chip, &zte_delta_time_s);
+	if (is_discard) {
+		pr_debug("zte_delta_time_s=%d is short return\n", zte_delta_time_s);
+		return;
+	}
+
 	bms_stay_awake(&chip->vbms_soc_wake_source);
 
 	calculate_delta_time(&chip->tm_sec, &chip->delta_time_s);
-	pr_debug("elapsed_time=%d\n", chip->delta_time_s);
+	calculate_delta_time(&chip->update_tm_sec, &chip->update_delta_time_s);
+	pr_debug("elapsed_time=%d update_delta_time_s=%d\n", chip->delta_time_s, chip->update_delta_time_s);
 
 	mutex_lock(&chip->last_soc_mutex);
 
@@ -2204,11 +2547,20 @@ static void voltage_soc_timeout_work(struct work_struct *work)
 	struct qpnp_bms_chip *chip = container_of(work,
 				struct qpnp_bms_chip,
 				voltage_soc_timeout_work.work);
+	static int timeout_counter = 30; /* 30 min timeout, some times the mount fs is very slow */
 
 	mutex_lock(&chip->bms_device_mutex);
 	if (!chip->bms_dev_open) {
-		pr_warn("BMS device not opened, using voltage based SOC\n");
-		chip->dt.cfg_use_voltage_soc = true;
+		pr_warn("BMS device not opened, using voltage based SOC timeout_counter=%d\n",
+			timeout_counter);
+		if (timeout_counter > 0) {
+			schedule_delayed_work(&chip->voltage_soc_timeout_work,
+				msecs_to_jiffies(chip->dt.cfg_voltage_soc_timeout_ms));
+			timeout_counter--;
+		} else {
+			pr_warn("BMS device always not opened, using voltage based SOC\n");
+			chip->dt.cfg_use_voltage_soc = true;
+		}
 	}
 	mutex_unlock(&chip->bms_device_mutex);
 }
@@ -2310,7 +2662,10 @@ static enum power_supply_property bms_power_props[] = {
 	POWER_SUPPLY_PROP_CYCLE_COUNT,
 	POWER_SUPPLY_PROP_CHARGE_COUNTER,
 	POWER_SUPPLY_PROP_CHARGE_FULL,
+	POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN,
 	POWER_SUPPLY_PROP_RESISTANCE_ID,
+	POWER_SUPPLY_PROP_RECHARGE_SOC,
+	POWER_SUPPLY_PROP_CAPACITY_RAW,
 };
 
 static int
@@ -2322,6 +2677,7 @@ qpnp_vm_bms_property_is_writeable(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_VOLTAGE_OCV:
 	case POWER_SUPPLY_PROP_HI_POWER:
 	case POWER_SUPPLY_PROP_LOW_POWER:
+	case POWER_SUPPLY_PROP_RECHARGE_SOC:
 		return 1;
 	default:
 		break;
@@ -2340,6 +2696,12 @@ static int qpnp_vm_bms_power_get_property(struct power_supply *psy,
 	val->intval = 0;
 
 	switch (psp) {
+	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
+		rc = get_battery_voltage(chip, &value);
+		if (rc < 0)
+			value = 0;
+		val->intval = value;
+		break;
 	case POWER_SUPPLY_PROP_CAPACITY:
 		val->intval = get_prop_bms_capacity(chip);
 		break;
@@ -2392,10 +2754,17 @@ static int qpnp_vm_bms_power_get_property(struct power_supply *psy,
 		val->intval = get_current_cc(chip);
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_FULL:
+	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
 		val->intval = get_charge_full(chip);
 		break;
 	case POWER_SUPPLY_PROP_RESISTANCE_ID:
 		val->intval = chip->batt_id_ohm;
+		break;
+	case POWER_SUPPLY_PROP_RECHARGE_SOC:
+		val->intval = chip->dt.cfg_soc_resume_limit;
+		break;
+	case POWER_SUPPLY_PROP_CAPACITY_RAW:
+		val->intval = chip->last_soc;
 		break;
 	default:
 		return -EINVAL;
@@ -2430,6 +2799,10 @@ static int qpnp_vm_bms_power_set_property(struct power_supply *psy,
 		rc = qpnp_vm_bms_config_power_state(chip, val->intval, false);
 		if (rc)
 			pr_err("Unable to set power-state rc=%d\n", rc);
+		break;
+	case POWER_SUPPLY_PROP_RECHARGE_SOC:
+		chip->dt.cfg_soc_resume_limit = val->intval - 1;
+		pr_info("cfg_soc_resume_limit=%d\n", chip->dt.cfg_soc_resume_limit);
 		break;
 	default:
 		return -EINVAL;
@@ -2534,7 +2907,7 @@ static void battery_status_check(struct qpnp_bms_chip *chip)
 	}
 }
 
-#define HIGH_CURRENT_TH 2
+#define HIGH_CURRENT_TH 0
 static void reported_soc_check_status(struct qpnp_bms_chip *chip)
 {
 	u8 present;
@@ -3805,6 +4178,12 @@ static int parse_bms_dt_properties(struct qpnp_bms_chip *chip)
 			chip->pdev->dev.of_node, "qcom,batt-aging-comp");
 	chip->dt.cfg_use_reported_soc = of_property_read_bool(
 			chip->pdev->dev.of_node, "qcom,use-reported-soc");
+
+	if (socinfo_get_charger_flag() && chip->dt.cfg_soc_resume_limit > 2) {
+		chip->dt.cfg_soc_resume_limit -= 2; /* for offcharger lower the resume soc */
+	}
+	pr_info("cfg_soc_resume_limit=%d\n", chip->dt.cfg_soc_resume_limit);
+
 	pr_debug("v_cutoff_uv=%d, max_v=%d\n", chip->dt.cfg_v_cutoff_uv,
 					chip->dt.cfg_max_voltage_uv);
 	pr_debug("r_conn=%d shutdown_soc_valid_limit=%d low_temp_threshold=%d ibat_avg_samples=%d\n",
@@ -4117,6 +4496,13 @@ static int qpnp_vm_bms_probe(struct platform_device *pdev)
 					get_prop_bms_capacity(chip), vbatt,
 					chip->last_ocv_uv, chip->warm_reset);
 
+#ifdef ZTE_CHG_BATTERY_CAPCITY_CORRECT
+	chip->charger_wake_lock = wakeup_source_register("zte_chg_event");
+	if (!chip->charger_wake_lock) {
+		pr_err("charger_wake_lock register failed\n");
+	}
+	ztefilterP = &zte_chg_capacity_filter_data;
+#endif
 	return rc;
 
 fail_get_vtg:

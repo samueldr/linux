@@ -22,6 +22,8 @@ struct profile_table_data {
 	int		**data;
 };
 
+int linear_interpolate(int y0, int x0, int y1, int x1, int x);
+
 int interpolate_single_row_lut(struct profile_table_data *lut,
 						int x, int scale);
 int interpolate_soc(struct profile_table_data *lut,
