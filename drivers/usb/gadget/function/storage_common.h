@@ -94,6 +94,17 @@ do {									\
  */
 #define INQUIRY_STRING_LEN ((size_t) (8 + 16 + 4 + 1))
 
+/* OEM for SCSI Command sent by OS X */
+#define SC_GET_CONFIGRATION      0x46
+#define SC_SET_CD_SPEED          0xbb
+
+/* SUA, for cdrom function switch */
+#define SC_USB_FUNCTION_SWITCH   0x86
+#define CDROM_FUNCTION_SWITCH_REQUEST  0xA5
+#define EXECUTE_CDROM_FUNCTION_SWITCH  0x01
+#define CANCEL_CDROM_FUNCTION_SWITCH  0x02
+/* end */
+
 struct fsg_lun {
 	struct file	*filp;
 	loff_t		file_length;
