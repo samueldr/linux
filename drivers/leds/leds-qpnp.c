@@ -9,6 +9,7 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  */
+#define pr_fmt(fmt) "[LED] %s(%d): " fmt, __func__, __LINE__
 
 #include <linux/kernel.h>
 #include <linux/regmap.h>
@@ -556,6 +557,7 @@ struct qpnp_led_data {
 	bool				default_on;
 	bool				in_order_command_processing;
 	int				turn_off_delay_ms;
+	bool				is_operator_sprint;
 };
 
 static DEFINE_MUTEX(flash_lock);
@@ -936,10 +938,25 @@ static int qpnp_mpp_set(struct qpnp_led_data *led)
 					duty_ns,
 					period_us * NSEC_PER_USEC);
 			}
+			} else {
+
+				if (led->is_operator_sprint) {
+					/* for SPRINT,blink 0.5s per 7.5s */
+					rc = pwm_config_us(led->mpp_cfg->pwm_cfg->pwm_dev, 0.5*1000000, 7.5*1000000);
+
+				} else {
+					/* for others,blink 0.5s per 3s */
+					rc = pwm_config_us(led->mpp_cfg->pwm_cfg->pwm_dev, 0.5*1000000, 3*1000000);
+				}
+			}
+
 			if (rc < 0) {
 				dev_err(&led->pdev->dev, "Failed to configure pwm for new values\n");
 				goto err_mpp_reg_write;
 			}
+			pr_info("LEDLOG: mpp set, %s, br=%d, blink=%d\n",
+				led->cdev.name, led->cdev.brightness, led->mpp_cfg->pwm_cfg->blinking);
+
 		}
 
 		if (led->mpp_cfg->pwm_mode != MANUAL_MODE) {
@@ -2922,49 +2939,23 @@ restore:
 static void led_blink(struct qpnp_led_data *led,
 			struct pwm_config_data *pwm_cfg)
 {
-	int rc;
 
 	flush_work(&led->work);
 	mutex_lock(&led->lock);
 	if (pwm_cfg->use_blink) {
-		if (led->cdev.brightness) {
+		if (led->cdev.brightness)
 			pwm_cfg->blinking = true;
-			if (led->id == QPNP_ID_LED_MPP)
-				led->mpp_cfg->pwm_mode = LPG_MODE;
-			else if (led->id == QPNP_ID_KPDBL)
-				led->kpdbl_cfg->pwm_mode = LPG_MODE;
-			pwm_cfg->mode = LPG_MODE;
-		} else {
+		else
 			pwm_cfg->blinking = false;
-			pwm_cfg->mode = pwm_cfg->default_mode;
-			if (led->id == QPNP_ID_LED_MPP)
-				led->mpp_cfg->pwm_mode = pwm_cfg->default_mode;
-			else if (led->id == QPNP_ID_KPDBL)
-				led->kpdbl_cfg->pwm_mode =
-						pwm_cfg->default_mode;
-		}
-		if (pwm_cfg->pwm_enabled) {
-			pwm_disable(pwm_cfg->pwm_dev);
-			pwm_cfg->pwm_enabled = 0;
-		}
+		/*zte led add only for blink_show() selftest*/
+		led->cdev.blink_value = pwm_cfg->blinking;
+		pr_info("LEDLOG: blink set, %s, br=%d  blink=%d\n",
+		led->cdev.name, led->cdev. brightness, pwm_cfg->blinking);	/*ZTE LOG*/
+		pwm_free(pwm_cfg->pwm_dev);
 		qpnp_pwm_init(pwm_cfg, led->pdev, led->cdev.name);
-		if (led->id == QPNP_ID_RGB_RED || led->id == QPNP_ID_RGB_GREEN
-				|| led->id == QPNP_ID_RGB_BLUE) {
-			rc = qpnp_rgb_set(led);
-			if (rc < 0)
-				dev_err(&led->pdev->dev,
-				"RGB set brightness failed (%d)\n", rc);
-		} else if (led->id == QPNP_ID_LED_MPP) {
-			rc = qpnp_mpp_set(led);
-			if (rc < 0)
-				dev_err(&led->pdev->dev,
-				"MPP set brightness failed (%d)\n", rc);
-		} else if (led->id == QPNP_ID_KPDBL) {
-			rc = qpnp_kpdbl_set(led);
-			if (rc < 0)
-				dev_err(&led->pdev->dev,
-				"KPDBL set brightness failed (%d)\n", rc);
-		}
+		/*to test led blink: write blink first and then write brightness*/
+		led->cdev.brightness = 0;
+
 	}
 	mutex_unlock(&led->lock);
 }
@@ -3006,6 +2997,8 @@ static ssize_t blink_store(struct device *dev,
 	case QPNP_ID_RGB_GREEN:
 	case QPNP_ID_RGB_BLUE:
 		led_blink(led, led->rgb_cfg->pwm_cfg);
+		pr_info("blink_store:%s br=%d blink=%d\n",
+		led->cdev.name, led->cdev.brightness, led->cdev.blink_value);
 		break;
 	case QPNP_ID_KPDBL:
 		led_blink(led, led->kpdbl_cfg->pwm_cfg);
@@ -3026,7 +3019,7 @@ static DEVICE_ATTR(start_idx, 0664, NULL, start_idx_store);
 static DEVICE_ATTR(ramp_step_ms, 0664, NULL, ramp_step_ms_store);
 static DEVICE_ATTR(lut_flags, 0664, NULL, lut_flags_store);
 static DEVICE_ATTR(duty_pcts, 0664, NULL, duty_pcts_store);
-static DEVICE_ATTR(blink, 0664, NULL, blink_store);
+static DEVICE_ATTR(blink, 0664, blink_show, blink_store); /*enable read blink*/
 
 static struct attribute *led_attrs[] = {
 	&dev_attr_led_mode.attr,
@@ -3421,6 +3414,16 @@ static int qpnp_get_common_configs(struct qpnp_led_data *led,
 		led->turn_off_delay_ms = val;
 	else if (rc != -EINVAL)
 		return rc;
+
+	led->is_operator_sprint = false;
+	rc = of_property_read_string(node, "zte,is-operator-sprint",
+		&temp_string);
+	if (!rc) {
+		if (strncmp(temp_string, "yes", sizeof("yes")) == 0)
+			led->is_operator_sprint = true;
+	} else if (rc != -EINVAL)
+		return rc;
+
 
 	return 0;
 }
@@ -4159,6 +4162,7 @@ err_config_gpio:
 	return rc;
 }
 
+
 static int qpnp_leds_probe(struct platform_device *pdev)
 {
 	struct qpnp_led_data *led, *led_array;
@@ -4167,6 +4171,9 @@ static int qpnp_leds_probe(struct platform_device *pdev)
 	int rc, i, num_leds = 0, parsed_leds = 0;
 	const char *led_label;
 	bool regulator_probe = false;
+
+	/*[ZTE_CHG_CHECK]0_3_20*/
+	pr_info("entering........\n");
 
 	node = pdev->dev.of_node;
 	if (node == NULL)
@@ -4445,6 +4452,7 @@ static int qpnp_leds_probe(struct platform_device *pdev)
 			__qpnp_led_work(led, led->cdev.brightness);
 		}
 
+		pr_info("led->mpp_cfg->pwm_cfg->use_blink=%d\n", led->mpp_cfg->pwm_cfg->use_blink);
 		parsed_leds++;
 	}
 	dev_set_drvdata(&pdev->dev, led_array);
