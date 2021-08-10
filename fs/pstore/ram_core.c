@@ -351,13 +351,13 @@ int notrace persistent_ram_write_user(struct persistent_ram_zone *prz,
 	start = buffer_start_add(prz, c);
 
 	rem = prz->buffer_size - start;
-	if (unlikely(rem < c)) {
+	if (unlikely(rem < c) && rem > 0) {
 		ret = persistent_ram_update_user(prz, s, start, rem);
 		s += rem;
 		c -= rem;
 		start = 0;
 	}
-	if (likely(!ret))
+	if (likely(!ret) && rem > 0)
 		ret = persistent_ram_update_user(prz, s, start, c);
 
 	persistent_ram_update_header_ecc(prz);
