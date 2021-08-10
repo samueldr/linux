@@ -1,0 +1,517 @@
+#include "dsi-panel-zte-lead-hx83112-lg-6p0-1080p-video-success.dtsi"
+#include "dsi-panel-zte-truly-hx83112-lg-6p0-1080p-video.dtsi"
+#include "dsi-panel-zte-lead-hx83112-jdi-6p0-1080p-video.dtsi"
+#include "dsi-panel-zte-skyworth-ft8719-jdi-6p0-1080p-video.dtsi"
+
+#include "zte-usb-type-c.dtsi"
+#include "touchscreen-randy.dtsi"
+#include "fingerprint_randy.dtsi"
+#include "zte-sdm450-camera-sensor-mtp-randy.dtsi"
+#include "../battery_protect_policy_080509200097.dtsi"
+
+&mtp_batterydata {
+	#include "zte_p450a01_3100mAh.dtsi"
+};
+
+&pmi632_charger {
+	qcom,usb-icl-ua = <1500000>;
+	qcom,thermal-mitigation
+		= <1500000 1300000 1000000 600000
+			300000 150000>;
+	qcom,auto-recharge-soc = <99>;
+	qcom,hvdcp-disable;
+	qcom,chg-term-src = <1>;
+	qcom,chg-term-current-ma = <(-150)>;
+	qcom,jeita-hysteresis-support;
+
+	/* COOL = 10 DegC, WARM = 43 DegC */
+	qcom,jeita-soft-thresholds = <0x3772 0x141e>;
+	/* COLD = 0 DegC, HOT = 45 DegC */
+	qcom,jeita-hard-thresholds = <0x45f5 0x12d2>;
+
+	/* COLD = 2 DegC, HOT = 45 DegC */
+	qcom,jeita-cold-hysteresis-thresholds = <0x430E 0x12D2>;
+	/* COOL = 12 DegC, WARM = 43 DegC */
+	qcom,jeita-cool-hysteresis-thresholds = <0x349E 0x141E>;
+	/* COOL = 10 DegC, WARM = 42 DegC */
+	qcom,jeita-warm-hysteresis-thresholds = <0x3772 0x14CD>;
+	/* COLD = 0 DegC, HOT = 44 DegC */
+	qcom,jeita-hot-hysteresis-thresholds = <0x45F5 0x1375>;
+};
+
+/*typec*/
+&usb3 {
+	extcon = <&pmi632_charger>, <&pmi632_charger>, <0>,
+		<&pmi632_charger>, <&extcon_usb1>;
+	vbus_dwc3-supply = <&smb5_vbus>;
+};
+
+&soc {
+	extcon_usb1: extcon_usb1 {
+		compatible = "linux,extcon-usb-gpio";
+		id-gpio = <&tlmm 9 0>;
+/*		pinctrl-names = "default";  */
+/*		pinctrl-0 = <&usb_id_default>;*/
+	};
+};
+
+/*typec*/
+
+&pmi632_qg {
+	qcom,qg-iterm-ma = <200>;
+	qcom,shutdown_soc_threshold = <30>;
+	qcom,ignore-shutdown-soc-secs = <43200>;
+	qcom,shutdown-temp-diff = <150>;
+	qcom,cl-feedback-on;
+	qcom,cl-min-start-soc = <1>;
+	qcom,cl-max-start-soc = <30>;
+	qcom,cl-max-temp = <430>;
+	qcom,cl-max-increment = <30>;
+	qcom,cl-max-decrement = <10>;
+	qcom,tcss-enable;
+};
+
+&dsi_skyworth_ft8719_jdi_1080p_video{
+	qcom,panel-supply-entries = <&dsi_panel_pwr_supply>;
+	qcom,mdss-dsi-panel-timings-phy-v2 = [25 1F 09 0A 06 03 04 a0
+		25 1F 09 0A 06 03 04 a0
+		25 1F 09 0A 06 03 04 a0
+		25 1F 09 0A 06 03 04 a0
+		25 1D 08 0A 06 03 04 a0];
+	zte,lcm_reset_pin_keep_high_sleeping;
+	zte,mdss-dsi-cabc-default-value = <0x02>;
+	zte,mdss-dsi-cabc-off-command = [39 01 00 00 00 00 02 55 00
+	];
+	zte,mdss-dsi-cabc-low-command = [39 01 00 00 00 00 02 55 11
+	];
+	zte,mdss-dsi-cabc-medium-command = [39 01 00 00 00 00 02 55 12
+	];
+	zte,mdss-dsi-cabc-high-command = [39 01 00 00 00 00 02 55 13
+	];
+	zte,mdss-dsi-cabc-command-state = "dsi_lp_mode";
+	qcom,esd-check-enabled;
+	qcom,mdss-dsi-panel-status-check-mode = "reg_read";
+	qcom,mdss-dsi-panel-status-command = [06 01 00 01 00 00 01 0a];
+	qcom,mdss-dsi-panel-status-command-state = "dsi_hs_mode";
+	qcom,mdss-dsi-panel-status-value = <0x9c 0x9c 0x9c 0x9c>;
+	qcom,mdss-dsi-panel-on-check-value = <0x9c 0x9c 0x9c 0x9c>;
+	qcom,mdss-dsi-panel-status-read-length = <4>;
+	qcom,mdss-dsi-panel-max-error-count = <3>;
+};
+
+
+
+&dsi_hx83112_lead_1080p_video{
+	qcom,panel-supply-entries = <&dsi_panel_pwr_supply>;
+	qcom,mdss-dsi-panel-timings-phy-v2 = [25 1F 09 0A 06 03 04 a0
+		25 1F 09 0A 06 03 04 a0
+		25 1F 09 0A 06 03 04 a0
+		25 1F 09 0A 06 03 04 a0
+		25 1D 08 0A 06 03 04 a0];
+	zte,set-reset-pin-ctrl;
+	zte,lcm_reset_pin_keep_high_sleeping;
+	zte,mdss-dsi-cabc-default-value = <0x02>;
+	zte,mdss-dsi-cabc-off-command = [39 01 00 00 00 00 02 55 00
+	];
+	zte,mdss-dsi-cabc-low-command = [39 01 00 00 00 00 02 55 11
+	];
+	zte,mdss-dsi-cabc-medium-command = [39 01 00 00 00 00 02 55 12
+	];
+	zte,mdss-dsi-cabc-high-command = [39 01 00 00 00 00 02 55 13
+	];
+	zte,mdss-dsi-cabc-command-state = "dsi_lp_mode";
+	qcom,esd-check-enabled;
+	qcom,mdss-dsi-panel-status-check-mode = "reg_read";
+	qcom,mdss-dsi-panel-status-command = [06 01 00 01 00 00 01 0a];
+	qcom,mdss-dsi-panel-status-command-state = "dsi_lp_mode";
+	qcom,mdss-dsi-panel-status-value = <0x9d 0x9d 0x9d 0x9d>;
+	qcom,mdss-dsi-panel-on-check-value = <0x9d 0x9d 0x9d 0x9d>;
+	qcom,mdss-dsi-panel-status-read-length = <4>;
+	qcom,mdss-dsi-panel-max-error-count = <3>;
+};
+
+&dsi_truly_hx83112_lg_1080p_video{
+	qcom,panel-supply-entries = <&dsi_panel_pwr_supply>;
+	qcom,mdss-dsi-panel-timings-phy-v2 = [25 1F 09 0A 06 03 04 a0
+		25 1F 09 0A 06 03 04 a0
+		25 1F 09 0A 06 03 04 a0
+		25 1F 09 0A 06 03 04 a0
+		25 1D 08 0A 06 03 04 a0];
+	zte,set-reset-pin-ctrl;
+	zte,lcm_reset_pin_keep_high_sleeping;
+	zte,mdss-dsi-cabc-default-value = <0x02>;
+	zte,mdss-dsi-cabc-off-command = [39 01 00 00 00 00 02 55 00
+	];
+	zte,mdss-dsi-cabc-low-command = [39 01 00 00 00 00 02 55 11
+	];
+	zte,mdss-dsi-cabc-medium-command = [39 01 00 00 00 00 02 55 12
+	];
+	zte,mdss-dsi-cabc-high-command = [39 01 00 00 00 00 02 55 13
+	];
+	zte,mdss-dsi-cabc-command-state = "dsi_lp_mode";
+	qcom,esd-check-enabled;
+	qcom,mdss-dsi-panel-status-check-mode = "reg_read";
+	qcom,mdss-dsi-panel-status-command = [06 01 00 01 00 00 01 0a];
+	qcom,mdss-dsi-panel-status-command-state = "dsi_lp_mode";
+	qcom,mdss-dsi-panel-status-value = <0x9d 0x9d 0x9d 0x9d>;
+	qcom,mdss-dsi-panel-on-check-value = <0x9d 0x9d 0x9d 0x9d>;
+	qcom,mdss-dsi-panel-status-read-length = <4>;
+	qcom,mdss-dsi-panel-max-error-count = <3>;
+};
+
+&dsi_lead_hx83112_jdi_1080p_video{
+	qcom,panel-supply-entries = <&dsi_panel_pwr_supply>;
+	qcom,mdss-dsi-panel-timings-phy-v2 = [25 1F 09 0A 06 03 04 a0
+		25 1F 09 0A 06 03 04 a0
+		25 1F 09 0A 06 03 04 a0
+		25 1F 09 0A 06 03 04 a0
+		25 1D 08 0A 06 03 04 a0];
+	zte,set-reset-pin-ctrl;
+	zte,lcm_reset_pin_keep_high_sleeping;
+	zte,mdss-dsi-cabc-default-value = <0x02>;
+	zte,mdss-dsi-cabc-off-command = [39 01 00 00 00 00 02 55 00
+	];
+	zte,mdss-dsi-cabc-low-command = [39 01 00 00 00 00 02 55 11
+	];
+	zte,mdss-dsi-cabc-medium-command = [39 01 00 00 00 00 02 55 12
+	];
+	zte,mdss-dsi-cabc-high-command = [39 01 00 00 00 00 02 55 13
+	];
+	zte,mdss-dsi-cabc-command-state = "dsi_lp_mode";
+	qcom,esd-check-enabled;
+	qcom,mdss-dsi-panel-status-check-mode = "reg_read";
+	qcom,mdss-dsi-panel-status-command = [06 01 00 01 00 00 01 0a];
+	qcom,mdss-dsi-panel-status-command-state = "dsi_lp_mode";
+	qcom,mdss-dsi-panel-status-value = <0x9d 0x9d 0x9d 0x9d>;
+	qcom,mdss-dsi-panel-on-check-value = <0x9d 0x9d 0x9d 0x9d>;
+	qcom,mdss-dsi-panel-status-read-length = <4>;
+	qcom,mdss-dsi-panel-max-error-count = <3>;
+};
+
+
+&mdss_dsi0 {
+	pinctrl-0 = <&mdss_dsi_active &mdss_te_active>;
+	pinctrl-1 = <&mdss_dsi_suspend &mdss_te_suspend>;
+};
+
+&soc {
+	gpio_keys {
+		compatible = "gpio-keys";
+		input-name = "gpio-keys";
+		pinctrl-names = "default";
+		pinctrl-0 = <&gpio_key_active>;
+
+		/delete-node/ camera_focus;
+		/delete-node/ camera_snapshot;
+		vol_up {
+			label = "volume_up";
+			gpios = <&tlmm 85 0x1>;
+			linux,input-type = <1>;
+			linux,code = <115>;
+			debounce-interval = <15>;
+			linux,can-disable;
+			gpio-key,wakeup;
+		};
+		vol_down {
+			label = "volume_down";
+			gpios = <&tlmm 66 0x1>;
+			linux,input-type = <1>;
+			linux,code = <114>;
+			debounce-interval = <15>;
+			linux,can-disable;
+			gpio-key,wakeup;
+		};
+	};
+
+	zte_misc {
+		compatible = "zte-misc";
+	};
+};
+&gpio_key_active {
+	mux {
+		pins = "gpio85", "gpio66";
+		function = "gpio";
+	};
+	config {
+		pins = "gpio85", "gpio66";
+		drive-strength = <2>;
+		bias-pull-up;
+	};
+};
+&gpio_key_suspend {
+	mux {
+		pins = "gpio85", "gpio66";
+		function = "gpio";
+	};
+	config {
+		pins = "gpio85", "gpio66";
+		drive-strength = <2>;
+		bias-pull-up;
+	};
+};
+
+&tlmm {
+/* zte typec */
+	tlmm_gpio_typec {
+		typec_intpin_cfg: typecintpincfg {
+				mux {
+					pins = "gpio36";
+					function = "gpio";
+				};
+				config {
+					pins = "gpio36";
+					drive-strength = <2>;
+					bias-disable;
+				};
+		};
+		typec_enpin_output0: enpin_output0 {
+				mux {
+					pins = "gpio140";
+					function = "gpio";
+				};
+				config {
+					pins = "gpio140";
+					drive-strength = <2>;
+					bias-disable;
+					output-low;
+				};
+		};
+		typec_enpin_output1: enpin_output1 {
+				mux {
+					pins = "gpio140";
+					function = "gpio";
+				};
+				config {
+					pins = "gpio140";
+					drive-strength = <2>;
+					bias-disable;
+					output-high;
+				};
+		};
+	};
+/*zte typec */
+};
+
+/*zteadd by wangxiaomei for SD cd pin start*/
+&sdhc_2 {
+	cd-gpios = <&tlmm 133 0x0>;
+};
+&sdc2_cd_on {
+	config {
+		pins = "gpio133";
+		drive-strength = <2>;
+		bias-disable;
+	};
+};
+/*zteadd by wangxiaomei for SD cd pin end*/
+
+&pri_tlmm_lines_act {
+	mux {
+		pins = "gpio91", "gpio93", "gpio88";
+		function = "pri_mi2s";
+	};
+
+	config {
+		pins = "gpio91", "gpio93", "gpio88";
+		drive-strength = <8>;
+	};
+};
+
+&pri_tlmm_lines_sus {
+	mux {
+		pins = "gpio91", "gpio93", "gpio88";
+		function = "pri_mi2s";
+	};
+
+	config {
+		pins = "gpio91", "gpio93", "gpio88";
+		drive-strength = <2>;
+		bias-pull-down;
+	};
+};
+
+&wsa881x_i2c_f {
+	status = "disabled";
+};
+
+&wsa881x_i2c_45 {
+	status = "disabled";
+};
+
+&wsa881x_analog_vi_gpio {
+	status = "disabled";
+};
+
+&wsa881x_analog_clk_gpio {
+	status = "disabled";
+};
+
+&wsa881x_analog_reset_gpio {
+	status = "disabled";
+};
+
+&int_codec {
+	qcom,msm-ext-pa = "primary","quinary";
+	qcom,msm-mbhc-hphl-swh = <1>;
+	qcom,msm-mbhc-gnd-swh = <1>;
+	qcom,msm-hs-micbias-type = "internal";
+	qcom,audio-routing =
+			"RX_BIAS", "MCLK",
+			"SPK_RX_BIAS", "MCLK",
+			"INT_LDO_H", "MCLK",
+			"RX_I2S_CLK", "MCLK",
+			"TX_I2S_CLK", "MCLK",
+			"MIC BIAS External", "Handset Mic",
+			"MIC BIAS Internal2", "Headset Mic",
+			"MIC BIAS External", "Secondary Mic",
+			"AMIC1", "MIC BIAS External",
+			"AMIC2", "MIC BIAS Internal2",
+			"AMIC3", "MIC BIAS External",
+			"ADC1_IN", "ADC1_OUT",
+			"ADC2_IN", "ADC2_OUT",
+			"ADC3_IN", "ADC3_OUT",
+			"PDM_IN_RX1", "PDM_OUT_RX1",
+			"PDM_IN_RX2", "PDM_OUT_RX2",
+			"PDM_IN_RX3", "PDM_OUT_RX3";
+};
+
+&i2c_8 {
+	status = "okay";
+	pinctrl-names = "i2c_active", "i2c_sleep";
+	pinctrl-0 = <&i2c_8_active>;
+	pinctrl-1 = <&i2c_8_sleep>;
+	tfa9897@34 {
+		compatible = "nxp,tfa98xx";
+		reg = <0x34>;
+		reset-gpio = <&tlmm 8 0x0>;
+	};
+};
+
+&tlmm {
+	i2c_8 {
+		i2c_8_active: i2c_8_active {
+			/* active state */
+			mux {
+				pins = "gpio98", "gpio99";
+				function = "blsp_i2c8";
+			};
+
+			config {
+				pins = "gpio98", "gpio99";
+				drive-strength = <2>;
+				bias-disable;
+			};
+		};
+
+		i2c_8_sleep: i2c_8_sleep {
+			/* suspended state */
+			mux {
+				pins = "gpio98", "gpio99";
+				function = "gpio";
+			};
+
+			config {
+				pins = "gpio98", "gpio99";
+				drive-strength = <2>;
+				bias-disable;
+				input-enable;
+			};
+		};
+	};
+
+	/* SAR sensor INT */
+	sx932x_int_active: sx932x_int_active {
+		mux {
+			pins = "gpio63";
+			function = "gpio";
+		};
+		config {
+			pins = "gpio63";
+			drive-strength = <2>;
+			bias-pull-up;
+			input-enable;
+		};
+		};
+		sx932x_int_suspend: sx932x_int_suspend {
+		mux {
+			pins = "gpio63";
+			function = "gpio";
+		};
+		config {
+			pins = "gpio63";
+			drive-strength = <2>;
+			bias-pull-up;
+			input-enable;
+		};
+	};
+};
+
+&i2c_5 {
+	status = "okay";
+	sx932x:sar@28 {
+		compatible = "Semtech,sx932x";
+		reg = <0x28>;
+		interrupt-parent = <&tlmm>;
+		interrupts = <63 2>;
+		interrupt-names = "sx932x_irq";
+		pinctrl-names = "sx932x_active", "sx932x_sleep";
+		pinctrl-0 = <&sx932x_int_active>;
+		pinctrl-1 = <&sx932x_int_suspend >;
+		Semtech,nirq-gpio = <&tlmm 63 0x00>;
+		status ="ok";
+		Semtech,reg-num = <53>;
+		Semtech,reg-init  = /bits/ 8 < 0x03 0x0f
+			0x05 0x60
+			0x06 0x00
+			0x07 0x80
+			0x08 0x00
+			0x10 0x16
+			0x14 0x00 /*PH0 to CS0 input*/
+			0x15 0x00
+			0x20 0x10 /*PH2 CS2-input,CS1-dync,CS0-HZ*/
+			0x21 0x10
+			0x22 0x00
+			0x23 0x01
+			0x24 0x17
+			0x25 0x00
+			0x26 0x01
+			0x27 0x17
+			0x28 0x3D
+			0x29 0x27
+			0x2A 0x1F
+			0x2B 0x37
+			0x2C 0x12
+			0x2D 0x06
+			0x30 0x0A
+			0x31 0x08
+			0x32 0x20
+			0x33 0x20
+			0x34 0x0B
+			0x35 0x10
+			0x36 0x20
+			0x37 0x24
+			0x40 0x00
+			0x41 0x00
+			0x42 0x00
+			0x43 0x00
+			0x44 0x00
+			0x45 0x05
+			0x46 0x00
+			0x47 0x00
+			0x48 0x00
+			0x49 0x00
+			0x4A 0x40
+			0x4B 0x00
+			0x4C 0x00
+			0x4D 0x00
+			0x4E 0x80
+			0x4F 0x0C
+			0x50 0x00
+			0x51 0x00
+			0x52 0x00
+			0x53 0x00
+			0x54 0x00
+			0x60 0x01
+			0x11 0x21>;
+	};
+};

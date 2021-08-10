@@ -1,0 +1,96 @@
+/*for touchscreen config*/
+&tlmm {
+	gpio-controller;
+	#gpio-cells = <2>;
+
+	pmx_ts_int_init {
+		ts_int_init: ts_int_init {
+			mux {
+				pins = "gpio65";
+				function = "gpio";
+				};
+			config {
+				pins = "gpio65";
+				drive-strength = <2>;
+				bias-disable;
+			};
+		};
+	};
+
+	pmx_ts_reset_init {
+		ts_reset_init: ts_reset_init {
+			mux {
+				pins = "gpio64";
+				function = "gpio";
+			};
+				config {
+				pins = "gpio64";
+				drive-strength = <2>;
+				bias-disable;
+			};
+		};
+	};
+
+	pmx_ts_lcdid0_init {
+		ts_lcdid0_init: ts_lcdid0_init {
+			mux {
+				pins = "gpio47";
+				function = "gpio";
+				};
+			config {
+				pins = "gpio47";
+				drive-strength = <2>;
+				bias-pull-down;
+				input-enable;
+			};
+		};
+	};
+
+	pmx_ts_lcdid1_init {
+		ts_lcdid1_init: ts_lcdid1_init {
+			mux {
+				pins = "gpio50";
+				function = "gpio";
+			};
+				config {
+				pins = "gpio50";
+				drive-strength = <2>;
+				bias-pull-down;
+				input-enable;
+			};
+		};
+	};
+};
+
+&i2c_3 { /* BLSP1 QUP3 */
+	status = "okay";
+	himax-ts@48 {
+		compatible = "himax,hxcommon";
+		reg = <0x48>;
+		interrupt-parent = <&tlmm>;
+		interrupts = <65 0x2>;
+		pinctrl-names = "pmx_ts_init";
+		pinctrl-0 = <&ts_int_init &ts_reset_init &ts_lcdid0_init &ts_lcdid1_init>;
+		himax,panel-coords = <0 1080 0 2160>;
+		himax,display-coords = <0 1080 0 2160>;
+		himax,irq-gpio = <&tlmm 65 0x00>;
+		himax,rst-gpio = <&tlmm 64 0x00>;
+		himax,id0-gpio = <&tlmm 47 0x00>;
+		himax,id1-gpio = <&tlmm 50 0x00>;
+		report_type = <1>;
+	};
+
+	focaltech@38 {
+		compatible = "focaltech,fts";
+		reg = <0x38>;
+		interrupt-parent = <&tlmm>;
+		pinctrl-names = "pmx_ts_active", "pmx_ts_suspend";
+		pinctrl-0 = <&ts_int_init &ts_reset_init &ts_lcdid0_init &ts_lcdid1_init>;
+		pinctrl-1 = <&ts_int_init &ts_reset_init &ts_lcdid0_init &ts_lcdid1_init>;
+		focaltech,reset-gpio = <&tlmm 64 0x00>;
+		focaltech,irq-gpio = <&tlmm 65 0x00>;
+		focaltech,display-coords = <0 0 1079 2159>;
+		focaltech,max-touch-number = <10>;
+	};
+
+};
