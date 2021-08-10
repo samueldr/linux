@@ -335,6 +335,8 @@ qpnp_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alarm)
 
 	rtc_dd->alarm_ctrl_reg1 = ctrl_reg;
 
+	pr_info("ZTE_ALARM_RTC  %lu s later.\n", (secs - secs_rtc));
+
 	dev_dbg(dev, "Alarm Set for h:r:s=%d:%d:%d, d/m/y=%d/%d/%d\n",
 			alarm->time.tm_hour, alarm->time.tm_min,
 			alarm->time.tm_sec, alarm->time.tm_mday,
@@ -618,6 +620,7 @@ static int qpnp_rtc_probe(struct platform_device *pdev)
 	}
 
 	device_init_wakeup(&pdev->dev, 1);
+	pr_info("ZTE_ALARM_RTC enable_irq_wake: %d\n", rtc_dd->rtc_alarm_irq);
 	enable_irq_wake(rtc_dd->rtc_alarm_irq);
 
 	dev_dbg(&pdev->dev, "Probe success !!\n");
