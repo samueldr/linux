@@ -492,6 +492,10 @@ static void suspend_finish(void)
  * Fail if that's not the case.  Otherwise, prepare for system suspend, make the
  * system enter the given sleep state and clean up after wakeup.
  */
+
+/*zte_pm add for sync*/
+extern void suspend_sys_sync_queue(void);
+
 static int enter_state(suspend_state_t state)
 {
 	int error;
@@ -515,9 +519,7 @@ static int enter_state(suspend_state_t state)
 
 #ifndef CONFIG_SUSPEND_SKIP_SYNC
 	trace_suspend_resume(TPS("sync_filesystems"), 0, true);
-	pr_info("PM: Syncing filesystems ... ");
-	sys_sync();
-	pr_cont("done.\n");
+	suspend_sys_sync_queue();/*zte_pm add for sync*/
 	trace_suspend_resume(TPS("sync_filesystems"), 0, false);
 #endif
 

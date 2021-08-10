@@ -832,11 +832,55 @@ static int qpnp_wled_set(struct qpnp_led_data *led)
 	return 0;
 }
 
+/*********************************************************
+* ZTE_PM_JZN NOTE(20160513):
+* add to check led status for optimize sink current setting
+***********************************************************/
+bool red_led_on	= false;
+bool green_led_on = false;
+struct qpnp_led_data *zte_green_led	= NULL;
+
+void update_led_state(struct qpnp_led_data *led)
+{
+	if (!strcmp(led->cdev.name, "red")) {
+		if (led->cdev.brightness)
+			red_led_on = true;
+		else
+			red_led_on = false;
+		return;
+	}
+
+	if (!strcmp(led->cdev.name, "green")) {
+		if (led->cdev.brightness)
+			green_led_on = true;
+		else
+			green_led_on = false;
+	}
+	pr_info("LedState:red=%d green=%d\n", red_led_on, green_led_on);
+}
+
+bool is_both_red_green_led_on(void)
+{
+	if (red_led_on && green_led_on)
+		return true;
+	return false;
+}
+
+bool is_both_red_green_led_off(void)
+{
+	if (!red_led_on && !green_led_on)
+		return true;
+	return false;
+}
+/*zte pm add, end*/
+
 static int qpnp_mpp_set(struct qpnp_led_data *led)
 {
 	int rc;
 	u8 val;
 	int duty_us, duty_ns, period_us;
+
+	update_led_state(led);		/*zte jiangfeng add only 1 pwm for red/green leds*/
 
 	if (led->cdev.brightness) {
 		if (led->mpp_cfg->mpp_reg && !led->mpp_cfg->enable) {
@@ -875,14 +919,7 @@ static int qpnp_mpp_set(struct qpnp_led_data *led)
 		}
 		if (led->mpp_cfg->pwm_mode == PWM_MODE) {
 			/*config pwm for brightness scaling*/
-			rc = pwm_change_mode(led->mpp_cfg->pwm_cfg->pwm_dev,
-					PM_PWM_MODE_PWM);
-			if (rc < 0) {
-				dev_err(&led->pdev->dev,
-					"Failed to set PWM mode, rc = %d\n",
-					rc);
-				return rc;
-			}
+			if (!led->mpp_cfg->pwm_cfg->blinking) {		/*zte pm add only for blink=0*/
 			period_us = led->mpp_cfg->pwm_cfg->pwm_period_us;
 			if (period_us > INT_MAX / NSEC_PER_USEC) {
 				duty_us = (period_us * led->cdev.brightness) /
@@ -932,6 +969,31 @@ static int qpnp_mpp_set(struct qpnp_led_data *led)
 				goto err_mpp_reg_write;
 			}
 		}
+		#if defined(CONFIG_BOARD_PRIMROSE)
+		if (is_both_red_green_led_on() && zte_green_led) {
+			rc = qpnp_led_masked_write(zte_green_led,
+					LED_MPP_SINK_CTRL(zte_green_led->base),
+					LED_MPP_SINK_MASK, 0);		/*5mA*/
+		} else {
+			rc = qpnp_led_masked_write(zte_green_led,
+					LED_MPP_SINK_CTRL(zte_green_led->base),
+					LED_MPP_SINK_MASK, 0);		/*5mA*/
+		}
+		#else
+		/* ZTE_PM_JZN NOTE (20160514):
+		 * change led sink current for orange color looking good.
+		 */
+		if (is_both_red_green_led_on() && zte_green_led) {
+			rc = qpnp_led_masked_write(zte_green_led,
+					LED_MPP_SINK_CTRL(zte_green_led->base),
+					LED_MPP_SINK_MASK, 1);		/*10mA*/
+		} else {
+			rc = qpnp_led_masked_write(zte_green_led,
+					LED_MPP_SINK_CTRL(zte_green_led->base),
+					LED_MPP_SINK_MASK, 0);		/*5mA*/
+		}
+		/*zte jiangfeng add, end*/
+		#endif
 
 		val = (led->mpp_cfg->source_sel & LED_MPP_SRC_MASK) |
 			(led->mpp_cfg->mode_ctrl & LED_MPP_MODE_CTRL_MASK);
@@ -958,8 +1020,17 @@ static int qpnp_mpp_set(struct qpnp_led_data *led)
 				led->mpp_cfg->pwm_cfg->default_mode;
 			led->mpp_cfg->pwm_mode =
 				led->mpp_cfg->pwm_cfg->default_mode;
-			pwm_disable(led->mpp_cfg->pwm_cfg->pwm_dev);
-			led->mpp_cfg->pwm_cfg->pwm_enabled = 0;
+
+			/* ZTE_PM_JZN NOTE:
+			 * if 2 leds are controlled by the same PMIC's mpps,
+			 * since only one PWM source in PMIC,
+			 * we check the status of both the two leds before disable pwm
+			 */
+			if (is_both_red_green_led_off())
+				pwm_disable(led->mpp_cfg->pwm_cfg->pwm_dev);
+
+			pr_info("LEDLOG: mpp set, %s, br=%d, blink=%d\n",
+				led->cdev.name, led->cdev.brightness, led->mpp_cfg->pwm_cfg->blinking);
 		}
 		rc = qpnp_led_masked_write(led,
 					LED_MPP_MODE_CTRL(led->base),
@@ -1002,9 +1073,10 @@ static int qpnp_mpp_set(struct qpnp_led_data *led)
 
 		led->mpp_cfg->enable = false;
 	}
-
+#if 0		/*zte pm removeonly 1 pwm so delete this part.*/
 	if (led->mpp_cfg->pwm_mode != MANUAL_MODE)
 		led->mpp_cfg->pwm_cfg->blinking = false;
+#endif
 	qpnp_dump_regs(led, mpp_debug_regs, ARRAY_SIZE(mpp_debug_regs));
 
 	return 0;
@@ -2897,6 +2969,20 @@ static void led_blink(struct qpnp_led_data *led,
 	mutex_unlock(&led->lock);
 }
 
+/* ****************************************
+*  ZTE_PM_JZN NOTE(20160513)
+*  blink_show():
+*   - to show the value of blink in /sys/class/leds/../blink
+*******************************************/
+static ssize_t blink_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct qpnp_led_data *led;
+	struct led_classdev *led_cdev = dev_get_drvdata(dev);
+
+	led = container_of(led_cdev, struct qpnp_led_data, cdev);
+	return snprintf(buf, 10, "%d\n", led->cdev.blink_value);
+}
+
 static ssize_t blink_store(struct device *dev,
 	struct device_attribute *attr,
 	const char *buf, size_t count)
@@ -3661,7 +3747,7 @@ static int qpnp_get_config_pwm(struct pwm_config_data *pwm_cfg,
 	pwm_cfg->use_blink =
 		of_property_read_bool(node, "qcom,use-blink");
 
-	if (pwm_cfg->mode == LPG_MODE || pwm_cfg->use_blink) {
+	if (0) {	/*zte pm remove*/
 		pwm_cfg->duty_cycles =
 			devm_kzalloc(&pdev->dev,
 			sizeof(struct pwm_duty_cycles), GFP_KERNEL);
@@ -4126,6 +4212,14 @@ static int qpnp_leds_probe(struct platform_device *pdev)
 
 		rc = of_property_read_string(temp, "linux,name",
 			&led->cdev.name);
+
+		pr_info("LED_PM num_leds=%d, led name:%s\n", num_leds, led->cdev.name);
+
+		if (!strcmp(led->cdev.name, "green")) {
+			zte_green_led = led;
+			pr_info("LED_PM zte_green_led\n");
+		}
+		/*zte pm add, end*/
 #ifdef TARGET_SECOND_SPI_PANEL
 		if (!strcmp(led->cdev.name, "second_spi-backlight"))
 			second_spi_backlight = led;
@@ -4345,8 +4439,11 @@ static int qpnp_leds_probe(struct platform_device *pdev)
 			__qpnp_led_work(led, led->cdev.brightness);
 			if (led->turn_off_delay_ms > 0)
 				qpnp_led_turn_off(led);
-		} else
+		} else {
 			led->cdev.brightness = LED_OFF;
+			/*ZTE_PM add, turn off led when power on in kernel(turn on in aboot)*/
+			__qpnp_led_work(led, led->cdev.brightness);
+		}
 
 		parsed_leds++;
 	}
