@@ -39,6 +39,7 @@ const char *pm_states[PM_SUSPEND_MAX];
 
 unsigned int pm_suspend_global_flags;
 EXPORT_SYMBOL_GPL(pm_suspend_global_flags);
+extern void pm_show_rpm_stats(void);
 
 static const struct platform_suspend_ops *suspend_ops;
 static const struct platform_freeze_ops *freeze_ops;
@@ -579,6 +580,7 @@ int pm_suspend(suspend_state_t state)
 		dpm_save_failed_errno(error);
 	} else {
 		suspend_stats.success++;
+		pm_show_rpm_stats();
 	}
 	pm_suspend_marker("exit");
 	return error;
