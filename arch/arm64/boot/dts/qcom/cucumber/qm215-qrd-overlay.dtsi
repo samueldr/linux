@@ -1,0 +1,153 @@
+&spmi_bus {
+	qcom,pm8916@0 {
+		qcom,charger {
+			status = "disabled";
+		};
+	};
+};
+
+&tlmm {
+	pmx_charger_pin_default {
+		int_pin_default: int_pin_default {
+			mux {
+				pins = "gpio1";
+				function = "gpio";
+			};
+
+			config {
+				pins = "gpio1";
+				drive-strength = <2>;
+				bias-disable;
+				input-enable;
+			};
+		};
+	};
+};
+
+&qrd_batterydata {
+	#include "zte-batterydata-1200mAh.dtsi"
+};
+
+&usb_otg {
+	qcom,hsusb-otg-mode = <1>;
+	extcon = <&bq_charger>;
+};
+
+&i2c_2 {
+	bq_charger: bq24297-charger@6b {
+		compatible = "ti,charger,bq24297";
+		status = "ok";
+		reg = <0x6b>;
+		interrupt-parent = <&tlmm>;
+		interrupts = <1 0x0>;
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&int_pin_default>;
+
+		/* ti,irq-gpio = <&tlmm 63 0x00>; */
+
+		ti,bq2429x,usb-vlim = <4520>;
+		ti,bq2429x,usb-ilim = <512>;
+		ti,bq2429x,usb-float-voltage-mv = <4400>;
+		ti,bq2429x,usb-ichg = <512>;
+
+		ti,bq2429x,cdp-vlim = <4520>;
+		ti,bq2429x,cdp-ilim = <1500>;
+		ti,bq2429x,cdp-ichg = <1216>;
+		ti,bq2429x,cdp-float-voltage-mv = <4352>;
+
+		ti,bq2429x,ta-vlim = <4520>;
+		ti,bq2429x,ta-ilim = <2000>;
+		ti,bq2429x,ta-ichg = <2048>;
+		ti,bq2429x,ta-float-voltage-mv = <4400>;
+
+		ti,recharge-mv = <300>;
+
+		ti,bq2429x,software-jeita-supported;
+		ti,bq2429x,jeita-hot-degc = <550>;
+		ti,bq2429x,jeita-warm-degc = <450>;
+		ti,bq2429x,jeita-cool-degc = <150>;
+		ti,bq2429x,jeita-cold-degc = <0>;
+		ti,bq2429x,jeita-cool-ma = <600>;
+		ti,bq2429x,jeita-cool-mv = <4400>;
+		ti,bq2429x,jeita-warm-ma = <600>;
+		ti,bq2429x,jeita-warm-mv = <4100>;
+		ti,bq2429x,jeita-cold-hysteresis = <20>;
+		ti,bq2429x,jeita-hot-hysteresis = <20>;
+		ti,bq2429x,thermal-mitigation = <2048 1408 1024 640>;
+
+		ti,bq2429x,precharge-current = <384>;
+		ti,bq2429x,termination-current = <128>;
+		ti,bq2429x,boost-volt = <4998>;
+		ti,bq2429x,boost-current = <1000>;
+		/* ti,bq2429x,enable_term; */
+
+		/* ----------fot ti bq25601 compatible---------- */
+		/* ti,charge_enable-gpio = <&tlmm 8 0x00>; */
+		/* light add note:*/
+		/* ichg:battery charging current */
+		/* vreg:battery float voltage */
+		/* ilim:charging input current */
+		/* vlim:input voltage */
+
+		ti,bq2560x,usb-vlim = <4520>;
+		ti,bq2560x,usb-ilim = <500>;
+		ti,bq2560x,usb-vreg = <4400>;
+		ti,bq2560x,usb-ichg = <500>;
+
+		ti,bq2560x,cdp-vlim = <4520>;
+		ti,bq2560x,cdp-ilim = <1000>;
+		ti,bq2560x,cdp-vreg = <4400>;
+		ti,bq2560x,cdp-ichg = <1500>;
+
+		ti,bq2560x,ta-vlim = <4520>;
+		ti,bq2560x,ta-ilim = <1000>;
+		ti,bq2560x,ta-vreg = <4400>;
+		ti,bq2560x,ta-ichg = <1500>;
+
+		ti,bq2560x,precharge-current = <384>;
+		ti,bq2560x,termination-current = <128>;
+		ti,bq2560x,boost-voltage = <4998>;
+		ti,bq2560x,boost-current = <1200>;
+
+		ti,bq2560x,stat-pin-ctrl = <0>;
+		ti,bq2560x,vac-ovp-threshold = <6200>;
+
+		ti,bq2560x,jeita-hot-degc = <550>;
+		ti,bq2560x,jeita-warm-degc = <450>;
+		ti,bq2560x,jeita-cool-degc = <100>;
+		ti,bq2560x,jeita-cooler-degc = <50>;
+		ti,bq2560x,jeita-cold-degc = <10>;
+
+		ti,bq2560x,jeita-hot-hysteresis = <20>;
+		ti,bq2560x,jeita-cold-hysteresis = <20>;
+
+		ti,bq2560x,jeita-cooler-ma = <300>;
+		ti,bq2560x,jeita-cool-ma = <900>;
+		ti,bq2560x,jeita-cool-mv = <4400>;
+		ti,bq2560x,jeita-warm-ma = <1000>;
+		ti,bq2560x,jeita-warm-mv = <4100>;
+
+		ti,bq2560x,recharge-mv = <100>;
+
+		ti,bq2560x,enable_term;
+		/*ti,bq2560x,enable_soc_term_charge;*/
+		ti,bq2560x,software-jeita-supported;
+		ti,bq2560x,thermal-mitigation = <1500 1000 700 500>;
+		smbcharger_charger_otg: qcom,smb358-boost-otg {
+				regulator-name = "smb358_charger_otg";
+		};
+	};
+};
+#include "dsi-panel-zte-lead-hx83112a-jdi-720p-video.dtsi"
+#include "dsi-panel-zte-lcetron-hx83104a-inn-720p-video.dtsi"
+&mdss_dsi0 {
+	qcom,regulator-ldo-mode;
+	qcom,dsi-pref-prim-pan = <&dsi_lcetron_hx83104a_inn_720p_video>;
+	zte,disp_iovdd_en_gpio = <&tlmm 68 0>;
+	zte,disp_vsp_en_gpio = <&tlmm 98 0>;
+	zte,disp_vsn_en_gpio = <&tlmm 99 0>;
+
+};
+
+
