@@ -46,6 +46,10 @@
 #include "peripheral-loader.h"
 #include <soc/qcom/boot_stats.h>
 
+#ifdef CONFIG_ZTE_PIL_AUTH_ERROR_DETECTION
+#include <linux/reboot.h>
+#endif
+
 #define pil_err(desc, fmt, ...)						\
 	dev_err(desc->dev, "%s: " fmt, desc->name, ##__VA_ARGS__)
 #define pil_info(desc, fmt, ...)					\
@@ -1121,6 +1125,9 @@ int pil_boot(struct pil_desc *desc)
 				priv->region_start, priv->region);
 	if (ret) {
 		pil_err(desc, "Initializing image failed(rc:%d)\n", ret);
+#ifdef CONFIG_ZTE_PIL_AUTH_ERROR_DETECTION
+		kernel_restart("unauth");
+#endif
 		goto err_boot;
 	}
 
@@ -1190,6 +1197,11 @@ int pil_boot(struct pil_desc *desc)
 	ret = desc->ops->auth_and_reset(desc);
 	if (ret) {
 		pil_err(desc, "Failed to bring out of reset(rc:%d)\n", ret);
+#ifdef CONFIG_ZTE_PIL_AUTH_ERROR_DETECTION
+		if (ret == -ENOEXEC) {
+			kernel_restart("unauth");
+		}
+#endif
 		goto err_auth_and_reset;
 	}
 	trace_pil_event("reset_done", desc);

@@ -31,6 +31,9 @@
 #include "peripheral-loader.h"
 #include "pil-q6v5.h"
 #include "pil-msa.h"
+#ifdef CONFIG_ZTE_PIL_AUTH_ERROR_DETECTION
+#include <linux/reboot.h>
+#endif
 
 /* Q6 Register Offsets */
 #define QDSP6SS_RST_EVB			0x010
@@ -635,8 +638,13 @@ static int pil_mss_reset(struct pil_desc *pil)
 	/* Wait for MBA to start. Check for PBL and MBA errors while waiting. */
 	if (drv->self_auth) {
 		ret = pil_msa_wait_for_mba_ready(drv);
-		if (ret)
+		if (ret) {
+#ifdef CONFIG_ZTE_PIL_AUTH_ERROR_DETECTION
+			kernel_restart("unauth");
+#else
 			goto err_q6v5_reset;
+#endif
+		}
 	}
 
 	dev_info(pil->dev, "MBA boot done\n");
@@ -920,7 +928,11 @@ static int pil_msa_auth_modem_mdt(struct pil_desc *pil, const u8 *metadata,
 		pil_assign_mem_to_linux(pil, mdata_phys, ALIGN(size, SZ_4K));
 
 	dma_free_attrs(dma_dev, size, mdata_virt, mdata_phys, attrs);
-
+#ifdef CONFIG_ZTE_PIL_AUTH_ERROR_DETECTION
+	if (ret) {
+		kernel_restart("unauth");
+	}
+#endif
 	if (!ret)
 		return ret;
 
@@ -1020,7 +1032,11 @@ static int pil_msa_mba_auth(struct pil_desc *pil)
 		modem_log_rmb_regs(drv->rmb_base);
 	if (q6_drv->ahb_clk_vote)
 		clk_disable_unprepare(q6_drv->ahb_clk);
-
+#ifdef CONFIG_ZTE_PIL_AUTH_ERROR_DETECTION
+	if (ret) {
+		kernel_restart("unauth");
+	}
+#endif
 	return ret;
 }
 
