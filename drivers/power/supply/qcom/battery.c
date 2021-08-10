@@ -954,6 +954,7 @@ static int usb_icl_vote_callback(struct votable *votable, void *data,
 
 	/* set the effective ICL */
 	pval.intval = icl_ua;
+	pr_info("usb_icl_vote_callback icl_ua=%d\n", icl_ua);
 	power_supply_set_property(chip->main_psy,
 			POWER_SUPPLY_PROP_CURRENT_MAX,
 			&pval);
