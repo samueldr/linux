@@ -1,0 +1,45 @@
+&soc {
+	gpio_keys {
+		compatible = "gpio-keys";
+		input-name = "gpio-keys";
+		pinctrl-names = "default";
+		pinctrl-0 = <&gpio_key_active>;
+
+		vol_up {
+			label = "volume_up";
+			gpios = <&tlmm 91 0x1>;
+			linux,input-type = <1>;
+			linux,code = <115>;
+			debounce-interval = <15>;
+			linux,can-disable;
+			gpio-key,wakeup;
+		};
+
+		vol_down {
+			label = "volume_down";
+			gpios = <&tlmm 90 0x1>;
+			linux,input-type = <1>;
+			linux,code = <114>;
+			debounce-interval = <15>;
+			linux,can-disable;
+			gpio-key,wakeup;
+		};
+	};
+};
+
+&gpio_key_active {
+	mux {
+		pins = "gpio90", "gpio91";
+		drive-strength = <2>;
+		bias-pull-up;
+	};
+};
+
+&gpio_key_suspend {
+	mux {
+		pins = "gpio90", "gpio91";
+		drive-strength = <2>;
+		bias-pull-up;
+	};
+};
+

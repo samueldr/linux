@@ -1,0 +1,9 @@
+/*
+ * this file is ued to change qualcomm dtsi which can't be changed by overlay
+ * such as /delete-node/ /delete-property/ and alises
+ */
+#include "msm8917-vendor.dtsi"
+#include "touchscreen_carlson.dtsi"
+#include "leds.dtsi"
+#include "hall_sensor.dtsi"
+
