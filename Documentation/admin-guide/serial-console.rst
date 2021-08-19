@@ -29,8 +29,9 @@ The format of this option is::
 			defines the baudrate/parity/bits/flow control of
 			the port, in the format BBBBPNF, where BBBB is the
 			speed, P is parity (n/o/e), N is number of bits,
-			and F is flow control ('r' for RTS). Default is
-			9600n8. The maximum baudrate is 115200.
+			and F is flow control ('r' for RTS). Default depends
+			on the driver. The maximum baudrate depends on the
+			device.
 
 You can specify multiple console= options on the kernel command line.
 Output will appear on all of them. The last device will be used when

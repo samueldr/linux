@@ -649,7 +649,7 @@
 			the form "bbbbpnf", where "bbbb" is the baud rate,
 			"p" is parity ("n", "o", or "e"), "n" is number of
 			bits, and "f" is flow control ("r" for RTS or
-			omit it).  Default is "9600n8".
+			omit it).  Default depends on the driver.
 
 			See Documentation/admin-guide/serial-console.rst for more
 			information.  See
