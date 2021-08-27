@@ -477,9 +477,27 @@
 	dai@2 {
 		reg = <2>;
 	};
+};
 
 &pmi8998_fg {
 	status = "okay";
+};
+
+&pmi8998_haptics {
+	status = "okay";
+
+	qcom,wave-play-rate-us = <4255>;
+};
+
+&pmi8998_rradc {
+	status = "okay";
+};
+
+&pmi8998_smb2 {
+	status = "okay";
+
+	qcom,has-usb-charger;
+	qcom,has-otg;
 };
 
 &qupv3_id_1 {
