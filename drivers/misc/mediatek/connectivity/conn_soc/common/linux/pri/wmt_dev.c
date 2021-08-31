@@ -1802,8 +1802,8 @@ INT32 wmt_dev_patch_get (
 {
     INT32 iRet = -1;
     osal_firmware *pfw;
-    uid_t orig_uid;
-    gid_t orig_gid;
+    kuid_t orig_uid;
+    kgid_t orig_gid;
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,29))
     //struct cred *cred = get_task_cred(current);
@@ -1836,7 +1836,8 @@ INT32 wmt_dev_patch_get (
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,29))
     orig_uid = cred->fsuid;
     orig_gid = cred->fsgid;
-    cred->fsuid = cred->fsgid = 0;
+    cred->fsuid = make_kuid(current_user_ns(), 0);
+    cred->fsgid = make_kgid(current_user_ns(), 0);
 #else
     orig_uid = current->fsuid;
     orig_gid = current->fsgid;

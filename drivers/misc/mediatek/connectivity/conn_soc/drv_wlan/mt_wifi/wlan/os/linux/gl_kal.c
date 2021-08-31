@@ -782,8 +782,8 @@ VOID kalHifAhbKalWakeLockTimeout(
 #if CFG_ENABLE_FW_DOWNLOAD
 
 static struct file *filp = NULL;
-static uid_t orgfsuid;
-static gid_t orgfsgid;
+static kuid_t orgfsuid;
+static kgid_t orgfsgid;
 static mm_segment_t orgfs;
 
 /*----------------------------------------------------------------------------*/
@@ -819,7 +819,8 @@ kalFirmwareOpen (
     struct cred *cred = (struct cred *) get_current_cred();
     orgfsuid = cred->fsuid;
     orgfsgid = cred->fsgid;
-    cred->fsuid = cred->fsgid = 0;
+    cred->fsuid = make_kuid(current_user_ns(), 0);
+    cred->fsgid = make_kgid(current_user_ns(), 0);
 #else
     struct cred *cred = get_task_cred(current);
     orgfsuid = cred->fsuid;

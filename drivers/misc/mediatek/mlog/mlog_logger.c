@@ -50,8 +50,8 @@
 
 #define MLOG_ID             ULONG_MAX
 
-#define AID_ROOT            0	/* traditional unix root user */
-#define AID_SYSTEM          1000	/* system server */
+#define AID_ROOT            make_kuid(current_user_ns(), 0)	/* traditional unix root user */
+#define AID_SYSTEM          make_kuid(current_user_ns(), 1000)	/* system server */
 
 #define M_MEMFREE           (1 << 0)
 #define M_SWAPFREE          (1 << 1)
@@ -558,7 +558,7 @@ static void mlog_procinfo(void)
 		goto collect_proc_mem_info;
 
 		/* skip root user */
-		if (cred->uid == AID_ROOT)
+		if (uid_eq(cred->uid, AID_ROOT))
 			goto unlock_continue;
 
 		real_parent = rcu_dereference(p->real_parent);
@@ -572,7 +572,7 @@ static void mlog_procinfo(void)
 
 		if (oom_score_adj == -16) {
 			/* only keep system server */
-			if (cred->uid != AID_SYSTEM)
+			if (!uid_eq(cred->uid, AID_SYSTEM))
 				goto unlock_continue;
 		}
 

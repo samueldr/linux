@@ -1595,7 +1595,7 @@ static int __init mtkthermal_init(void)
         THRML_ERROR_LOG("%s Can not create mtm_monitor\n", __func__);
     } else {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
-        proc_set_user(entry, 0, 1000);
+        proc_set_user(entry, KUIDT_INIT(0), KGIDT_INIT(1000));
 #else
         entry->gid = 1000;
 #endif
@@ -1615,7 +1615,7 @@ static int __init mtkthermal_init(void)
 		THRML_ERROR_LOG("%s Can not create mtm_scen_call\n", __func__);
 	} else {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
-        proc_set_user(entry, 0, 1000);
+        proc_set_user(entry, KUIDT_INIT(0), KGIDT_INIT(1000));
 #else
         entry->gid = 1000;
 #endif
@@ -2169,7 +2169,7 @@ struct thermal_zone_device *mtk_thermal_zone_device_register_wrapper
 			THRML_ERROR_LOG("%s proc file not created: %p\n", __func__, tz);
 		} else {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
-			proc_set_user(entry, 0, 1000);
+			proc_set_user(entry, KUIDT_INIT(0), KGIDT_INIT(1000));
 #else
 			entry->gid = 1000;
 #endif
@@ -2475,7 +2475,7 @@ struct thermal_cooling_device *mtk_thermal_cooling_device_register_wrapper
 			THRML_ERROR_LOG("%s proc file not created: %p\n", __func__, mcdata);
 		} else {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
-			proc_set_user(entry, 0, 1000);
+			proc_set_user(entry, KUIDT_INIT(0), KGIDT_INIT(1000));
 #else
 			entry->gid = 1000;
 #endif
