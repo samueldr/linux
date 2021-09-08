@@ -75,7 +75,7 @@ static void pmic_spmi_load_revid(struct regmap *map, struct device *dev, struct 
 	if (ret < 0)
 		return;
 
-	if (type != PMIC_TYPE_VALUE)
+	if (pmic->type != PMIC_TYPE_VALUE)
 		return;
 
 	ret = regmap_read(map, PMIC_SUBTYPE, &pmic->subtype);
@@ -143,7 +143,7 @@ static int pmic_spmi_probe(struct spmi_device *sdev)
 	if (sdev->usid % 2 == 0) {
 		pmic_spmi_load_revid(regmap, &sdev->dev, pmic);
 		dev_info(&sdev->dev, "Read PMIC info for usid: %d!!", sdev->usid);
-		platform_set_drvdata(&sdev->dev, pmic);
+		//platform_set_drvdata(&sdev->dev, pmic);
 	}
 
 	return devm_of_platform_populate(&sdev->dev);

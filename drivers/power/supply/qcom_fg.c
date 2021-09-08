@@ -985,9 +985,9 @@ static int qcom_fg_probe(struct platform_device *pdev)
 		return -ENODEV;
 	}
 
-	chip->pmic = (struct qcom_spmi_pmic*)platform_get_drvdata(pdev->dev.parent);
+	//chip->pmic = (struct qcom_spmi_pmic*)platform_get_drvdata(pdev->dev.parent);
 
-	print_pmic_info(chip->dev, pmic);
+	//print_pmic_info(chip->dev, pmic);
 
 	/* Get base address */
 	prop_addr = of_get_address(pdev->dev.of_node, 0, NULL, NULL);
