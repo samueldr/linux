@@ -1,0 +1,120 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR X11)
+/*
+ * Copyright 2018 Icenowy Zheng <icenowy@aosc.io>
+ * Copyright 2021 Samuel Dionne-Riel <samuel@dionne-riel.com>
+ */
+
+/dts-v1/;
+#include "suniv-f1c100s.dtsi"
+
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/input/input.h>
+
+#define BUTTON(name, key, bank, pin) btn_##name { \
+		label = #name; \
+		linux,code = <key>; \
+		gpios = <&pio bank pin GPIO_ACTIVE_LOW>; \
+	}
+
+/ {
+	model = "Powkiddy v90";
+	compatible = "powkiddy,powkiddy-v90", "allwinner,suniv-f1c100s",
+		     "allwinner,suniv";
+
+	aliases {
+		serial1 = &uart1;
+	};
+
+	chosen {
+		stdout-path = "serial1:115200n8";
+	};
+
+	backlight: backlight {
+		compatible = "pwm-backlight";
+		pwms = <&pwm 1 58824 0>;
+		brightness-levels = <0 10 20 30 40 50 60 70 80 90 100>;
+		default-brightness-level = <5>;
+		status = "okay";
+	};
+
+	/* 0x01c23400 is actually the LRADC; co-opted to detect battery voltage. */
+	battery: battery@1c23400 {
+		 compatible = "miyoo,battery";
+		 reg = <0x01c23400 0x400>;
+		 status = "okay";
+	 };
+
+	reg_vcc3v3: vcc3v3 {
+		compatible = "regulator-fixed";
+		regulator-name = "vcc3v3";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+	};
+
+	gpio_keys {
+		status = "okay";
+
+		compatible = "gpio-keys-polled";
+		poll-interval = <30>;
+		autorepeat;
+
+		BUTTON(start,   KEY_ENTER,     4,  0); /* PE0 */
+		BUTTON(select,  KEY_ESC,       3,  0); /* PD0 */
+		BUTTON(suspend, KEY_RIGHTCTRL, 4,  1); /* PE1 */
+
+		BUTTON(up,      KEY_UP,        4,  2); /* PE2 */
+		BUTTON(down,    KEY_DOWN,      4,  3); /* PE3 */
+		BUTTON(left,    KEY_LEFT,      4,  4); /* PE4 */
+		BUTTON(right,   KEY_RIGHT,     4,  5); /* PE5 */
+
+		BUTTON(a,       KEY_LEFTCTRL,  4,  9); /* PE9 */
+		BUTTON(b,       KEY_LEFTALT,   4,  7); /* PE7 */
+		BUTTON(x,       KEY_SPACE,     3,  9); /* PD9 */
+		BUTTON(y,       KEY_LEFTSHIFT, 4,  8); /* PE8 */
+
+		BUTTON(l1,      KEY_TAB,       2,  1); /* PC1 */
+		BUTTON(r1,      KEY_BACKSPACE, 2,  2); /* PC2 */
+		BUTTON(l2,      KEY_PAGEUP,    2,  3); /* PC3 */
+		BUTTON(r2,      KEY_PAGEDOWN,  0,  1); /* PA1 */
+	};
+};
+
+&pwm {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pwm1_pins_a>;
+	status = "okay";
+};
+
+&mmc0 {
+	vmmc-supply = <&reg_vcc3v3>;
+	bus-width = <4>;
+	broken-cd;
+	status = "okay";
+};
+
+&codec {
+	allwinner,audio-routing =
+		"Headphone", "HP",
+		"Headphone", "HPCOM",
+		"MIC", "Mic";
+	status = "okay";
+};
+
+&uart1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&uart1_pa_pins>;
+	status = "okay";
+};
+
+&otg_sram {
+	status = "okay";
+};
+
+&usb_otg {
+	dr_mode = "peripheral";
+	status = "okay";
+};
+
+&usbphy {
+	status = "okay";
+};
