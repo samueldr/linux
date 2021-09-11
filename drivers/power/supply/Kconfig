@@ -453,6 +453,12 @@ config CHARGER_PCF50633
 	help
 	  Say Y to include support for NXP PCF50633 Main Battery Charger.
 
+config BATTERY_MIYOO
+	tristate "Miyoo and compatible battery driver"
+	help
+	  Say Y here to enable support for battery information on Miyoo
+	  and compatible hardware.
+
 config BATTERY_RX51
 	tristate "Nokia RX-51 (N900) battery driver"
 	depends on TWL4030_MADC
