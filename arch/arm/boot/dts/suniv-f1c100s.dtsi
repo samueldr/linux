@@ -199,6 +199,15 @@
 			#interrupt-cells = <1>;
 		};
 
+		pwm: pwm@01c21000 {
+			compatible = "allwinner,suniv-pwm",
+				"allwinner,sun4i-a10-pwm";
+			reg = <0x01c21000 0x400>;
+			clocks = <&osc24M>;
+			#pwm-cells = <3>;
+			status = "disabled";
+		};
+
 		pio: pinctrl@1c20800 {
 			compatible = "allwinner,suniv-f1c100s-pinctrl";
 			reg = <0x01c20800 0x400>;
@@ -214,6 +223,11 @@
 				pins = "PF0", "PF1", "PF2", "PF3", "PF4", "PF5";
 				function = "mmc0";
 				drive-strength = <30>;
+			};
+
+			pwm1_pins_a: pwm1 {
+				pins = "PE6";
+				function = "pwm1";
 			};
 
 			spi0_pc_pins: spi0-pc-pins {
