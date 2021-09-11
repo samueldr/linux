@@ -248,6 +248,13 @@
 			clocks = <&osc24M>;
 		};
 
+		lradc: lradc@1c23400 {
+			// compatible = "allwinner,sun4i-a10-lradc-keys";
+			reg = <0x01c23400 0x400>;
+			// interrupts = <31>;
+			status = "disabled";
+		};
+
 		wdt: watchdog@1c20ca0 {
 			compatible = "allwinner,suniv-f1c100s-wdt",
 				     "allwinner,sun6i-a31-wdt";
