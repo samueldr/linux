@@ -797,6 +797,8 @@ static bool a6xx_ucode_check_version(struct a6xx_gpu *a6xx_gpu,
 		DRM_DEV_ERROR(&gpu->pdev->dev,
 			"a630 SQE ucode is too old. Have version %x need at least %x\n",
 			buf[0] & 0xfff, 0x190);
+		ret = true;
+		goto out;
 	} else if (!strcmp(sqe_name, "a650_sqe.fw")) {
 		if ((buf[0] & 0xfff) >= 0x095) {
 			ret = true;
