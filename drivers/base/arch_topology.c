@@ -177,6 +177,9 @@ void topology_update_thermal_pressure(const struct cpumask *cpus,
 	u32 max_freq;
 	int cpu;
 
+	if (WARN_ON(cpumask_empty(cpus)))
+		return;
+
 	cpu = cpumask_first(cpus);
 	max_capacity = arch_scale_cpu_capacity(cpu);
 	max_freq = per_cpu(freq_factor, cpu);
