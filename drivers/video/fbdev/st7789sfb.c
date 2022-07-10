@@ -171,6 +171,11 @@
 // }}}
 ////////////////////////////////////////////////////////////////////////////////
 
+#define MIYOO_FB_BPP 16
+#define MIYOO_FB_RES "320x240"
+#define MIYOO_FB_XRES 320
+#define MIYOO_FB_YRES 240
+#define DE_LAYERS_COUNT 4
 #define PALETTE_SIZE 256
 #define DRIVER_NAME  "ST7789S-fb"
 DECLARE_WAIT_QUEUE_HEAD(wait_vsync_queue);
@@ -344,25 +349,25 @@ static void refresh_lcd(struct myfb_par *par)
 
     if(par->lcdc_ready){
         lcdc_wr_cmd(ST7789S_CMD_RAMWR);
-        if(par->app_virt->yoffset == 0){
+        if(par->app_virt->yoffset == MIYOO_FB_YRES * 0){
             suniv_setbits(iomm.debe + DEBE_MODE_CTRL_REG, (1 << 8));
             suniv_clrbits(iomm.debe + DEBE_MODE_CTRL_REG, (1 << 9));
             suniv_clrbits(iomm.debe + DEBE_MODE_CTRL_REG, (1 << 10));
             suniv_clrbits(iomm.debe + DEBE_MODE_CTRL_REG, (1 << 11));
         }
-        else if(par->app_virt->yoffset == 240){
+        else if(par->app_virt->yoffset == MIYOO_FB_YRES * 1){
             suniv_clrbits(iomm.debe + DEBE_MODE_CTRL_REG, (1 << 8));
             suniv_setbits(iomm.debe + DEBE_MODE_CTRL_REG, (1 << 9));
             suniv_clrbits(iomm.debe + DEBE_MODE_CTRL_REG, (1 << 10));
             suniv_clrbits(iomm.debe + DEBE_MODE_CTRL_REG, (1 << 11));
         }
-        else if(par->app_virt->yoffset == 480){
+        else if(par->app_virt->yoffset == MIYOO_FB_YRES * 2){
             suniv_clrbits(iomm.debe + DEBE_MODE_CTRL_REG, (1 << 8));
             suniv_clrbits(iomm.debe + DEBE_MODE_CTRL_REG, (1 << 9));
             suniv_setbits(iomm.debe + DEBE_MODE_CTRL_REG, (1 << 10));
             suniv_clrbits(iomm.debe + DEBE_MODE_CTRL_REG, (1 << 11));
         }
-        else if(par->app_virt->yoffset == 720){
+        else if(par->app_virt->yoffset == MIYOO_FB_YRES * 3){
             suniv_clrbits(iomm.debe + DEBE_MODE_CTRL_REG, (1 << 8));
             suniv_clrbits(iomm.debe + DEBE_MODE_CTRL_REG, (1 << 9));
             suniv_clrbits(iomm.debe + DEBE_MODE_CTRL_REG, (1 << 10));
@@ -419,14 +424,16 @@ static void init_lcd(void)
 	lcdc_wr_cmd(ST7789S_CMD_CASET);
 	lcdc_wr_dat(0x00);
 	lcdc_wr_dat(0x00);
-	lcdc_wr_dat(0x01);
-	lcdc_wr_dat(0x3f);
+	// (Spreads the 16 bit value over two writes)
+	lcdc_wr_dat(((MIYOO_FB_XRES - 1) & 0xff00) >> 8);
+	lcdc_wr_dat( (MIYOO_FB_XRES - 1) & 0x00ff);       
 
+	// TODO: handle DE rotation (would use XRES instead here)
 	lcdc_wr_cmd(ST7789S_CMD_RASET);
 	lcdc_wr_dat(0x00);
 	lcdc_wr_dat(0x00);
-	lcdc_wr_dat(0x00);
-	lcdc_wr_dat(0xef);
+	lcdc_wr_dat(((MIYOO_FB_YRES - 1) & 0xff00) >> 8);
+	lcdc_wr_dat( (MIYOO_FB_YRES - 1) & 0x00ff);
 
 	lcdc_wr_cmd(ST7789S_CMD_PORCTRL); // <- differs
 	lcdc_wr_dat(116);
@@ -514,7 +521,7 @@ static void init_lcd(void)
 	lcdc_wr_cmd(ST7789S_CMD_RAMWR);
 
 	mypar->app_virt->yoffset = 0;
-	memset(mypar->vram_virt, 0, 320*240*4);
+	memset(mypar->vram_virt, 0, MIYOO_FB_XRES * MIYOO_FB_YRES * (MIYOO_FB_BPP / 8) * DE_LAYERS_COUNT);
 }
 
 static void suniv_lcdc_init(struct myfb_par *par)
@@ -552,15 +559,17 @@ static void suniv_lcdc_init(struct myfb_par *par)
     writel(ret, iomm.lcdc + TCON_CTRL_REG);
     ret = (1 + 1 + 1);
 
-    writel((uint32_t)(par->vram_phys + 320*240*2*0) << 3, iomm.debe + DEBE_LAY0_FB_ADDR_REG);
-    writel((uint32_t)(par->vram_phys + 320*240*2*1) << 3, iomm.debe + DEBE_LAY1_FB_ADDR_REG);
-    writel((uint32_t)(par->vram_phys + 320*240*2*2) << 3, iomm.debe + DEBE_LAY2_FB_ADDR_REG);
-    writel((uint32_t)(par->vram_phys + 320*240*2*3) << 3, iomm.debe + DEBE_LAY3_FB_ADDR_REG);
+	// Tells the DE where the layers are
+	writel((uint32_t)(par->vram_phys + MIYOO_FB_XRES * MIYOO_FB_YRES * (MIYOO_FB_BPP / 8) * 0) << 3, iomm.debe + DEBE_LAY0_FB_ADDR_REG);
+	writel((uint32_t)(par->vram_phys + MIYOO_FB_XRES * MIYOO_FB_YRES * (MIYOO_FB_BPP / 8) * 1) << 3, iomm.debe + DEBE_LAY1_FB_ADDR_REG);
+	writel((uint32_t)(par->vram_phys + MIYOO_FB_XRES * MIYOO_FB_YRES * (MIYOO_FB_BPP / 8) * 2) << 3, iomm.debe + DEBE_LAY2_FB_ADDR_REG);
+	writel((uint32_t)(par->vram_phys + MIYOO_FB_XRES * MIYOO_FB_YRES * (MIYOO_FB_BPP / 8) * 3) << 3, iomm.debe + DEBE_LAY3_FB_ADDR_REG);
 
-    writel((uint32_t)(par->vram_phys + 320*240*2*0) >> 29, iomm.debe + DEBE_LAY0_FB_HI_ADDR_REG);
-    writel((uint32_t)(par->vram_phys + 320*240*2*1) >> 29, iomm.debe + DEBE_LAY1_FB_HI_ADDR_REG);
-    writel((uint32_t)(par->vram_phys + 320*240*2*2) >> 29, iomm.debe + DEBE_LAY2_FB_HI_ADDR_REG);
-    writel((uint32_t)(par->vram_phys + 320*240*2*3) >> 29, iomm.debe + DEBE_LAY3_FB_HI_ADDR_REG);
+	// Tells the DE where the layers are
+	writel((uint32_t)(par->vram_phys + MIYOO_FB_XRES * MIYOO_FB_YRES * (MIYOO_FB_BPP / 8) * 0) >> 29, iomm.debe + DEBE_LAY0_FB_HI_ADDR_REG);
+	writel((uint32_t)(par->vram_phys + MIYOO_FB_XRES * MIYOO_FB_YRES * (MIYOO_FB_BPP / 8) * 1) >> 29, iomm.debe + DEBE_LAY1_FB_HI_ADDR_REG);
+	writel((uint32_t)(par->vram_phys + MIYOO_FB_XRES * MIYOO_FB_YRES * (MIYOO_FB_BPP / 8) * 2) >> 29, iomm.debe + DEBE_LAY2_FB_HI_ADDR_REG);
+	writel((uint32_t)(par->vram_phys + MIYOO_FB_XRES * MIYOO_FB_YRES * (MIYOO_FB_BPP / 8) * 3) >> 29, iomm.debe + DEBE_LAY3_FB_HI_ADDR_REG);
 
     writel((1 << 31) | ((ret & 0x1f) << 4) | (1 << 24), iomm.lcdc + TCON0_CTRL_REG);
     writel((0xf << 28) | (25 << 0), iomm.lcdc + TCON_CLK_CTRL_REG);
@@ -647,7 +656,7 @@ static void lcd_delay_init(unsigned long param)
 {
     suniv_cpu_init(mypar);
     suniv_lcdc_init(mypar);
-    mypar->app_virt->yoffset = 240;
+    mypar->app_virt->yoffset = MIYOO_FB_YRES;
     mypar->lcdc_ready = 1;
     suniv_enable_irq(mypar);
 }
@@ -669,7 +678,7 @@ static int myfb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
     struct myfb_par *par = info->par;
     unsigned long line_size = var->xres_virtual * bpp;
 
-    if((var->xres != 320) || (var->yres != 240) || (var->bits_per_pixel != 16)){
+    if((var->xres != MIYOO_FB_XRES) || (var->yres != MIYOO_FB_YRES) || (var->bits_per_pixel != MIYOO_FB_BPP)){
         return -EINVAL;
     }
 
@@ -787,9 +796,9 @@ static int myfb_probe(struct platform_device *device)
     if(mode == NULL){
         return -ENOMEM;
     }
-    mode->name = "320x240";
-    mode->xres = 320;
-    mode->yres = 240;
+    mode->name = MIYOO_FB_RES;
+    mode->xres = MIYOO_FB_XRES;
+    mode->yres = MIYOO_FB_YRES;
     mode->vmode = FB_VMODE_NONINTERLACED;
     pm_runtime_enable(&device->dev);
     pm_runtime_get_sync(&device->dev);
@@ -802,10 +811,10 @@ static int myfb_probe(struct platform_device *device)
     par = info->par;
     par->pdev = device;
     par->dev = &device->dev;
-    par->bpp = 16;
+    par->bpp = MIYOO_FB_BPP;
     fb_videomode_to_var(&myfb_var, mode);
 
-    par->vram_size = (320 * 240 * 2 * 4) + 4096;
+    par->vram_size = (MIYOO_FB_XRES * MIYOO_FB_YRES * (MIYOO_FB_BPP / 8) * DE_LAYERS_COUNT) + 4096;
     par->vram_virt = dma_alloc_coherent(NULL, par->vram_size, (resource_size_t*)&par->vram_phys, GFP_KERNEL | GFP_DMA);
     if(!par->vram_virt){
         return -EINVAL;
@@ -813,8 +822,8 @@ static int myfb_probe(struct platform_device *device)
     info->screen_base = (char __iomem*)par->vram_virt;
     myfb_fix.smem_start = par->vram_phys;
     myfb_fix.smem_len = par->vram_size;
-    myfb_fix.line_length = 320 * 2;
-    par->app_virt = (struct myfb_app*)((uint8_t*)par->vram_virt + (320 * 240 * 2 * 4));
+    myfb_fix.line_length = MIYOO_FB_XRES * (MIYOO_FB_BPP / 8);
+    par->app_virt = (struct myfb_app*)((uint8_t*)par->vram_virt + (MIYOO_FB_XRES * MIYOO_FB_YRES * (MIYOO_FB_BPP / 8) * DE_LAYERS_COUNT));
 
     par->v_palette_base = dma_alloc_coherent(NULL, PALETTE_SIZE, (resource_size_t*)&par->p_palette_base, GFP_KERNEL | GFP_DMA);
     if(!par->v_palette_base){
