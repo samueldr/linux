@@ -228,35 +228,65 @@ static struct fb_fix_screeninfo myfb_fix = {
         .accel = FB_ACCEL_NONE
 };
 
-static void suniv_gpio_init(void)
+/**
+ * Originally named suniv_gpio_init.
+ * It does not initialize GPIO, but instead configures the multi-usage
+ * GPIO pins to their LCD_XXX mode.
+ */
+static void miyoo_lcd_pinmux(void)
 {
-    uint32_t r=0;
+	// Temporary buffer
+	uint32_t r=0;
 
-    r = readl(iomm.gpio + PD_CFG0);
-    r&= 0x0000000f;
-    r|= 0x22222220;
-    writel(r, iomm.gpio + PD_CFG0);
+	// Read current configuration
+	r = readl(iomm.gpio + PD_CFG0);
+	// Resets everything, except bits 0:3 (PD0:btn_select)
+	r&= 0x0000000f;
+	//     LCD_D11  LDC_D10  LCD_D7  LCD_D6  LCD_D5  LCD_D4  LCD_D3   (PD0)
+	// => ["0010",  "0010",  "0010", "0010", "0010", "0010", "0010", "0000"]
+	r|= 0x22222220;
+	writel(r, iomm.gpio + PD_CFG0);
 
-    r = readl(iomm.gpio + PD_CFG1);
-    r&= 0x000000f0;
-    r|= 0x22222202;
-    writel(r, iomm.gpio + PD_CFG1);
+	// Read current configuration
+	r = readl(iomm.gpio + PD_CFG1);
+	// Resets everything, except bits 4:7 (PD9:btn_X)
+	r&= 0x000000f0;
+	//     LCD_D21  LCD_D20  LCD_D19  LCD_D18  LCD_D15  LCD_D14   (PD9)  LCD_D12
+	// => ["0010",  "0010",  "0010",  "0010",  "0010",  "0010",  "0000", "0010"]
+	r|= 0x22222202;
+	writel(r, iomm.gpio + PD_CFG1);
 
-    r = readl(iomm.gpio + PD_CFG2);
-    r&= 0xff000000;
-    r|= 0x000222222;
-    writel(r, iomm.gpio + PD_CFG2);
+	// Read current configuration
+	r = readl(iomm.gpio + PD_CFG2);
+	// Resets everything, except bits 24:31 (reserved)
+	r&= 0xff000000;
+	//    __ reserved ___  LCD_VSYNC  LCD_HSYNC  LCD_DE  LCD_CLK  LCD_D23  LCD_D22
+	// => ["0000", "0000", "0010",    "0010",    "0010", "0010",  "0010",  "0010"]
+	r|= 0x000222222;
+	writel(r, iomm.gpio + PD_CFG2);
 
-    r = readl(iomm.gpio + PD_PUL1);
-    r&= 0xfffff0ff;
-    r|= 0x00000500;
-    writel(r, iomm.gpio + PD_PUL1);
+	// Read current configuration
+	r = readl(iomm.gpio + PD_PUL1);
+	// Resets 8:11
+	r&= 0xfffff0ff;
+	// Pull-Up enable for PD4, PD5 [LCD_D6, LCD_D7]
+	// 01 01 00 00 00 00
+	r|= 0x00000500;
+	writel(r, iomm.gpio + PD_PUL1);
 
-    r = readl(iomm.gpio + PE_CFG1);
-    r&= 0xffff0fff;
-    r|= 0x00001000;
-    writel(r, iomm.gpio + PE_CFG1);
-    writel(0xffffffff, iomm.gpio + PE_DATA);
+	// Read current configuration
+	r = readl(iomm.gpio + PE_CFG1);
+	// Resets 12:15
+	r&= 0xffff0fff;
+	//     ______ reserved ______  PE12    PE11    PE10    PE9     PE8
+	//                                     output
+	// => ["0000", "0000", "0000", "0000", "0001", "0000", "0000", "0000"]
+	// (NOTE: PE11 is supposedly connected to the LCD:RESX line, unverified)
+	r|= 0x00001000;
+	writel(r, iomm.gpio + PE_CFG1);
+
+	// Sets initial state for reset line.
+	writel(0xffffffff, iomm.gpio + PE_DATA);
 }
 
 static uint32_t lcdc_wait_busy(void)
@@ -361,7 +391,7 @@ static irqreturn_t lcdc_irq_handler(int irq, void *arg)
 
 static void init_lcd(void)
 {
-    suniv_gpio_init();
+	miyoo_lcd_pinmux();
 
 	// Turn the display off and on again
 	suniv_clrbits(iomm.lcdc + PE_DATA, (1 << 11)); // Unsets PE11 (RESX)
