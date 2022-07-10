@@ -404,7 +404,14 @@ static void init_lcd(void)
 	mdelay(50);
 
 	lcdc_wr_cmd(ST7789S_CMD_MADCTL);
-	lcdc_wr_dat(0xb0);
+	lcdc_wr_dat(
+		// Equivalent to 0xb0
+		ST7789S_MADCTL_ML |
+		ST7789S_MADCTL_MV | // Causes **IMPRESSIVE** diagonal tearing :/
+		// ST7789S_MADCTL_MX |
+		ST7789S_MADCTL_MY |
+		0
+	);
 
 	lcdc_wr_cmd(ST7789S_CMD_COLMOD);
 	lcdc_wr_dat(0x05);
