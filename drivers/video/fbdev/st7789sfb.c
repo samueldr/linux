@@ -65,6 +65,112 @@
 #include <asm/arch-suniv/clock.h>
 #include <asm/arch-suniv/common.h>
 
+////////////////////////////////////////////////////////////////////////////////
+// ST7789S commands
+// {{{
+
+// Table 1
+#define ST7789S_CMD_NOP        (0x00)
+#define ST7789S_CMD_SWRESET    (0x01) // Software Reset
+#define ST7789S_CMD_RDDID      (0x04) // Read Display ID
+#define ST7789S_CMD_RDDST      (0x09) // Read Display Status
+#define ST7789S_CMD_RDDPM      (0x0A) // Read Display Power Mode
+#define ST7789S_CMD_RDDMADCTL  (0x0B) // Read Display MADCTL
+#define ST7789S_CMD_RDDCOLMOD  (0x0C) // Read Display Pixel Format
+#define ST7789S_CMD_RDDIM      (0x0D) // Read Display Image Mode
+#define ST7789S_CMD_RDDSM      (0x0E) // Read Display Signal Mode
+#define ST7789S_CMD_RDDSDR     (0x0F) // Read Display Self-Diagnostic Result
+#define ST7789S_CMD_SLPIN      (0x10) // Sleep in
+#define ST7789S_CMD_SLPOUT     (0x11) // Sleep Out
+#define ST7789S_CMD_PTLON      (0x12) // Partial Display Mode On
+#define ST7789S_CMD_NORON      (0x13) // Normal Display Mode On
+#define ST7789S_CMD_INVOFF     (0x20) // Display Inversion Off
+#define ST7789S_CMD_INVON      (0x21) // Display Inversion On
+#define ST7789S_CMD_GAMSET     (0x26) // Gamma Set
+#define ST7789S_CMD_DISPOFF    (0x28) // Display Off
+#define ST7789S_CMD_DISPON     (0x29) // Display On
+#define ST7789S_CMD_CASET      (0x2A) // Column Address Set
+#define ST7789S_CMD_RASET      (0x2B) // Row Address Set
+#define ST7789S_CMD_RAMWR      (0x2C) // Memory Write
+#define ST7789S_CMD_RAMRD      (0x2E) // Memory Read
+#define ST7789S_CMD_PTLAR      (0x30) // Partial Area
+#define ST7789S_CMD_VSCRDEF    (0x33) // Vertical Scrolling Definition
+#define ST7789S_CMD_TEOFF      (0x34) // Tearing Effect Line OFF
+#define ST7789S_CMD_TEON       (0x35) // Tearing Effect Line On
+#define ST7789S_CMD_MADCTL     (0x36) // Memory Data Access Control
+#define ST7789S_MADCTL_BGR BIT(3) /* bitmask for RGB/BGR order */
+#define ST7789S_MADCTL_ML  BIT(4) /* bitmask for vertical refresh order */
+#define ST7789S_MADCTL_MV  BIT(5) /* bitmask for page/column order */
+#define ST7789S_MADCTL_MX  BIT(6) /* bitmask for column address order */
+#define ST7789S_MADCTL_MY  BIT(7) /* bitmask for page address order */
+#define ST7789S_CMD_VSCSAD     (0x37) // Vertical Scroll Start Address of RAM
+#define ST7789S_CMD_IDMOFF     (0x38) // Idle Mode Off
+#define ST7789S_CMD_IDMON      (0x39) // Idle mode on
+#define ST7789S_CMD_COLMOD     (0x3A) // Interface Pixel Format
+#define ST7789S_CMD_WRMEMC     (0x3C) // Write Memory Continue
+#define ST7789S_CMD_RDMEMC     (0x3E) // Read Memory Continue
+#define ST7789S_CMD_STE        (0x44) // Set Tear Scanline
+#define ST7789S_CMD_GSCAN      (0x45) // Get Scanline
+#define ST7789S_CMD_WRDISBV    (0x51) // Write Display Brightness
+#define ST7789S_CMD_RDDISBV    (0x52) // Read Display Brightness Value
+#define ST7789S_CMD_WRCTRLD    (0x53) // Write CTRL Display
+#define ST7789S_CMD_RDCTRLD    (0x54) // Read CTRL Value Display
+#define ST7789S_CMD_WRCACE     (0x55) // Write Content Adaptive Brightness Control and Color Enhancement
+#define ST7789S_CMD_RDCABC     (0x56) // Read Content Adaptive Brightness Control
+#define ST7789S_CMD_WRCABCMB   (0x5E) // Write CABC Minimum Brightness
+#define ST7789S_CMD_RDCABCMB   (0x5F) // Read CABC Minimum Brightness
+#define ST7789S_CMD_RDID1      (0xDA) // Read ID1
+#define ST7789S_CMD_RDID2      (0xDB) // Read ID2
+#define ST7789S_CMD_RDID3      (0xDC) // Read ID3
+
+// Table 2
+#define ST7789S_CMD_RAMCTRL    (0xB0) // RAM Control
+#define ST7789S_RAMCTRL_1_RM_NORMAL       (0)
+#define ST7789S_RAMCTRL_1_RM_RGB          BIT(4)
+// Choice between those options
+#define ST7789S_RAMCTRL_1_DM_MCU          (0)
+#define ST7789S_RAMCTRL_1_DM_RGB          (1)
+#define ST7789S_RAMCTRL_1_DM_VSYNC        (2)
+//                                        (3) is reserved
+#define ST7789S_RAMCTRL_ENDIAN_NORMAL   (0 << 3)
+#define ST7789S_RAMCTRL_ENDIAN_LITTLE   (1 << 3)
+#define ST7789S_RAMCTRL_MAGIC           (3 << 6)
+#define ST7789S_RAMCTRL_EPF(n)          (((n) & 3) << 4)
+
+#define ST7789S_CMD_RGBCTRL    (0xB1) // RGB Interface Control
+#define ST7789S_CMD_PORCTRL    (0xB2) // Porch Setting
+#define ST7789S_CMD_FRCTRL1    (0xB3) // Frame Rate Control 1 (In partial mode/ idle colors)
+#define ST7789S_CMD_GCTRL      (0xB7) // Gate Control
+#define ST7789S_CMD_DGMEN      (0xBA) // Digital Gamma Enable
+#define ST7789S_CMD_VCOMS      (0xBB) // VCOM Setting
+#define ST7789S_CMD_LCMCTRL    (0xC0) // LCM Control
+#define ST7789S_CMD_IDSET      (0xC1) // ID Code Setting
+#define ST7789S_CMD_VDVVRHEN   (0xC2) // VDV and VRH Command Enable
+#define ST7789S_CMD_VRHS       (0xC3) // VRH Set
+#define ST7789S_CMD_VDVS       (0xC4) // VDV Set
+#define ST7789S_CMD_VCMOFSET   (0xC5) // VCOM Offset Set
+#define ST7789S_CMD_FRCTRL2    (0xC6) // Frame Rate Control in Normal Mode
+#define ST7789S_CMD_CABCCTRL   (0xC7) // CABC Control
+#define ST7789S_CMD_REGSEL1    (0xC8) // Register Value Selection 1
+#define ST7789S_CMD_REGSEL2    (0xCA) // Register Value Selection 2
+#define ST7789S_CMD_PWCTRL1    (0xD0) // Power Control 1
+#define ST7789S_CMD_VAPVANEN   (0xD2) // Enable VAP/VAN signal output
+#define ST7789S_CMD_PVGAMCTRL  (0xE0) // Positive Voltage Gamma Control
+#define ST7789S_CMD_NVGAMCTRL  (0xE1) // Negative Voltage Gamma Control
+#define ST7789S_CMD_DGMLUTR    (0xE2) // Digital Gamma Look-up Table for Red
+#define ST7789S_CMD_DGMLUTB    (0xE3) // Digital Gamma Look-up Table for Blue
+#define ST7789S_CMD_GATECTRL   (0xE4) // Gate Control
+#define ST7789S_CMD_SPI2EN     (0xE7) // SPI2 Enable
+#define ST7789S_CMD_PWCTRL2    (0xE8) // Power Control 2
+#define ST7789S_CMD_EQCTRL     (0xE9) // Equalize time control
+#define ST7789S_CMD_PROMCTRL   (0xEC) // Program Mode Control
+#define ST7789S_CMD_PROMEN     (0xFA) // Program Mode Enable
+#define ST7789S_CMD_NVMSET     (0xFC) // NVM Setting
+#define ST7789S_CMD_PROMACT    (0xFE) // Program action
+
+// }}}
+////////////////////////////////////////////////////////////////////////////////
+
 #define PALETTE_SIZE 256
 #define DRIVER_NAME  "ST7789S-fb"
 DECLARE_WAIT_QUEUE_HEAD(wait_vsync_queue);
@@ -207,7 +313,7 @@ static void refresh_lcd(struct myfb_par *par)
     suniv_clrbits(iomm.lcdc + TCON_CTRL_REG, (1 << 31));
 
     if(par->lcdc_ready){
-        lcdc_wr_cmd(0x2c);
+        lcdc_wr_cmd(ST7789S_CMD_RAMWR);
         if(par->app_virt->yoffset == 0){
             suniv_setbits(iomm.debe + DEBE_MODE_CTRL_REG, (1 << 8));
             suniv_clrbits(iomm.debe + DEBE_MODE_CTRL_REG, (1 << 9));
@@ -256,117 +362,122 @@ static irqreturn_t lcdc_irq_handler(int irq, void *arg)
 static void init_lcd(void)
 {
     suniv_gpio_init();
-    suniv_clrbits(iomm.lcdc + PE_DATA, (1 << 11));
-    mdelay(150);
-    suniv_setbits(iomm.lcdc + PE_DATA, (1 << 11));
-    mdelay(150);
 
-    lcdc_wr_cmd(0x11);
-    mdelay(50);
+	// Turn the display off and on again
+	suniv_clrbits(iomm.lcdc + PE_DATA, (1 << 11)); // Unsets PE11 (RESX)
+	mdelay(150);
+	suniv_setbits(iomm.lcdc + PE_DATA, (1 << 11)); // Sets PE11 (RESX)
+	mdelay(150);
 
-    lcdc_wr_cmd(0x36);
-    lcdc_wr_dat(0xb0);
+	// Bring out of sleep
+	lcdc_wr_cmd(ST7789S_CMD_SLPOUT);
+	mdelay(50);
 
-    lcdc_wr_cmd(0x3a);
-    lcdc_wr_dat(0x05);
+	lcdc_wr_cmd(ST7789S_CMD_MADCTL);
+	lcdc_wr_dat(0xb0);
 
-    lcdc_wr_cmd(0x2a);
-    lcdc_wr_dat(0x00);
-    lcdc_wr_dat(0x00);
-    lcdc_wr_dat(0x01);
-    lcdc_wr_dat(0x3f);
+	lcdc_wr_cmd(ST7789S_CMD_COLMOD);
+	lcdc_wr_dat(0x05);
 
-    lcdc_wr_cmd(0x2b);
-    lcdc_wr_dat(0x00);
-    lcdc_wr_dat(0x00);
-    lcdc_wr_dat(0x00);
-    lcdc_wr_dat(0xef);
+	lcdc_wr_cmd(ST7789S_CMD_CASET);
+	lcdc_wr_dat(0x00);
+	lcdc_wr_dat(0x00);
+	lcdc_wr_dat(0x01);
+	lcdc_wr_dat(0x3f);
 
-    lcdc_wr_cmd(0xb2);
-    lcdc_wr_dat(116);
-    lcdc_wr_dat(16);
-    lcdc_wr_dat(0x01);
-    lcdc_wr_dat(0x33);
-    lcdc_wr_dat(0x33);
+	lcdc_wr_cmd(ST7789S_CMD_RASET);
+	lcdc_wr_dat(0x00);
+	lcdc_wr_dat(0x00);
+	lcdc_wr_dat(0x00);
+	lcdc_wr_dat(0xef);
 
-    lcdc_wr_cmd(0xb7);
-    lcdc_wr_dat(0x35);
+	lcdc_wr_cmd(ST7789S_CMD_PORCTRL); // <- differs
+	lcdc_wr_dat(116);
+	lcdc_wr_dat(16);
+	lcdc_wr_dat(0x01);
+	lcdc_wr_dat(0x33);
+	lcdc_wr_dat(0x33);
 
-    lcdc_wr_cmd(0xb8);
-    lcdc_wr_dat(0x2f);
-    lcdc_wr_dat(0x2b);
-    lcdc_wr_dat(0x2f);
+	lcdc_wr_cmd(ST7789S_CMD_GCTRL);
+	lcdc_wr_dat(0x35);
 
-    lcdc_wr_cmd(0xbb);
-    lcdc_wr_dat(0x15);
+	lcdc_wr_cmd(0xb8); // unknown likely ST7789_GTADJ
+	lcdc_wr_dat(0x2f);
+	lcdc_wr_dat(0x2b);
+	lcdc_wr_dat(0x2f);
 
-    lcdc_wr_cmd(0xc0);
-    lcdc_wr_dat(0x3c);
+	lcdc_wr_cmd(ST7789S_CMD_VCOMS);
+	lcdc_wr_dat(0x15);
 
-    lcdc_wr_cmd(0x35);
-    lcdc_wr_dat(0x00);
+	lcdc_wr_cmd(ST7789S_CMD_LCMCTRL);
+	lcdc_wr_dat(0x3c);
 
-    lcdc_wr_cmd(0xc2);
-    lcdc_wr_dat(0x01);
+	lcdc_wr_cmd(ST7789S_CMD_TEON); // <- configured at the end in my driver
+	lcdc_wr_dat(0x00);
 
-    lcdc_wr_cmd(0xc3);
-    lcdc_wr_dat(0x13);
+	lcdc_wr_cmd(ST7789S_CMD_VDVVRHEN);
+	lcdc_wr_dat(0x01);
 
-    lcdc_wr_cmd(0xc4);
-    lcdc_wr_dat(0x20);
+	lcdc_wr_cmd(ST7789S_CMD_VRHS);
+	lcdc_wr_dat(0x13);
 
-    lcdc_wr_cmd(0xc6);
-    lcdc_wr_dat(0x07);
+	lcdc_wr_cmd(ST7789S_CMD_VDVS);
+	lcdc_wr_dat(0x20);
 
-    lcdc_wr_cmd(0xd0);
-    lcdc_wr_dat(0xa4);
-    lcdc_wr_dat(0xa1);
+	lcdc_wr_cmd(ST7789S_CMD_FRCTRL2);
+	lcdc_wr_dat(0x07); // <- 0x0f on my end
 
-    lcdc_wr_cmd(0xe8);
-    lcdc_wr_dat(0x03);
+	lcdc_wr_cmd(ST7789S_CMD_PWCTRL1);
+	lcdc_wr_dat(0xa4);
+	lcdc_wr_dat(0xa1);
 
-    lcdc_wr_cmd(0xe9);
-    lcdc_wr_dat(0x0d);
-    lcdc_wr_dat(0x12);
-    lcdc_wr_dat(0x00);
+	lcdc_wr_cmd(ST7789S_CMD_PWCTRL2);
+	lcdc_wr_dat(0x03);
 
-    lcdc_wr_cmd(0xe0);
-    lcdc_wr_dat(0xd0);
-    lcdc_wr_dat(0x08);
-    lcdc_wr_dat(0x10);
-    lcdc_wr_dat(0x0d);
-    lcdc_wr_dat(0x0c);
-    lcdc_wr_dat(0x07);
-    lcdc_wr_dat(0x37);
-    lcdc_wr_dat(0x53);
-    lcdc_wr_dat(0x4c);
-    lcdc_wr_dat(0x39);
-    lcdc_wr_dat(0x15);
-    lcdc_wr_dat(0x15);
-    lcdc_wr_dat(0x2a);
-    lcdc_wr_dat(0x2d);
+	lcdc_wr_cmd(ST7789S_CMD_EQCTRL);
+	lcdc_wr_dat(0x0d);
+	lcdc_wr_dat(0x12);
+	lcdc_wr_dat(0x00);
 
-    lcdc_wr_cmd(0xe1);
-    lcdc_wr_dat(0xd0);
-    lcdc_wr_dat(0x0d);
-    lcdc_wr_dat(0x12);
-    lcdc_wr_dat(0x08);
-    lcdc_wr_dat(0x08);
-    lcdc_wr_dat(0x15);
-    lcdc_wr_dat(0x34);
-    lcdc_wr_dat(0x34);
-    lcdc_wr_dat(0x4a);
-    lcdc_wr_dat(0x36);
-    lcdc_wr_dat(0x12);
-    lcdc_wr_dat(0x13);
-    lcdc_wr_dat(0x2b);
-    lcdc_wr_dat(0x2f);
+	lcdc_wr_cmd(ST7789S_CMD_PVGAMCTRL);
+	lcdc_wr_dat(0xd0);
+	lcdc_wr_dat(0x08);
+	lcdc_wr_dat(0x10);
+	lcdc_wr_dat(0x0d);
+	lcdc_wr_dat(0x0c);
+	lcdc_wr_dat(0x07);
+	lcdc_wr_dat(0x37);
+	lcdc_wr_dat(0x53);
+	lcdc_wr_dat(0x4c);
+	lcdc_wr_dat(0x39);
+	lcdc_wr_dat(0x15);
+	lcdc_wr_dat(0x15);
+	lcdc_wr_dat(0x2a);
+	lcdc_wr_dat(0x2d);
 
-    lcdc_wr_cmd(0x29);
-    lcdc_wr_cmd(0x2c);
+	lcdc_wr_cmd(ST7789S_CMD_NVGAMCTRL);
+	lcdc_wr_dat(0xd0);
+	lcdc_wr_dat(0x0d);
+	lcdc_wr_dat(0x12);
+	lcdc_wr_dat(0x08);
+	lcdc_wr_dat(0x08);
+	lcdc_wr_dat(0x15);
+	lcdc_wr_dat(0x34);
+	lcdc_wr_dat(0x34);
+	lcdc_wr_dat(0x4a);
+	lcdc_wr_dat(0x36);
+	lcdc_wr_dat(0x12);
+	lcdc_wr_dat(0x13);
+	lcdc_wr_dat(0x2b);
+	lcdc_wr_dat(0x2f);
 
-    mypar->app_virt->yoffset = 0;
-    memset(mypar->vram_virt, 0, 320*240*4);
+	// Missing: CMD_STE (set tear scanline)
+
+	lcdc_wr_cmd(ST7789S_CMD_DISPON);
+	lcdc_wr_cmd(ST7789S_CMD_RAMWR);
+
+	mypar->app_virt->yoffset = 0;
+	memset(mypar->vram_virt, 0, 320*240*4);
 }
 
 static void suniv_lcdc_init(struct myfb_par *par)
