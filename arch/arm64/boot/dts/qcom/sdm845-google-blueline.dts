@@ -395,6 +395,35 @@
 	};
 };
 
+&i2c2 {
+	status = "disabled";
+	#dma-cells = <3>;
+
+	dmas =  <&gpi_dma0 0 2 QCOM_GPI_I2C>,
+		<&gpi_dma0 1 2 QCOM_GPI_I2C>;
+	dma-names = "tx", "rx";
+
+	touchscreen@49 {
+		compatible = "st,fts";
+		reg = <0x49>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&touchscreen_pins &touchscreen_reset>;
+		interrupt-parent = <&tlmm>;
+		interrupts = <125 IRQ_TYPE_LEVEL_LOW>;
+		avdd-supply = <&vreg_l14a_1p88>;
+		vdd-supply = <&vreg_l19a_3p3>;
+		// touchscreen-size-x = <1080>;
+		// touchscreen-size-y = <2160>;
+
+		st,irq-gpio = <&tlmm 125 0>;
+		st,reset-gpio = <&tlmm 99 0>;
+		st,switch_gpio = <&tlmm 136 0>;
+		st,max-coords = <1079 2159>;
+		st,regulator_dvdd = "vdd";
+		st,regulator_avdd = "avdd";
+	};
+};
+
 &ipa {
 	status = "okay";
 
@@ -536,14 +565,6 @@
 			drive-strength = <2>;
 			bias-disable;
 		};
-	};
-
-	touchscreen_i2c_pins: qup-i2c2-gpio {
-		pins = "gpio27", "gpio28";
-		function = "gpio";
-
-		drive-strength = <2>;
-		bias-disable;
 	};
 };
 
