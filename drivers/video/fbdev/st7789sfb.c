@@ -171,10 +171,21 @@
 // }}}
 ////////////////////////////////////////////////////////////////////////////////
 
+// Forces horizontal mode in the LCD controller.
+// This is what the driver did originally.
+// NOTE: This causes heavy diagonal tearing.
+//#define FORCE_HORIZONTAL
 #define MIYOO_FB_BPP 16
+#if defined(FORCE_HORIZONTAL)
 #define MIYOO_FB_RES "320x240"
 #define MIYOO_FB_XRES 320
 #define MIYOO_FB_YRES 240
+#else
+#define MIYOO_FB_RES "240x320"
+#define MIYOO_FB_XRES 240
+#define MIYOO_FB_YRES 320
+#endif
+
 // Documented to be 0x2 on reset/by default
 #define MIYOO_ST7789s_VERTICAL_BACK_PORCH 0x02
 // In another driver, testing inconclusive
@@ -422,6 +433,7 @@ static void init_lcd(void)
 	lcdc_wr_cmd(ST7789S_CMD_SLPOUT);
 	mdelay(50);
 
+#if defined(FORCE_HORIZONTAL)
 	lcdc_wr_cmd(ST7789S_CMD_MADCTL);
 	lcdc_wr_dat(
 		// Equivalent to 0xb0
@@ -431,9 +443,13 @@ static void init_lcd(void)
 		ST7789S_MADCTL_MY |
 		0
 	);
+#else
+	lcdc_wr_cmd(ST7789S_CMD_MADCTL);
+	lcdc_wr_dat(0);
+#endif
 
 	lcdc_wr_cmd(ST7789S_CMD_COLMOD);
-	lcdc_wr_dat(0x05);
+	lcdc_wr_dat(0x05); // 101 -> 16bpp
 
 	lcdc_wr_cmd(ST7789S_CMD_CASET);
 	lcdc_wr_dat(0x00);
@@ -442,7 +458,6 @@ static void init_lcd(void)
 	lcdc_wr_dat(((MIYOO_FB_XRES - 1) & 0xff00) >> 8);
 	lcdc_wr_dat( (MIYOO_FB_XRES - 1) & 0x00ff);       
 
-	// TODO: handle DE rotation (would use XRES instead here)
 	lcdc_wr_cmd(ST7789S_CMD_RASET);
 	lcdc_wr_dat(0x00);
 	lcdc_wr_dat(0x00);
