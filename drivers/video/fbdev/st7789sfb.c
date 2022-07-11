@@ -472,9 +472,6 @@ static void init_lcd(void)
 	lcdc_wr_cmd(ST7789S_CMD_LCMCTRL);
 	lcdc_wr_dat(0x3c);
 
-	lcdc_wr_cmd(ST7789S_CMD_TEON); // <- configured at the end in my driver
-	lcdc_wr_dat(0x00);
-
 	lcdc_wr_cmd(ST7789S_CMD_VDVVRHEN);
 	lcdc_wr_dat(0x01);
 
@@ -540,13 +537,26 @@ static void init_lcd(void)
 	lcdc_wr_dat(0x2b);
 	lcdc_wr_dat(0x2f);
 
-	// Missing: CMD_STE (set tear scanline)
+#if 0                                     
+	lcdc_wr_cmd(ST7789S_CMD_TEOFF);        
+#else                                     
+	lcdc_wr_cmd(ST7789S_CMD_TEON);         
+	lcdc_wr_dat(0x00); // only for vsync   
 
-	lcdc_wr_cmd(ST7789S_CMD_DISPON);
-	lcdc_wr_cmd(ST7789S_CMD_RAMWR);
+	lcdc_wr_cmd(ST7789S_CMD_STE);          
+	lcdc_wr_dat(0x00);                     
+	lcdc_wr_dat(0x30); // Line 48          
+#endif                                    
 
 	mypar->app_virt->yoffset = 0;
+
+	// Initialize framebuffer
 	memset(mypar->vram_virt, 0, MIYOO_FB_XRES * MIYOO_FB_YRES * (MIYOO_FB_BPP / 8) * DE_LAYERS_COUNT);
+
+	// Start a write
+	lcdc_wr_cmd(ST7789S_CMD_RAMWR);
+	// Turn the display on
+	lcdc_wr_cmd(ST7789S_CMD_DISPON);
 }
 
 static void suniv_lcdc_init(struct myfb_par *par)
