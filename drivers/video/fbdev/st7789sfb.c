@@ -488,9 +488,16 @@ static void init_lcd(void)
 	lcdc_wr_cmd(ST7789S_CMD_VDVS);
 	lcdc_wr_dat(0x20);
 
+	// TODO module param for refresh rate
 	lcdc_wr_cmd(ST7789S_CMD_FRCTRL2);
-	//lcdc_wr_dat(0x04);   // 94hz
-	lcdc_wr_dat(0x0f); // 60hz, and the default
+	//lcdc_wr_dat(0x04);   // 94hz, jarring is the word
+	//lcdc_wr_dat(0x0f); // 60hz, and the default
+	//lcdc_wr_dat(0x10); // 58hz
+	//lcdc_wr_dat(0x11); // 57hz
+	lcdc_wr_dat(0x12); // 55hz, looks the less jarring(?)
+	//lcdc_wr_dat(0x13); // 53hz
+	//lcdc_wr_dat(0x14); // 52hz
+	//lcdc_wr_dat(0x15); // 50hz
 	//lcdc_wr_dat(0x1f); // 39hz
 
 	lcdc_wr_cmd(ST7789S_CMD_PWCTRL1);
