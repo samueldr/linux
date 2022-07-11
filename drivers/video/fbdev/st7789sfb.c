@@ -177,10 +177,6 @@
 #define MIYOO_FB_YRES 240
 // Documented to be 0x2 on reset/by default
 #define MIYOO_ST7789s_VERTICAL_BACK_PORCH 0x02
-// In another driver, testing inconclusive
-// #define MIYOO_ST7789s_BACK_PORCH  9
-// #define MIYOO_ST7789s_FRONT_PORCH 10
-// Initial values from this driver
 #define MIYOO_ST7789s_BACK_PORCH  0x1
 #define MIYOO_ST7789s_FRONT_PORCH 0x1
 #define DE_LAYERS_COUNT 4
