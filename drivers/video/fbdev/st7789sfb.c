@@ -175,6 +175,12 @@
 #define MIYOO_FB_RES "320x240"
 #define MIYOO_FB_XRES 320
 #define MIYOO_FB_YRES 240
+// In another driver, testing inconclusive
+// #define MIYOO_ST7789s_BACK_PORCH  9
+// #define MIYOO_ST7789s_FRONT_PORCH 10
+// Initial values from this driver
+#define MIYOO_ST7789s_BACK_PORCH  0x74
+#define MIYOO_ST7789s_FRONT_PORCH 0x10
 #define DE_LAYERS_COUNT 4
 #define PALETTE_SIZE 256
 #define DRIVER_NAME  "ST7789S-fb"
@@ -291,7 +297,7 @@ static void miyoo_lcd_pinmux(void)
 	writel(r, iomm.gpio + PE_CFG1);
 
 	// Sets initial state for reset line.
-	writel(0xffffffff, iomm.gpio + PE_DATA);
+	suniv_clrbits(iomm.lcdc + PE_DATA, (1 << 11)); // Unsets PE11 (RESX)
 }
 
 static uint32_t lcdc_wait_busy(void)
@@ -350,30 +356,35 @@ static void refresh_lcd(struct myfb_par *par)
     if(par->lcdc_ready){
         lcdc_wr_cmd(ST7789S_CMD_RAMWR);
         if(par->app_virt->yoffset == MIYOO_FB_YRES * 0){
+			// Layer 0 enable
             suniv_setbits(iomm.debe + DEBE_MODE_CTRL_REG, (1 << 8));
             suniv_clrbits(iomm.debe + DEBE_MODE_CTRL_REG, (1 << 9));
             suniv_clrbits(iomm.debe + DEBE_MODE_CTRL_REG, (1 << 10));
             suniv_clrbits(iomm.debe + DEBE_MODE_CTRL_REG, (1 << 11));
         }
         else if(par->app_virt->yoffset == MIYOO_FB_YRES * 1){
+			// Layer 1 enable
             suniv_clrbits(iomm.debe + DEBE_MODE_CTRL_REG, (1 << 8));
             suniv_setbits(iomm.debe + DEBE_MODE_CTRL_REG, (1 << 9));
             suniv_clrbits(iomm.debe + DEBE_MODE_CTRL_REG, (1 << 10));
             suniv_clrbits(iomm.debe + DEBE_MODE_CTRL_REG, (1 << 11));
         }
         else if(par->app_virt->yoffset == MIYOO_FB_YRES * 2){
+			// Layer 2 enable
             suniv_clrbits(iomm.debe + DEBE_MODE_CTRL_REG, (1 << 8));
             suniv_clrbits(iomm.debe + DEBE_MODE_CTRL_REG, (1 << 9));
             suniv_setbits(iomm.debe + DEBE_MODE_CTRL_REG, (1 << 10));
             suniv_clrbits(iomm.debe + DEBE_MODE_CTRL_REG, (1 << 11));
         }
         else if(par->app_virt->yoffset == MIYOO_FB_YRES * 3){
+			// Layer 3 enable
             suniv_clrbits(iomm.debe + DEBE_MODE_CTRL_REG, (1 << 8));
             suniv_clrbits(iomm.debe + DEBE_MODE_CTRL_REG, (1 << 9));
             suniv_clrbits(iomm.debe + DEBE_MODE_CTRL_REG, (1 << 10));
             suniv_setbits(iomm.debe + DEBE_MODE_CTRL_REG, (1 << 11));
         }
     }
+	// Mark register loading as done
     suniv_setbits(iomm.debe + DEBE_REGBUFF_CTRL_REG, (1 << 0));
     suniv_setbits(iomm.lcdc + TCON_CTRL_REG, (1 << 31));
 
@@ -435,12 +446,16 @@ static void init_lcd(void)
 	lcdc_wr_dat(((MIYOO_FB_YRES - 1) & 0xff00) >> 8);
 	lcdc_wr_dat( (MIYOO_FB_YRES - 1) & 0x00ff);
 
-	lcdc_wr_cmd(ST7789S_CMD_PORCTRL); // <- differs
-	lcdc_wr_dat(116);
-	lcdc_wr_dat(16);
-	lcdc_wr_dat(0x01);
-	lcdc_wr_dat(0x33);
-	lcdc_wr_dat(0x33);
+	lcdc_wr_cmd(ST7789S_CMD_PORCTRL);
+	// Back porch in normal mode
+	lcdc_wr_dat(MIYOO_ST7789s_BACK_PORCH);
+	// Front porch in normal mode
+	lcdc_wr_dat(MIYOO_ST7789s_FRONT_PORCH);
+	// Enable separate porches control
+	lcdc_wr_dat(0x01); // 0b.......1
+	// Partial and idle mode back porches, set to 0x3 each
+	lcdc_wr_dat(0x33); // 0b0011 0b0011
+	lcdc_wr_dat(0x33); // 0b0011 0b0011
 
 	lcdc_wr_cmd(ST7789S_CMD_GCTRL);
 	lcdc_wr_dat(0x35);
@@ -469,7 +484,8 @@ static void init_lcd(void)
 	lcdc_wr_dat(0x20);
 
 	lcdc_wr_cmd(ST7789S_CMD_FRCTRL2);
-	lcdc_wr_dat(0x07); // <- 0x0f on my end
+	lcdc_wr_dat(0x0f); // 60hz, and the default
+	//lcdc_wr_dat(0x1f); // 39hz
 
 	lcdc_wr_cmd(ST7789S_CMD_PWCTRL1);
 	lcdc_wr_dat(0xa4);
@@ -526,38 +542,94 @@ static void init_lcd(void)
 
 static void suniv_lcdc_init(struct myfb_par *par)
 {
-    uint32_t ret=0, p1=0, p2=0;
+	uint32_t ret=0, p1=0, p2=0;
 
-    writel(0, iomm.lcdc + TCON_CTRL_REG);
-    writel(0, iomm.lcdc + TCON_INT_REG0);
-    ret = readl(iomm.lcdc + TCON_CLK_CTRL_REG);
-    ret&= ~(0xf << 28);
-    writel(ret, iomm.lcdc + TCON_CLK_CTRL_REG);
-    writel(0xffffffff, iomm.lcdc + TCON0_IO_CTRL_REG1);
-    writel(0xffffffff, iomm.lcdc + TCON1_IO_CTRL_REG1);
+	// Initializes CTRL_REG and INT_REG0 to all unset.
+	writel(0, iomm.lcdc + TCON_CTRL_REG);
+	writel(0, iomm.lcdc + TCON_INT_REG0);
 
-    suniv_setbits(iomm.debe + DEBE_MODE_CTRL_REG, (1 << 0));
-    writel(par->mode.xres << 4, iomm.debe + DEBE_LAY0_LINEWIDTH_REG);
-    writel(par->mode.xres << 4, iomm.debe + DEBE_LAY1_LINEWIDTH_REG);
-    writel(par->mode.xres << 4, iomm.debe + DEBE_LAY2_LINEWIDTH_REG);
-    writel(par->mode.xres << 4, iomm.debe + DEBE_LAY3_LINEWIDTH_REG);
-    writel((((par->mode.yres) - 1) << 16) | (((par->mode.xres) - 1) << 0), iomm.debe + DEBE_DISP_SIZE_REG);
-    writel((((par->mode.yres) - 1) << 16) | (((par->mode.xres) - 1) << 0), iomm.debe + DEBE_LAY0_SIZE_REG);
-    writel((((par->mode.yres) - 1) << 16) | (((par->mode.xres) - 1) << 0), iomm.debe + DEBE_LAY1_SIZE_REG);
-    writel((((par->mode.yres) - 1) << 16) | (((par->mode.xres) - 1) << 0), iomm.debe + DEBE_LAY2_SIZE_REG);
-    writel((((par->mode.yres) - 1) << 16) | (((par->mode.xres) - 1) << 0), iomm.debe + DEBE_LAY3_SIZE_REG);
-    writel((5 << 8), iomm.debe + DEBE_LAY0_ATT_CTRL_REG1);
-    writel((5 << 8), iomm.debe + DEBE_LAY1_ATT_CTRL_REG1);
-    writel((5 << 8), iomm.debe + DEBE_LAY2_ATT_CTRL_REG1);
-    writel((5 << 8), iomm.debe + DEBE_LAY3_ATT_CTRL_REG1);
-    suniv_setbits(iomm.debe + DEBE_MODE_CTRL_REG, (1 << 8));
-    suniv_setbits(iomm.debe + DEBE_REGBUFF_CTRL_REG, (1 << 1));
-    suniv_setbits(iomm.debe + DEBE_MODE_CTRL_REG, (1 << 1));
+	// Resets bits 28:31; LCLK_EN[3:0]
+	// The documentation is terrible and it is incomprehensible.
+	/* LCLK_EN Look-up Table:
+		0x0 : dclk_en = 0; dclk1_en = 0; dclk2_en = 0; dclkm2_en = 0;
+		0x4 : dclk_en = 0; dclk1_en = 0; dclk2_en = 0; dclkm2_en = 0;
+		0x6 : dclk_en = 0; dclk1_en = 0; dclk2_en = 0; dclkm2_en = 0;
+		0x7 : dclk_en = 0; dclk1_en = 0; dclk2_en = 0; dclkm2_en = 0;
 
-    ret = readl(iomm.lcdc + TCON_CTRL_REG);
-    ret&= ~(1 << 0);
-    writel(ret, iomm.lcdc + TCON_CTRL_REG);
-    ret = (1 + 1 + 1);
+		0x1 : dclk_en = 1; dclk1_en = 0; dclk2_en = 0; dclkm2_en = 0;
+
+		0x2 : dclk_en = 1; dclk1_en = 0; dclk2_en = 0; dclkm2_en = 1;
+
+		0x3 : dclk_en = 1; dclk1_en = 1; dclk2_en = 0; dclkm2_en = 0;
+
+		0x5 : dclk_en = 1; dclk1_en = 0; dclk2_en = 1; dclkm2_en = 0;
+
+		0x8 : dclk_en = 1; dclk1_en = 1; dclk2_en = 1; dclkm2_en = 1;
+		0x9 : dclk_en = 1; dclk1_en = 1; dclk2_en = 1; dclkm2_en = 1;
+		0xa : dclk_en = 1; dclk1_en = 1; dclk2_en = 1; dclkm2_en = 1;
+		0xb : dclk_en = 1; dclk1_en = 1; dclk2_en = 1; dclkm2_en = 1;
+		0xc : dclk_en = 1; dclk1_en = 1; dclk2_en = 1; dclkm2_en = 1;
+		0xd : dclk_en = 1; dclk1_en = 1; dclk2_en = 1; dclkm2_en = 1;
+		0xe : dclk_en = 1; dclk1_en = 1; dclk2_en = 1; dclkm2_en = 1;
+		0xf : dclk_en = 1; dclk1_en = 1; dclk2_en = 1; dclkm2_en = 1;
+	*/
+	ret = readl(iomm.lcdc + TCON_CLK_CTRL_REG);
+	ret&= ~(0xf << 28);
+	writel(ret, iomm.lcdc + TCON_CLK_CTRL_REG);
+
+	// Initializes TCONx_IO_CTRL_REG1; all set
+	writel(0xffffffff, iomm.lcdc + TCON0_IO_CTRL_REG1);
+	writel(0xffffffff, iomm.lcdc + TCON1_IO_CTRL_REG1);
+
+	// DE back-end enable
+	suniv_setbits(iomm.debe + DEBE_MODE_CTRL_REG, (1 << 0));
+
+	// Tell the DE how long in bits lines are
+	writel(par->mode.xres * MIYOO_FB_BPP, iomm.debe + DEBE_LAY0_LINEWIDTH_REG);
+	writel(par->mode.xres * MIYOO_FB_BPP, iomm.debe + DEBE_LAY1_LINEWIDTH_REG);
+	writel(par->mode.xres * MIYOO_FB_BPP, iomm.debe + DEBE_LAY2_LINEWIDTH_REG);
+	writel(par->mode.xres * MIYOO_FB_BPP, iomm.debe + DEBE_LAY3_LINEWIDTH_REG);
+
+	// Splats the res as consecutibe 16 bit numbers in the size registers
+	// (The DE adds one to these values, thus minus one)
+	writel((((par->mode.yres) - 1) << 16) | (((par->mode.xres) - 1) << 0), iomm.debe + DEBE_DISP_SIZE_REG);
+	writel((((par->mode.yres) - 1) << 16) | (((par->mode.xres) - 1) << 0), iomm.debe + DEBE_LAY0_SIZE_REG);
+	writel((((par->mode.yres) - 1) << 16) | (((par->mode.xres) - 1) << 0), iomm.debe + DEBE_LAY1_SIZE_REG);
+	writel((((par->mode.yres) - 1) << 16) | (((par->mode.xres) - 1) << 0), iomm.debe + DEBE_LAY2_SIZE_REG);
+	writel((((par->mode.yres) - 1) << 16) | (((par->mode.xres) - 1) << 0), iomm.debe + DEBE_LAY3_SIZE_REG);
+
+	// Sets RGB565 framebuffer format
+	// ... | Format  | Reserved | Channel swap | Pixel sequence
+	// ... | "0101"  | "00000"  | "0"          | "00"
+	writel((5 << 8), iomm.debe + DEBE_LAY0_ATT_CTRL_REG1);
+	writel((5 << 8), iomm.debe + DEBE_LAY1_ATT_CTRL_REG1);
+	writel((5 << 8), iomm.debe + DEBE_LAY2_ATT_CTRL_REG1);
+	writel((5 << 8), iomm.debe + DEBE_LAY3_ATT_CTRL_REG1);
+
+	// Register loading auto mode: disabled
+	suniv_setbits(iomm.debe + DEBE_REGBUFF_CTRL_REG, (1 << 1));
+
+	// Layer 0 enable
+	suniv_setbits(iomm.debe + DEBE_MODE_CTRL_REG, (1 << 8));
+	suniv_clrbits(iomm.debe + DEBE_MODE_CTRL_REG, (1 << 9));
+	suniv_clrbits(iomm.debe + DEBE_MODE_CTRL_REG, (1 << 10));
+	suniv_clrbits(iomm.debe + DEBE_MODE_CTRL_REG, (1 << 11));
+	// Normal output channel Start & Reset control
+	// (set -> start)
+	// (unset -> reset)
+	suniv_setbits(iomm.debe + DEBE_MODE_CTRL_REG, (1 << 1));
+
+	// Mark register loading as done
+    suniv_setbits(iomm.debe + DEBE_REGBUFF_CTRL_REG, (1 << 0));
+
+	// // Read current TCON_CTRL_REG
+	// ret = readl(iomm.lcdc + TCON_CTRL_REG);
+	// // Sets bit 0 to 0; IO_MAP_SEL to TCON0
+	// // Which is documented as *function deleted in this version*...
+	// ret&= ~(1 << 0);
+	// writel(ret, iomm.lcdc + TCON_CTRL_REG);
+	// ret = (1 + 1 + 1); // ????
+    suniv_clrbits(iomm.lcdc + TCON_CTRL_REG, (1 << 0));
 
 	// Tells the DE where the layers are
 	writel((uint32_t)(par->vram_phys + MIYOO_FB_XRES * MIYOO_FB_YRES * (MIYOO_FB_BPP / 8) * 0) << 3, iomm.debe + DEBE_LAY0_FB_ADDR_REG);
@@ -571,34 +643,86 @@ static void suniv_lcdc_init(struct myfb_par *par)
 	writel((uint32_t)(par->vram_phys + MIYOO_FB_XRES * MIYOO_FB_YRES * (MIYOO_FB_BPP / 8) * 2) >> 29, iomm.debe + DEBE_LAY2_FB_HI_ADDR_REG);
 	writel((uint32_t)(par->vram_phys + MIYOO_FB_XRES * MIYOO_FB_YRES * (MIYOO_FB_BPP / 8) * 3) >> 29, iomm.debe + DEBE_LAY3_FB_HI_ADDR_REG);
 
-    writel((1 << 31) | ((ret & 0x1f) << 4) | (1 << 24), iomm.lcdc + TCON0_CTRL_REG);
-    writel((0xf << 28) | (25 << 0), iomm.lcdc + TCON_CLK_CTRL_REG);
+	// NOTE about TCON0_STA_DLY:
+	// Other drivers (r61520fb) use:
+	// 		ret = (v_front_porch + v_back_porch + v_sync_len);
+	// 		...
+	// 		(ret & 0x1f) << 4
+	// This makes much more sense than 1+1+1...
+	// Though porches and sync *could* be 3 I suppose?
+	// Anyway, this is likely something that can be looked at to fix the issues.
+    writel(0
+			| (1 << 31)             //  31 > TCON0_EN, 1: enable
+			// | ((ret & 0x1f) << 4)   // 8:4 > TCON0_STA_DLY: STA delay (ret was set to 1+1+1)
+			// | ((  3 & 0x1f) << 4)   // 8:4 > TCON0_STA_DLY: STA delay
+			| (((
+						//MIYOO_ST7789s_BACK_PORCH
+						//+ MIYOO_ST7789s_FRONT_PORCH
+						1 + 1 // XXX
+						+ 1
+				) & 0x1f) << 4)   // 8:4 > TCON0_STA_DLY: STA delay (porches of 8, sync of 1)
+			| (1 << 24)
+			| 0,
+		iomm.lcdc + TCON0_CTRL_REG
+	);
+
+	// Configures TCON_CLK_CTRL_REG
+    writel(
+			(0xf << 28) // LCLK_EN = 0xf -> dclk_en = 1; dclk1_en = 1; dclk2_en = 1; dclkm2_en = 1;
+			| (25 << 0) // DCLKDIV =  25 -> tdclk = tsclk[?] * 25
+	, iomm.lcdc + TCON_CLK_CTRL_REG);
 
     writel((4 << 29) | (1 << 26), iomm.lcdc + TCON0_CPU_IF_REG);
     writel((1 << 28), iomm.lcdc + TCON0_IO_CTRL_REG0);
 
-    p1 = par->mode.yres - 1;
-    p2 = par->mode.xres - 1;
+	// Sets screen width and height (in pixels)
+	// (The DE adds one to these values, thus minus one)
+    p1 = par->mode.yres - 1; // TCON0_Y: height (in pixels)
+    p2 = par->mode.xres - 1; // TCON0_X: width (in pixels)
     writel((p2 << 16) | (p1 << 0), iomm.lcdc + TCON0_BASIC_TIMING_REG0);
 
-    p1 = 1 + 1;
-    p2 = 1 + 1 + par->mode.xres + 2;
+	// Sets horizontal total time, and horizontal back porch, in dclk
+    p1 = 1 + 1; // HBP: back porch
+    p2 = 1 + 1 + par->mode.xres + 2; // HT: horizontal total time (back porch + res + front porch)
     writel((p2 << 16) | (p1 << 0), iomm.lcdc + TCON0_BASIC_TIMING_REG1);
 
-    p1 = 1 + 1;
-    p2 = (1 + 1 + par->mode.yres + 1 + 2) << 1;
+	// Sets vertical back and front porch
+    p1 = 1 + 1; // VBP: Vertical back porch (in lines)
+    p2 = (1 + 1 + par->mode.yres + 1 + 2) << 1; // VT: Vertical front porch (in lines)
     writel((p2 << 16) | (p1 << 0), iomm.lcdc + TCON0_BASIC_TIMING_REG2);
 
-    p1 = 1 + 1;
-    p2 = 1 + 1;
+	// Sets sync pulse widths
+    p1 = 1 + 1; // VSPW: vertical sync pulse width (in lines)
+    p2 = 1 + 1; // HSPW: horizontal sync pulse width (in dclk)
     writel((p2 << 16) | (p1 << 0), iomm.lcdc + TCON0_BASIC_TIMING_REG3);
 
+	// Sets those to their defaults:
+	// (and most likely changes nothing?)
+	//   HV_MOD:      0 -> 24 bit parallel mode
+	//   SERIAL_MOD:  0 -> 8 bit/3cycle RGB serial mode (RGB888)
+	//   RGB888_SM0: 00 -> R G B
+	//   RGB888_SM1: 00 -> R G B
+	//   YUV_SM:     00 -> Y U Y V
+	//   YUV EAV/SAV: 0 -> F toggle right after active video line
     writel(0, iomm.lcdc + TCON0_HV_TIMING_REG);
+	// Sets those to enabled:
+	//   IO3_OUTPUT_TRI_EN : enable
+	//   IO2_OUTPUT_TRI_EN : enable
+	//   IO1_OUTPUT_TRI_EN : enable
+	//   IO0_OUTPUT_TRI_EN : enable
+	//   D[23:0]           : enable
     writel(0, iomm.lcdc + TCON0_IO_CTRL_REG1);
 
+	// TCON_CTRL_REG.MODULE_EN = enable
     suniv_setbits(iomm.lcdc + TCON_CTRL_REG, (1 << 31));
-    init_lcd();
+    
+	// Initialize the panel
+	init_lcd();
+
+	// TCON_INT_REG0.VBIE_TCON0 = enable (vblank interrupt enable)
     suniv_setbits(iomm.lcdc + TCON_INT_REG0, (1 << 31));
+
+	// TCON0_CPU_IF_REG.AUTO = 1; "all valid data during frame is written to the panel"
     suniv_setbits(iomm.lcdc + TCON0_CPU_IF_REG, (1 << 28));
 }
 
