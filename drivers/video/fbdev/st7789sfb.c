@@ -175,12 +175,14 @@
 #define MIYOO_FB_RES "320x240"
 #define MIYOO_FB_XRES 320
 #define MIYOO_FB_YRES 240
+// Documented to be 0x2 on reset/by default
+#define MIYOO_ST7789s_VERTICAL_BACK_PORCH 0x02
 // In another driver, testing inconclusive
 // #define MIYOO_ST7789s_BACK_PORCH  9
 // #define MIYOO_ST7789s_FRONT_PORCH 10
 // Initial values from this driver
-#define MIYOO_ST7789s_BACK_PORCH  0x74
-#define MIYOO_ST7789s_FRONT_PORCH 0x10
+#define MIYOO_ST7789s_BACK_PORCH  0x1
+#define MIYOO_ST7789s_FRONT_PORCH 0x1
 #define DE_LAYERS_COUNT 4
 #define PALETTE_SIZE 256
 #define DRIVER_NAME  "ST7789S-fb"
@@ -276,14 +278,15 @@ static void miyoo_lcd_pinmux(void)
 	r|= 0x000222222;
 	writel(r, iomm.gpio + PD_CFG2);
 
-	// Read current configuration
-	r = readl(iomm.gpio + PD_PUL1);
-	// Resets 8:11
-	r&= 0xfffff0ff;
-	// Pull-Up enable for PD4, PD5 [LCD_D6, LCD_D7]
-	// 01 01 00 00 00 00
-	r|= 0x00000500;
-	writel(r, iomm.gpio + PD_PUL1);
+	// ???
+	// // Read current configuration
+	// r = readl(iomm.gpio + PD_PUL1);
+	// // Resets 8:11
+	// r&= 0xfffff0ff;
+	// // Pull-Up enable for PD4, PD5 [LCD_D6, LCD_D7]
+	// // 01 01 00 00 00 00
+	// r|= 0x00000500;
+	// writel(r, iomm.gpio + PD_PUL1);
 
 	// Read current configuration
 	r = readl(iomm.gpio + PE_CFG1);
@@ -460,10 +463,13 @@ static void init_lcd(void)
 	lcdc_wr_cmd(ST7789S_CMD_GCTRL);
 	lcdc_wr_dat(0x35);
 
+	/*
+	// NOTE: enabling this creates unsightly "columnar ghosting"
 	lcdc_wr_cmd(0xb8); // unknown likely ST7789_GTADJ
 	lcdc_wr_dat(0x2f);
 	lcdc_wr_dat(0x2b);
 	lcdc_wr_dat(0x2f);
+	*/
 
 	lcdc_wr_cmd(ST7789S_CMD_VCOMS);
 	lcdc_wr_dat(0x15);
@@ -484,6 +490,7 @@ static void init_lcd(void)
 	lcdc_wr_dat(0x20);
 
 	lcdc_wr_cmd(ST7789S_CMD_FRCTRL2);
+	//lcdc_wr_dat(0x04);   // 94hz
 	lcdc_wr_dat(0x0f); // 60hz, and the default
 	//lcdc_wr_dat(0x1f); // 39hz
 
@@ -533,8 +540,11 @@ static void init_lcd(void)
 
 	// Missing: CMD_STE (set tear scanline)
 
+    mdelay(50);
 	lcdc_wr_cmd(ST7789S_CMD_DISPON);
+    mdelay(50);
 	lcdc_wr_cmd(ST7789S_CMD_RAMWR);
+    mdelay(50);
 
 	mypar->app_virt->yoffset = 0;
 	memset(mypar->vram_virt, 0, MIYOO_FB_XRES * MIYOO_FB_YRES * (MIYOO_FB_BPP / 8) * DE_LAYERS_COUNT);
@@ -656,12 +666,11 @@ static void suniv_lcdc_init(struct myfb_par *par)
 			// | ((ret & 0x1f) << 4)   // 8:4 > TCON0_STA_DLY: STA delay (ret was set to 1+1+1)
 			// | ((  3 & 0x1f) << 4)   // 8:4 > TCON0_STA_DLY: STA delay
 			| (((
-						//MIYOO_ST7789s_BACK_PORCH
-						//+ MIYOO_ST7789s_FRONT_PORCH
-						1 + 1 // XXX
+						MIYOO_ST7789s_BACK_PORCH
+						+ MIYOO_ST7789s_FRONT_PORCH
 						+ 1
-				) & 0x1f) << 4)   // 8:4 > TCON0_STA_DLY: STA delay (porches of 8, sync of 1)
-			| (1 << 24)
+				) & 0x1f) << 4)   // 8:4 > TCON0_STA_DLY: STA delay
+			| (1 << 24) // 24:26 -> 01 : 8080 I/F
 			| 0,
 		iomm.lcdc + TCON0_CTRL_REG
 	);
@@ -669,7 +678,8 @@ static void suniv_lcdc_init(struct myfb_par *par)
 	// Configures TCON_CLK_CTRL_REG
     writel(
 			(0xf << 28) // LCLK_EN = 0xf -> dclk_en = 1; dclk1_en = 1; dclk2_en = 1; dclkm2_en = 1;
-			| (25 << 0) // DCLKDIV =  25 -> tdclk = tsclk[?] * 25
+			// | (15 << 0) // stable image, at ~ half res ???!?
+			| (30 << 0) // DCLKDIV =  x  -> tdclk = tsclk[?] * x
 	, iomm.lcdc + TCON_CLK_CTRL_REG);
 
     writel((4 << 29) | (1 << 26), iomm.lcdc + TCON0_CPU_IF_REG);
@@ -682,13 +692,13 @@ static void suniv_lcdc_init(struct myfb_par *par)
     writel((p2 << 16) | (p1 << 0), iomm.lcdc + TCON0_BASIC_TIMING_REG0);
 
 	// Sets horizontal total time, and horizontal back porch, in dclk
-    p1 = 1 + 1; // HBP: back porch
-    p2 = 1 + 1 + par->mode.xres + 2; // HT: horizontal total time (back porch + res + front porch)
+    p1 = MIYOO_ST7789s_BACK_PORCH + 1; // HBP: back porch
+    p2 = p1 + par->mode.xres + MIYOO_ST7789s_FRONT_PORCH; // HT: horizontal total time (back porch + res + front porch)
     writel((p2 << 16) | (p1 << 0), iomm.lcdc + TCON0_BASIC_TIMING_REG1);
 
 	// Sets vertical back and front porch
-    p1 = 1 + 1; // VBP: Vertical back porch (in lines)
-    p2 = (1 + 1 + par->mode.yres + 1 + 2) << 1; // VT: Vertical front porch (in lines)
+    p1 = MIYOO_ST7789s_VERTICAL_BACK_PORCH; // VBP: Vertical back porch (in lines)
+    p2 = (p1 + par->mode.yres + 1 + 2) << 1; // VT: Vertical front porch (in lines)
     writel((p2 << 16) | (p1 << 0), iomm.lcdc + TCON0_BASIC_TIMING_REG2);
 
 	// Sets sync pulse widths
@@ -1110,4 +1120,3 @@ module_exit(fb_cleanup);
 MODULE_DESCRIPTION("Framebuffer driver for ST7789S");
 MODULE_AUTHOR("Steward Fu <steward.fu@gmail.com>");
 MODULE_LICENSE("GPL");
-
