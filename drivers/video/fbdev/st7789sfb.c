@@ -540,11 +540,8 @@ static void init_lcd(void)
 
 	// Missing: CMD_STE (set tear scanline)
 
-    mdelay(50);
 	lcdc_wr_cmd(ST7789S_CMD_DISPON);
-    mdelay(50);
 	lcdc_wr_cmd(ST7789S_CMD_RAMWR);
-    mdelay(50);
 
 	mypar->app_virt->yoffset = 0;
 	memset(mypar->vram_virt, 0, MIYOO_FB_XRES * MIYOO_FB_YRES * (MIYOO_FB_BPP / 8) * DE_LAYERS_COUNT);
