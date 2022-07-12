@@ -176,9 +176,12 @@
 #define MIYOO_FB_XRES 320
 #define MIYOO_FB_YRES 240
 // Documented to be 0x2 on reset/by default
-#define MIYOO_ST7789s_VERTICAL_BACK_PORCH 0x02
-#define MIYOO_ST7789s_BACK_PORCH  0x1
-#define MIYOO_ST7789s_FRONT_PORCH 0x1
+#define MIYOO_ST7789s_VERTICAL_FRONT_PORCH 0x03
+#define MIYOO_ST7789s_VERTICAL_BACK_PORCH  0x01
+#define MIYOO_ST7789s_VERTICAL_SYNC_LENGTH 0x03
+#define MIYOO_ST7789s_HORIZONTAL_FRONT_PORCH 0x01
+#define MIYOO_ST7789s_HORIZONTAL_BACK_PORCH  0x01
+#define MIYOO_ST7789s_HORIZONTAL_SYNC_LENGTH 0x03
 #define DE_LAYERS_COUNT 4
 #define PALETTE_SIZE 256
 #define DRIVER_NAME  "ST7789S-fb"
@@ -446,9 +449,9 @@ static void init_lcd(void)
 
 	lcdc_wr_cmd(ST7789S_CMD_PORCTRL);
 	// Back porch in normal mode
-	lcdc_wr_dat(MIYOO_ST7789s_BACK_PORCH);
+	lcdc_wr_dat(MIYOO_ST7789s_HORIZONTAL_BACK_PORCH);
 	// Front porch in normal mode
-	lcdc_wr_dat(MIYOO_ST7789s_FRONT_PORCH);
+	lcdc_wr_dat(MIYOO_ST7789s_HORIZONTAL_FRONT_PORCH);
 	// Enable separate porches control
 	lcdc_wr_dat(0x01); // 0b.......1
 	// Partial and idle mode back porches, set to 0x3 each
@@ -675,9 +678,9 @@ static void suniv_lcdc_init(struct myfb_par *par)
 			// | ((ret & 0x1f) << 4)   // 8:4 > TCON0_STA_DLY: STA delay (ret was set to 1+1+1)
 			// | ((  3 & 0x1f) << 4)   // 8:4 > TCON0_STA_DLY: STA delay
 			| (((
-						MIYOO_ST7789s_BACK_PORCH
-						+ MIYOO_ST7789s_FRONT_PORCH
-						+ 1
+					MIYOO_ST7789s_HORIZONTAL_BACK_PORCH
+					+ MIYOO_ST7789s_HORIZONTAL_FRONT_PORCH
+					+ 1
 				) & 0x1f) << 4)   // 8:4 > TCON0_STA_DLY: STA delay
 			| (1 << 24) // 24:26 -> 01 : 8080 I/F
 			| 0,
@@ -687,7 +690,6 @@ static void suniv_lcdc_init(struct myfb_par *par)
 	// Configures TCON_CLK_CTRL_REG
     writel(
 			(0xf << 28) // LCLK_EN = 0xf -> dclk_en = 1; dclk1_en = 1; dclk2_en = 1; dclkm2_en = 1;
-			// | (15 << 0) // stable image, at ~ half res ???!?
 			| (30 << 0) // DCLKDIV =  x  -> tdclk = tsclk[?] * x
 	, iomm.lcdc + TCON_CLK_CTRL_REG);
 
@@ -701,18 +703,18 @@ static void suniv_lcdc_init(struct myfb_par *par)
     writel((p2 << 16) | (p1 << 0), iomm.lcdc + TCON0_BASIC_TIMING_REG0);
 
 	// Sets horizontal total time, and horizontal back porch, in dclk
-    p1 = MIYOO_ST7789s_BACK_PORCH + 1; // HBP: back porch
-    p2 = p1 + par->mode.xres + MIYOO_ST7789s_FRONT_PORCH; // HT: horizontal total time (back porch + res + front porch)
+    p1 = MIYOO_ST7789s_HORIZONTAL_SYNC_LENGTH + MIYOO_ST7789s_HORIZONTAL_BACK_PORCH; // HBP: back porch
+    p2 = par->mode.xres + p1 + MIYOO_ST7789s_HORIZONTAL_FRONT_PORCH; // HT: horizontal total time (back porch + res + front porch)
     writel((p2 << 16) | (p1 << 0), iomm.lcdc + TCON0_BASIC_TIMING_REG1);
 
 	// Sets vertical back and front porch
-    p1 = MIYOO_ST7789s_VERTICAL_BACK_PORCH; // VBP: Vertical back porch (in lines)
-    p2 = (p1 + par->mode.yres + 1 + 2) << 1; // VT: Vertical front porch (in lines)
+    p1 = MIYOO_ST7789s_VERTICAL_SYNC_LENGTH + MIYOO_ST7789s_VERTICAL_BACK_PORCH; // VBP: Vertical back porch (in lines)
+    p2 = (p1 + par->mode.yres + MIYOO_ST7789s_VERTICAL_FRONT_PORCH) * 2; // VT: Vertical front porch (in lines)
     writel((p2 << 16) | (p1 << 0), iomm.lcdc + TCON0_BASIC_TIMING_REG2);
 
 	// Sets sync pulse widths
-    p1 = 1 + 1; // VSPW: vertical sync pulse width (in lines)
-    p2 = 1 + 1; // HSPW: horizontal sync pulse width (in dclk)
+    p1 = MIYOO_ST7789s_VERTICAL_SYNC_LENGTH - 1; // VSPW: vertical sync pulse width (in lines)
+    p2 = MIYOO_ST7789s_HORIZONTAL_SYNC_LENGTH - 1; // HSPW: horizontal sync pulse width (in dclk)
     writel((p2 << 16) | (p1 << 0), iomm.lcdc + TCON0_BASIC_TIMING_REG3);
 
 	// Sets those to their defaults:
