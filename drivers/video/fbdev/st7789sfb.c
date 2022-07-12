@@ -175,13 +175,38 @@
 #define MIYOO_FB_RES "320x240"
 #define MIYOO_FB_XRES 320
 #define MIYOO_FB_YRES 240
-// Documented to be 0x2 on reset/by default
-#define MIYOO_ST7789s_VERTICAL_FRONT_PORCH 0x03
-#define MIYOO_ST7789s_VERTICAL_BACK_PORCH  0x01
-#define MIYOO_ST7789s_VERTICAL_SYNC_LENGTH 0x03
-#define MIYOO_ST7789s_HORIZONTAL_FRONT_PORCH 0x01
-#define MIYOO_ST7789s_HORIZONTAL_BACK_PORCH  0x01
-#define MIYOO_ST7789s_HORIZONTAL_SYNC_LENGTH 0x03
+//#define MIYOO_ST7789s_VERTICAL_FRONT_PORCH 0x03
+//#define MIYOO_ST7789s_VERTICAL_BACK_PORCH  0x01
+//#define MIYOO_ST7789s_VERTICAL_SYNC_LENGTH 0x03
+#define MIYOO_ST7789s_VERTICAL_FRONT_PORCH 0x0a
+#define MIYOO_ST7789s_VERTICAL_BACK_PORCH  0x0a
+#define MIYOO_ST7789s_VERTICAL_SYNC_LENGTH 0x0a
+//#define MIYOO_ST7789s_HORIZONTAL_FRONT_PORCH 0x01
+//#define MIYOO_ST7789s_HORIZONTAL_BACK_PORCH  0x01
+//#define MIYOO_ST7789s_HORIZONTAL_SYNC_LENGTH 0x01
+//#define MIYOO_ST7789s_HORIZONTAL_FRONT_PORCH 0x64
+//#define MIYOO_ST7789s_HORIZONTAL_BACK_PORCH  0x64
+//#define MIYOO_ST7789s_HORIZONTAL_SYNC_LENGTH 0x64
+//#define MIYOO_ST7789s_HORIZONTAL_FRONT_PORCH 0xc8
+//#define MIYOO_ST7789s_HORIZONTAL_BACK_PORCH  0xc8
+//#define MIYOO_ST7789s_HORIZONTAL_SYNC_LENGTH 0xc8
+#define MIYOO_ST7789s_HORIZONTAL_FRONT_PORCH 0x04
+#define MIYOO_ST7789s_HORIZONTAL_BACK_PORCH  0x10
+#define MIYOO_ST7789s_HORIZONTAL_SYNC_LENGTH 0x10
+//#define DCLKDIV 20 // half-res
+//#define DCLKDIV 24 // garbled half-height~ish
+//#define DCLKDIV 26 // garbled, full res~ish
+//#define DCLKDIV 27 // slightly garbly, full res
+//#define DCLKDIV 28 // stable, wide bars
+//#define DCLKDIV 29 // stable, less wide bars(?)
+//#define DCLKDIV 30 // stable value
+//#define DCLKDIV 31 // stable value
+//#define DCLKDIV 32 // stable, eh
+//#define DCLKDIV 35 // stable value, wider bars
+#define DCLKDIV 37 // stable value; wider bars (still)
+//#define DCLKDIV 38 // stable value; wider bars... hard to tell
+//#define DCLKDIV 40 // stable value; hard to tell if better
+//#define DCLKDIV 60 // stable, bars wide~ish, but diagonals seem "stepp-y"
 #define DE_LAYERS_COUNT 4
 #define PALETTE_SIZE 256
 #define DRIVER_NAME  "ST7789S-fb"
@@ -690,7 +715,7 @@ static void suniv_lcdc_init(struct myfb_par *par)
 	// Configures TCON_CLK_CTRL_REG
     writel(
 			(0xf << 28) // LCLK_EN = 0xf -> dclk_en = 1; dclk1_en = 1; dclk2_en = 1; dclkm2_en = 1;
-			| (30 << 0) // DCLKDIV =  x  -> tdclk = tsclk[?] * x
+			| (DCLKDIV << 0) // DCLKDIV =  x  -> tdclk = tsclk[?] * x
 	, iomm.lcdc + TCON_CLK_CTRL_REG);
 
     writel((4 << 29) | (1 << 26), iomm.lcdc + TCON0_CPU_IF_REG);
