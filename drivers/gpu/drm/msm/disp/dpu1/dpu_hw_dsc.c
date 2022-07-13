@@ -42,7 +42,7 @@ static void dpu_hw_dsc_config(struct dpu_hw_dsc *hw_dsc,
 			      u32 initial_lines)
 {
 	struct dpu_hw_blk_reg_map *c = &hw_dsc->hw;
-	u32 data, lsb, bpp;
+	u32 data;
 	u32 slice_last_group_size;
 	u32 det_thresh_flatness;
 	bool is_cmd_mode = !(mode & DSC_MODE_VIDEO);
@@ -56,15 +56,7 @@ static void dpu_hw_dsc_config(struct dpu_hw_dsc *hw_dsc,
 	data = (initial_lines << 20);
 	data |= ((slice_last_group_size - 1) << 18);
 	/* bpp is 6.4 format, 4 LSBs bits are for fractional part */
-	u32 bppx = dsc->drm->bits_per_pixel >> 4;
-
-	lsb = bppx % 4;
-	bpp = bppx / 4;
-	bpp *= 4; /* either 8 or 12 */
-	bpp <<= 4;
-	bpp |= lsb;
-
-	data |= bpp << 8;
+	data |= (dsc->drm->bits_per_pixel << 8);
 	data |= (dsc->drm->block_pred_enable << 7);
 	data |= (dsc->drm->line_buf_depth << 3);
 	data |= (dsc->drm->simple_422 << 2);
