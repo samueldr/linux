@@ -920,6 +920,7 @@ static void dsi_update_dsc_timing(struct msm_dsi_host *msm_host, bool is_cmd_mod
 	u32 pkt_per_line;
 	u32 bytes_in_slice;
 	u32 eol_byte_num;
+	int bpp = dsc->bits_per_pixel >> 4;
 
 	/* first calculate dsc parameters and then program
 	 * compress mode registers
@@ -935,7 +936,7 @@ static void dsi_update_dsc_timing(struct msm_dsi_host *msm_host, bool is_cmd_mod
 		dsc->drm->slice_count = 1;
 
 	slice_per_intf = DIV_ROUND_UP(hdisplay, dsc->drm->slice_width);
-	bytes_in_slice = DIV_ROUND_UP(dsc->drm->slice_width * dsc->drm->bits_per_pixel, 8);
+	bytes_in_slice = DIV_ROUND_UP(dsc->drm->slice_width * bpp, 8);
 
 	dsc->drm->slice_chunk_size = bytes_in_slice;
 
@@ -1283,6 +1284,10 @@ static int dsi_cmd_dma_add(struct msm_dsi_host *msm_host,
 	/* Append 0xff to the end */
 	if (packet.size < len)
 		memset(data + packet.size, 0xff, len - packet.size);
+
+	if (msg->type == MIPI_DSI_PICTURE_PARAMETER_SET)
+		print_hex_dump(KERN_DEBUG, "ALL:", DUMP_PREFIX_NONE,
+				16, 1, data, len, false);
 
 	if (cfg_hnd->ops->tx_buf_put)
 		cfg_hnd->ops->tx_buf_put(msm_host);
@@ -1858,6 +1863,7 @@ static int dsi_populate_dsc_params(struct msm_display_dsc_config *dsc)
 	int data;
 	int final_value, final_scale;
 	int i;
+	int bpp = dsc->bits_per_pixel >> 4;
 
 	dsc->drm->rc_model_size = 8192;
 	dsc->drm->first_line_bpg_offset = 12;
@@ -1879,7 +1885,7 @@ static int dsi_populate_dsc_params(struct msm_display_dsc_config *dsc)
 	}
 
 	dsc->drm->initial_offset = 6144; /* Not bpp 12 */
-	if (dsc->drm->bits_per_pixel != 8)
+	if (bpp != 8)
 		dsc->drm->initial_offset = 2048;	/* bpp = 12 */
 
 	mux_words_size = 48;		/* bpc == 8/10 */
@@ -1901,17 +1907,17 @@ static int dsi_populate_dsc_params(struct msm_display_dsc_config *dsc)
 	/* FIXME: need to call drm_dsc_compute_rc_parameters() so that rest of
 	 * params are calculated
 	 */
-	groups_per_line = DIV_ROUND_UP(dsc->drm->slice_width, 3);
-	dsc->drm->slice_chunk_size = dsc->drm->slice_width * dsc->drm->bits_per_pixel / 8;
-	if ((dsc->drm->slice_width * dsc->drm->bits_per_pixel) % 8)
+	groups_per_line = DIV_ROUND_UP(dsc->slice_width, 3);
+	dsc->drm->slice_chunk_size = dsc->drm->slice_width * bpp / 8;
+	if ((dsc->drm->slice_width * bpp) % 8)
 		dsc->drm->slice_chunk_size++;
 
 	/* rbs-min */
 	min_rate_buffer_size =  dsc->drm->rc_model_size - dsc->drm->initial_offset +
-				dsc->drm->initial_xmit_delay * dsc->drm->bits_per_pixel +
+				dsc->drm->initial_xmit_delay * bpp +
 				groups_per_line * dsc->drm->first_line_bpg_offset;
 
-	hrd_delay = DIV_ROUND_UP(min_rate_buffer_size, dsc->drm->bits_per_pixel);
+	hrd_delay = DIV_ROUND_UP(min_rate_buffer_size, bpp);
 
 	dsc->drm->initial_dec_delay = hrd_delay - dsc->drm->initial_xmit_delay;
 
@@ -1934,7 +1940,7 @@ static int dsi_populate_dsc_params(struct msm_display_dsc_config *dsc)
 	data = 2048 * (dsc->drm->rc_model_size - dsc->drm->initial_offset + num_extra_mux_bits);
 	dsc->drm->slice_bpg_offset = DIV_ROUND_UP(data, groups_total);
 
-	target_bpp_x16 = dsc->drm->bits_per_pixel * 16;
+	target_bpp_x16 = bpp * 16;
 
 	data = (dsc->drm->initial_xmit_delay * target_bpp_x16) / 16;
 	final_value =  dsc->drm->rc_model_size - data + num_extra_mux_bits;
