@@ -56,10 +56,11 @@ static void dpu_hw_dsc_config(struct dpu_hw_dsc *hw_dsc,
 	data = (initial_lines << 20);
 	data |= ((slice_last_group_size - 1) << 18);
 	/* bpp is 6.4 format, 4 LSBs bits are for fractional part */
-	data |= dsc->drm->bits_per_pixel << 12;
-	lsb = dsc->drm->bits_per_pixel % 4;
-	bpp = dsc->drm->bits_per_pixel / 4;
-	bpp *= 4;
+	u32 bppx = dsc->drm->bits_per_pixel >> 4;
+
+	lsb = bppx % 4;
+	bpp = bppx / 4;
+	bpp *= 4; /* either 8 or 12 */
 	bpp <<= 4;
 	bpp |= lsb;
 
