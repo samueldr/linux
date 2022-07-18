@@ -102,34 +102,36 @@ static inline struct sw43408_panel *to_panel_info(struct drm_panel *panel)
  * Currently unable to bring up the panel after resetting, must be missing
  * some init commands somewhere.
  */
-static __always_unused int panel_reset(struct sw43408_panel *ctx)
+static /*__always_unused*/ int panel_reset(struct sw43408_panel *ctx)
 {
 	int ret = 0, i;
 
-	for (i = 0; i < ARRAY_SIZE(ctx->supplies); i++) {
-		ret = regulator_set_load(ctx->supplies[i].consumer,
-					 regulator_enable_loads[i]);
-		if (ret)
-			return ret;
-	}
+	DRM_DEV_INFO(ctx->base.dev, "%s\n", __func__);
 
-	ret = regulator_bulk_enable(ARRAY_SIZE(ctx->supplies), ctx->supplies);
-	if (ret < 0)
-		return ret;
+	// for (i = 0; i < ARRAY_SIZE(ctx->supplies); i++) {
+	// 	ret = regulator_set_load(ctx->supplies[i].consumer,
+	// 				 regulator_enable_loads[i]);
+	// 	if (ret)
+	// 		return ret;
+	// }
 
-	for (i = 0; i < ARRAY_SIZE(ctx->supplies); i++) {
-		ret = regulator_set_load(ctx->supplies[i].consumer,
-					 regulator_disable_loads[i]);
-		if (ret) {
-			DRM_DEV_ERROR(ctx->base.dev,
-				      "regulator_set_load failed %d\n", ret);
-			return ret;
-		}
-	}
+	// ret = regulator_bulk_enable(ARRAY_SIZE(ctx->supplies), ctx->supplies);
+	// if (ret < 0)
+	// 	return ret;
 
-	ret = regulator_bulk_disable(ARRAY_SIZE(ctx->supplies), ctx->supplies);
-	if (ret < 0)
-		return ret;
+	// for (i = 0; i < ARRAY_SIZE(ctx->supplies); i++) {
+	// 	ret = regulator_set_load(ctx->supplies[i].consumer,
+	// 				 regulator_disable_loads[i]);
+	// 	if (ret) {
+	// 		DRM_DEV_ERROR(ctx->base.dev,
+	// 			      "regulator_set_load failed %d\n", ret);
+	// 		return ret;
+	// 	}
+	// }
+
+	// ret = regulator_bulk_disable(ARRAY_SIZE(ctx->supplies), ctx->supplies);
+	// if (ret < 0)
+	// 	return ret;
 
 	gpiod_set_value(ctx->reset_gpio, 0);
 	usleep_range(9000, 10000);
@@ -173,6 +175,8 @@ static int lg_panel_disable(struct drm_panel *panel)
 {
 	struct sw43408_panel *ctx = to_panel_info(panel);
 
+	DRM_DEV_INFO(panel->dev, "%s\n", __func__);
+
 	backlight_disable(ctx->backlight);
 	ctx->enabled = false;
 
@@ -183,11 +187,13 @@ static int lg_panel_disable(struct drm_panel *panel)
  * We can't currently re-initialise the panel properly after powering off.
  * This function will be used when this is resolved.
  */
-static __always_unused int lg_panel_power_off(struct drm_panel *panel)
+static /*__always_unused*/ int lg_panel_power_off(struct drm_panel *panel)
 {
 	struct sw43408_panel *ctx = to_panel_info(panel);
 	int i, ret = 0;
 	gpiod_set_value(ctx->reset_gpio, 1);
+
+	DRM_DEV_INFO(panel->dev, "%s\n", __func__);
 
 	for (i = 0; i < ARRAY_SIZE(ctx->supplies); i++) {
 		ret = regulator_set_load(ctx->supplies[i].consumer,
@@ -214,6 +220,8 @@ static int lg_panel_unprepare(struct drm_panel *panel)
 
 	if (!ctx->prepared)
 		return 0;
+	
+	DRM_DEV_INFO(panel->dev, "%s\n", __func__);
 
 	ret = mipi_dsi_dcs_set_display_off(ctx->link);
 	if (ret < 0) {
@@ -229,12 +237,10 @@ static int lg_panel_unprepare(struct drm_panel *panel)
 			      ret);
 	}
 
-	/*
 	msleep(100);
 	ret = lg_panel_power_off(panel);
 	if (ret < 0)
 		DRM_DEV_ERROR(panel->dev, "power_off failed ret = %d\n", ret);
-	*/
 
 	for (i = 0; i < ARRAY_SIZE(ctx->supplies); i++) {
 		ret = regulator_set_load(ctx->supplies[i].consumer,
@@ -254,19 +260,20 @@ static int lg_panel_unprepare(struct drm_panel *panel)
 static int lg_panel_prepare(struct drm_panel *panel)
 {
 	struct sw43408_panel *ctx = to_panel_info(panel);
+	struct drm_dsc_picture_parameter_set pps;
 	int err, i;
+
+	DRM_DEV_INFO(panel->dev, "%s\n", __func__);
 
 	if (ctx->prepared)
 		return 0;
 
-	/*
 	err = panel_reset(ctx);
 	if (err < 0) {
 		pr_err("sw43408 panel_reset failed: %d\n",
 		       err);
 		return err;
 	}
-	*/
 
 	for (i = 0; i < ARRAY_SIZE(ctx->supplies); i++) {
 		err = regulator_set_load(ctx->supplies[i].consumer,
@@ -279,6 +286,7 @@ static int lg_panel_prepare(struct drm_panel *panel)
 	if (err < 0)
 		return err;
 
+	msleep(50);
 	usleep_range(9000, 10000);
 
 	err = mipi_dsi_dcs_write(ctx->link, MIPI_DCS_SET_GAMMA_CURVE,
@@ -338,6 +346,21 @@ static int lg_panel_prepare(struct drm_panel *panel)
 
 	msleep(120);
 
+	if (!panel->dsc) {
+		DRM_DEV_ERROR(panel->dev, "Can't find DSC\n");
+		return -ENODEV;
+	}
+
+	drm_dsc_pps_payload_pack(&pps, panel->dsc);
+
+	err = mipi_dsi_picture_parameter_set(ctx->link, &pps);
+	if (err < 0) {
+		DRM_DEV_ERROR(panel->dev, "Failed to send PPS: %d\n", err);
+		return err;
+	}
+
+	msleep(10);
+
 	ctx->prepared = true;
 
 	return 0;
@@ -351,11 +374,12 @@ poweroff:
 static int lg_panel_enable(struct drm_panel *panel)
 {
 	struct sw43408_panel *ctx = to_panel_info(panel);
-	struct drm_dsc_picture_parameter_set pps;
 	int ret;
 
 	if (ctx->enabled)
 		return 0;
+
+	DRM_DEV_INFO(panel->dev, "%s\n", __func__);
 
 	ret = backlight_enable(ctx->backlight);
 	if (ret) {
@@ -363,13 +387,6 @@ static int lg_panel_enable(struct drm_panel *panel)
 			      ret);
 		return ret;
 	}
-
-	if (!panel->dsc) {
-		DRM_DEV_ERROR(panel->dev, "Can't find DSC\n");
-		return -ENODEV;
-	}
-
-	drm_dsc_pps_payload_pack(&pps, panel->dsc);
 
 	ctx->enabled = true;
 
@@ -382,6 +399,7 @@ static int lg_panel_get_modes(struct drm_panel *panel,
 	struct sw43408_panel *ctx = to_panel_info(panel);
 	const struct drm_display_mode *m = ctx->mode;
 	struct drm_display_mode *mode;
+
 	mode = drm_mode_duplicate(connector->dev, m);
 	if (!mode) {
 		DRM_DEV_ERROR(panel->dev, "failed to add mode %ux%u\n",
@@ -550,7 +568,8 @@ static int panel_probe(struct mipi_dsi_device *dsi)
 	dsc->slice_width = 540;
 	dsc->slice_count = 1;
 	dsc->bits_per_component = 8;
-	dsc->bits_per_pixel = 8;
+	/* 4 fractional bits */
+	dsc->bits_per_pixel = 8 << 4;
 	dsc->block_pred_enable = true;
 
 	ctx->base.dsc = dsc;
