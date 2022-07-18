@@ -920,7 +920,7 @@ static void dsi_update_dsc_timing(struct msm_dsi_host *msm_host, bool is_cmd_mod
 	u32 pkt_per_line;
 	u32 bytes_in_slice;
 	u32 eol_byte_num;
-	int bpp = dsc->bits_per_pixel >> 4;
+	int bpp = dsc->drm->bits_per_pixel >> 4;
 
 	/* first calculate dsc parameters and then program
 	 * compress mode registers
@@ -1863,7 +1863,7 @@ static int dsi_populate_dsc_params(struct msm_display_dsc_config *dsc)
 	int data;
 	int final_value, final_scale;
 	int i;
-	int bpp = dsc->bits_per_pixel >> 4;
+	int bpp = dsc->drm->bits_per_pixel >> 4;
 
 	dsc->drm->rc_model_size = 8192;
 	dsc->drm->first_line_bpg_offset = 12;
@@ -1907,7 +1907,7 @@ static int dsi_populate_dsc_params(struct msm_display_dsc_config *dsc)
 	/* FIXME: need to call drm_dsc_compute_rc_parameters() so that rest of
 	 * params are calculated
 	 */
-	groups_per_line = DIV_ROUND_UP(dsc->slice_width, 3);
+	groups_per_line = DIV_ROUND_UP(dsc->drm->slice_width, 3);
 	dsc->drm->slice_chunk_size = dsc->drm->slice_width * bpp / 8;
 	if ((dsc->drm->slice_width * bpp) % 8)
 		dsc->drm->slice_chunk_size++;
