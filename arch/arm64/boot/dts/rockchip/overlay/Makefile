@@ -32,12 +32,6 @@ dtbo-$(CONFIG_ARCH_ROCKCHIP) += \
 	rk3588-uart7-m1.dtbo \
 	rk3588-uart7-m2.dtbo
 
-scr-$(CONFIG_ARCH_ROCKCHIP) += \
-	rockchip-fixup.scr
-
-dtbotxt-$(CONFIG_ARCH_ROCKCHIP) += \
-	README.rockchip-overlays
-
 targets += $(dtbo-y) $(scr-y) $(dtbotxt-y)
 
 always			:= $(dtbo-y) $(scr-y) $(dtbotxt-y)
