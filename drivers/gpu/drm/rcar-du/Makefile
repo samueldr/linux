@@ -1,4 +1,8 @@
 # SPDX-License-Identifier: GPL-2.0
+
+# ¯\_(ツ)_/¯
+CFLAGS_rcar_dw_hdmi.o += -Wno-error=incompatible-pointer-types
+
 rcar-du-drm-y := rcar_du_crtc.o \
 		 rcar_du_drv.o \
 		 rcar_du_encoder.o \

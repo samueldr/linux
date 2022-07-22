@@ -2,6 +2,10 @@
 #
 # Rockchip Soc drivers
 #
+
+# ¯\_(ツ)_/¯
+CFLAGS_iomux.o += -Wno-error=implicit-int
+
 obj-$(CONFIG_ROCKCHIP_AMP) += rockchip_amp.o
 obj-$(CONFIG_ROCKCHIP_CPUINFO) += rockchip-cpuinfo.o
 obj-$(CONFIG_ROCKCHIP_GRF) += grf.o
