@@ -1090,3 +1090,15 @@
 	status = "okay";
 	pinctrl-0 = <&uart2m0_xfer>;
 };
+
+&sfc {
+	status = "okay";
+
+	flash@0 {
+		compatible = "jedec,spi-nor";
+		reg = <0>;
+		spi-max-frequency = <100000000>;
+		spi-rx-bus-width = <4>;
+		spi-tx-bus-width = <1>;
+	};
+};
