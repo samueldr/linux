@@ -1091,6 +1091,11 @@
 	pinctrl-0 = <&uart2m0_xfer>;
 };
 
+// Set to FIQ console to 115200, preferred ecosystem baud rate.
+&fiq_debugger {
+	rockchip,baudrate = <115200>;
+};
+
 &sfc {
 	status = "okay";
 
