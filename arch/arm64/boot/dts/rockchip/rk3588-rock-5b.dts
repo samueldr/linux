@@ -1082,6 +1082,9 @@
 	};
 };
 
+// Enable for using UART2
+// FIXME: currently the serial interface does not "bind" as a console.
+#if 0
 &fiq_debugger {
 	status = "disabled";
 };
@@ -1090,6 +1093,7 @@
 	status = "okay";
 	pinctrl-0 = <&uart2m0_xfer>;
 };
+#endif
 
 // Set to FIQ console to 115200, preferred ecosystem baud rate.
 &fiq_debugger {
