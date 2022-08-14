@@ -4153,12 +4153,7 @@ CONFIG_RK_SFC_NOR_MTD=y
 #
 # Gator module for ARM streamline
 #
-CONFIG_GATOR=m
-CONFIG_GATOR_DO_NOT_ONLINE_CORES_AT_STARTUP=y
-CONFIG_GATOR_WITH_MALI_SUPPORT=y
-# CONFIG_GATOR_MALI_4XXMP is not set
-CONFIG_GATOR_MALI_MIDGARD=y
-CONFIG_GATOR_MALI_MIDGARD_PATH="drivers/gpu/arm/bifrost_for_linux"
+# CONFIG_GATOR is not set
 
 #
 # Firmware Drivers
