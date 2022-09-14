@@ -242,13 +242,12 @@ void drm_dsc_pps_payload_pack(struct drm_dsc_picture_parameter_set *pps_payload,
 	 * are as follows: Min_qp[15:11], max_qp[10:6], offset[5:0]
 	 */
 	for (i = 0; i < DSC_NUM_BUF_RANGES; i++) {
-		/* TODO: Use FIELD_PREP */
 		pps_payload->rc_range_parameters[i] =
-			cpu_to_be16(((dsc_cfg->rc_range_params[i].range_min_qp & 0x1f) <<
+			cpu_to_be16((dsc_cfg->rc_range_params[i].range_min_qp <<
 				     DSC_PPS_RC_RANGE_MINQP_SHIFT) |
-				    ((dsc_cfg->rc_range_params[i].range_max_qp & 0x1f) <<
+				    (dsc_cfg->rc_range_params[i].range_max_qp <<
 				     DSC_PPS_RC_RANGE_MAXQP_SHIFT) |
-				    (dsc_cfg->rc_range_params[i].range_bpg_offset & 0x3f));
+				    (dsc_cfg->rc_range_params[i].range_bpg_offset));
 	}
 
 	/* PPS 88 */
