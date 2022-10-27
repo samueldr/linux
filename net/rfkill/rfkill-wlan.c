@@ -224,6 +224,7 @@ int rfkill_get_wifi_power_state(int *power)
  * 1 -> power on
  *
  *************************************************************************/
+#define __WIFI__
 int rockchip_wifi_power(int on)
 {
 	struct rfkill_wlan_data *mrfkill = g_rfkill;
@@ -293,6 +294,10 @@ int rockchip_wifi_power(int on)
 			}
 
 			if (gpio_is_valid(poweron->io)) {
+				#ifdef __WIFI__
+				gpio_direction_output(poweron->io, !(poweron->enable));
+				msleep(2000);
+				#endif
 				gpio_direction_output(poweron->io, poweron->enable);
 				msleep(100);
 			}
