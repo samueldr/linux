@@ -38,14 +38,14 @@
 #include <asm/atomic.h>
 
 #include "rk_headset.h"
-
+#define CONFIG_RK817_HEADSET
 /* Debug */
 #if 0
 #define DBG(x...) printk(x)
 #else
 #define DBG(x...) do { } while (0)
 #endif
-
+//#define __SPK__
 #define HOOK_ADC_SAMPLE_TIME	100
 
 #define HOOK_LEVEL_HIGH		410	//1V*1024/2.5
@@ -81,9 +81,15 @@ extern int rt5631_headset_mic_detect(bool headset_status);
 #if defined(CONFIG_SND_SOC_RT3261) || defined(CONFIG_SND_SOC_RT3224)
 extern int rt3261_headset_mic_detect(int jack_insert);
 #endif
-
+#if defined(CONFIG_SND_SOC_ES8316)
+extern int es8316_headset_detect(int jack_insert);
+#endif
 #if defined(CONFIG_SND_SOC_CX2072X)
 extern int cx2072x_jack_report(void);
+#endif
+
+#if defined(CONFIG_RK817_HEADSET)
+extern int rk817_headset_detect(int jack_insert);
 #endif
 
 /* headset private data */
@@ -168,6 +174,14 @@ static irqreturn_t headset_interrupt(int irq, void *dev_id)
 		pdata->headset_insert_type ? "high level" : "low level",
 		headset_info->headset_status ? "in" : "out");
 
+	#if defined(CONFIG_SND_SOC_ES8316)
+	es8316_headset_detect(headset_info->headset_status);
+	#endif
+
+	#if defined(CONFIG_RK817_HEADSET)
+	rk817_headset_detect(headset_info->headset_status);
+	#endif
+
 	if (headset_info->headset_status == HEADSET_IN) {
 		if (pdata->chan != 0) {
 			/* detect Hook key */
@@ -223,6 +237,16 @@ static irqreturn_t headset_interrupt(int irq, void *dev_id)
 		DBG("headset notice android headset status = %d\n",
 		    headset_info->cur_headset_status);
 	}
+	#ifdef __SPK__
+	if (headset_info->headset_status == HEADSET_OUT)
+	{
+		gpio_set_value(146,1);
+	}
+	else
+	{
+		gpio_set_value(146,0);
+	}
+	#endif
 	/*rk_send_wakeup_key();  */
 out:
 	headset_info->heatset_irq_working = IDLE;
