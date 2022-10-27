@@ -31,7 +31,7 @@
 
 #include "rockchip_drm_drv.h"
 #include "rockchip_drm_vop.h"
-
+//#define __DEBUG__
 #define UPDATE(v, h, l)			(((v) << (l)) & GENMASK((h), (l)))
 
 /* DWC_mipi_dsi_host registers */
@@ -1735,7 +1735,9 @@ static int dw_mipi_dsi_probe(struct platform_device *pdev)
 	void __iomem *regs;
 	int id;
 	int ret;
-
+	#ifdef __DEBUG__
+	printk("%s-------%s %d \n",__FILE__,__func__,__LINE__);
+	#endif
 	dsi = devm_kzalloc(dev, sizeof(*dsi), GFP_KERNEL);
 	if (!dsi)
 		return -ENOMEM;
@@ -1743,12 +1745,16 @@ static int dw_mipi_dsi_probe(struct platform_device *pdev)
 	id = of_alias_get_id(dev->of_node, "dsi");
 	if (id < 0)
 		id = 0;
-
+	#ifdef __DEBUG__
+	printk("%s-------%s %d \n",__FILE__,__func__,__LINE__);
+	#endif
 	dsi->dev = dev;
 	dsi->id = id;
 	dsi->pdata = of_device_get_match_data(dev);
 	platform_set_drvdata(pdev, dsi);
-
+	#ifdef __DEBUG__
+	printk("%s-------%s %d \n",__FILE__,__func__,__LINE__);
+	#endif
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	regs = devm_ioremap_resource(dev, res);
 	if (IS_ERR(regs))

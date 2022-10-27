@@ -1,7 +1,10 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 #ifndef COMPONENT_H
 #define COMPONENT_H
-
+#define __HDMI__
+#ifdef __HDMI__
+#include <linux/gpio.h>
+#endif
 #include <linux/stddef.h>
 
 struct device;
