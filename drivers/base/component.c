@@ -15,7 +15,6 @@
 #include <linux/mutex.h>
 #include <linux/slab.h>
 #include <linux/debugfs.h>
-
 struct component;
 
 struct component_match_array {
@@ -532,6 +531,14 @@ int component_bind_all(struct device *master_dev, void *data)
 	for (i = 0; i < master->match->num; i++)
 		if (!master->match->compare[i].duplicate) {
 			c = master->match->compare[i].component;
+			#ifdef __HDMI__
+			if(gpio_get_value(16)==0)
+			{
+				if (strstr(dev_name(c->dev), "dsi")) {
+					continue;
+				}
+			}
+			#endif
 			ret = component_bind(c, master, data);
 			if (ret)
 				break;
