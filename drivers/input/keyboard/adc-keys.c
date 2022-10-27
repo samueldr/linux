@@ -33,6 +33,9 @@ struct adc_keys_state {
 	const struct adc_keys_button *map;
 };
 
+extern void rk_send_key_f_key_up(void);
+extern void rk_send_key_f_key_down(void);
+
 static void adc_keys_poll(struct input_polled_dev *dev)
 {
 	struct adc_keys_state *st = dev->private;
@@ -57,13 +60,16 @@ static void adc_keys_poll(struct input_polled_dev *dev)
 	if (abs(st->keyup_voltage - value) < closest)
 		keycode = 0;
 
-	if (st->last_key && st->last_key != keycode)
-		input_report_key(dev->input, st->last_key, 0);
+	if (st->last_key && st->last_key != keycode){
+		//input_report_key(dev->input, st->last_key, 0);
+		rk_send_key_f_key_down();
+	}
 
-	if (keycode)
-		input_report_key(dev->input, keycode, 1);
-
-	input_sync(dev->input);
+	if (keycode){
+		//input_report_key(dev->input, keycode, 1);
+		rk_send_key_f_key_up();
+	}
+	//input_sync(dev->input);
 	st->last_key = keycode;
 }
 
