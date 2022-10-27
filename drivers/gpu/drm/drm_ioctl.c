@@ -113,6 +113,8 @@ int drm_getunique(struct drm_device *dev, void *data,
 {
 	struct drm_unique *u = data;
 	struct drm_master *master = file_priv->master;
+	if(!master)
+		return -EINVAL;	
 
 	mutex_lock(&master->dev->master_mutex);
 	if (u->unique_len >= master->unique_len) {
