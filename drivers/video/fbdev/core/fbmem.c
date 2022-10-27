@@ -601,7 +601,10 @@ static inline int fb_show_extra_logos(struct fb_info *info, int y, int rotate)
 }
 
 #endif /* CONFIG_FB_LOGO_EXTRA */
-
+#define __HDMI__
+#ifdef __HDMI__
+#include <linux/gpio.h>
+#endif
 
 int fb_prepare_logo(struct fb_info *info, int rotate)
 {
@@ -628,7 +631,18 @@ int fb_prepare_logo(struct fb_info *info, int rotate)
 	}
 
 	/* Return if no suitable logo was found */
+	#ifdef __HDMI__
+	if(gpio_get_value(16)==0)
+	{
+		fb_logo.logo = fb_find_hdmi_logo(depth);
+	}
+	else
+	{
+		fb_logo.logo = fb_find_logo(depth);
+	}
+	#else
 	fb_logo.logo = fb_find_logo(depth);
+	#endif
 
 	if (!fb_logo.logo) {
 		return 0;

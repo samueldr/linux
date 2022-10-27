@@ -36,6 +36,7 @@ struct linux_logo {
 extern const struct linux_logo logo_linux_mono;
 extern const struct linux_logo logo_linux_vga16;
 extern const struct linux_logo logo_linux_clut224;
+extern const struct linux_logo logo_hdmi_clut224;
 extern const struct linux_logo logo_dec_clut224;
 extern const struct linux_logo logo_mac_clut224;
 extern const struct linux_logo logo_parisc_clut224;
@@ -47,6 +48,7 @@ extern const struct linux_logo logo_superh_clut224;
 extern const struct linux_logo logo_spe_clut224;
 
 extern const struct linux_logo *fb_find_logo(int depth);
+extern const struct linux_logo *fb_find_hdmi_logo(int depth);
 #ifdef CONFIG_FB_LOGO_EXTRA
 extern void fb_append_extra_logo(const struct linux_logo *logo,
 				 unsigned int n);
