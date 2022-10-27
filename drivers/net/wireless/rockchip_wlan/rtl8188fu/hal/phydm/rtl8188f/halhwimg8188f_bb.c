@@ -1,4 +1,3 @@
-/* SPDX-License-Identifier: GPL-2.0 */
 /******************************************************************************
  *
  * Copyright(c) 2007 - 2017 Realtek Corporation.
@@ -241,7 +240,7 @@ odm_read_and_config_mp_8188f_agc_tab(struct dm_struct *dm)
 u32
 odm_get_version_mp_8188f_agc_tab(void)
 {
-		return 38;
+		return 39;
 }
 
 /******************************************************************************
@@ -526,7 +525,7 @@ odm_read_and_config_mp_8188f_phy_reg(struct dm_struct *dm)
 u32
 odm_get_version_mp_8188f_phy_reg(void)
 {
-		return 38;
+		return 39;
 }
 
 /******************************************************************************
@@ -534,8 +533,8 @@ odm_get_version_mp_8188f_phy_reg(void)
 ******************************************************************************/
 
 u32 array_mp_8188f_phy_reg_pg[] = {
-	0, 0, 0, 0x00000e08, 0x0000ff00, 0x00003200,
-	0, 0, 0, 0x0000086c, 0xffffff00, 0x32323200,
+	0, 0, 0, 0x00000e08, 0x0000ff00, 0x00004000,
+	0, 0, 0, 0x0000086c, 0xffffff00, 0x32363800,
 	0, 0, 0, 0x00000e00, 0xffffffff, 0x34363636,
 	0, 0, 0, 0x00000e04, 0xffffffff, 0x28303234,
 	0, 0, 0, 0x00000e10, 0xffffffff, 0x30343434,

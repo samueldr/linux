@@ -1,4 +1,3 @@
-/* SPDX-License-Identifier: GPL-2.0 */
 /******************************************************************************
  *
  * Copyright(c) 2007 - 2017 Realtek Corporation.
@@ -302,8 +301,6 @@ void rtl8188f_set_FwPwrModeInIPS_cmd(PADAPTER padapter, u8 cmd_param)
 	/*u8 cmd_param; //BIT0:enable, BIT1:NoConnect32k */
 
 	RTW_INFO("%s()\n", __func__);
-
-	cmd_param = cmd_param;
 
 	FillH2CCmd8188F(padapter, H2C_8188F_INACTIVE_PS_, 1, &cmd_param);
 

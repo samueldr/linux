@@ -1,4 +1,3 @@
-/* SPDX-License-Identifier: GPL-2.0 */
 /******************************************************************************
  *
  * Copyright(c) 2007 - 2017  Realtek Corporation.
@@ -30,6 +29,6 @@
   You do not need to fill up the version.h anymore,
   only the maintenance supervisor fills it before formal release.
 */
-#define	RELEASE_DATE_8188F		20171204
-#define	COMMIT_BY_8188F			"BB_David"
-#define	RELEASE_VERSION_8188F		38
+#define	RELEASE_DATE_8188F		20191017
+#define	COMMIT_BY_8188F			"BB_Nancy"
+#define	RELEASE_VERSION_8188F		39

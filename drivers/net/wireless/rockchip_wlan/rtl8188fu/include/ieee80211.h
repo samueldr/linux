@@ -1,4 +1,3 @@
-/* SPDX-License-Identifier: GPL-2.0 */
 /******************************************************************************
  *
  * Copyright(c) 2007 - 2017 Realtek Corporation.
@@ -27,7 +26,7 @@
 
 #ifdef CONFIG_AP_MODE
 
-#define RTL_IOCTL_HOSTAPD (SIOCIWFIRSTPRIV + 28)
+#define RTL_IOCTL_HOSTAPD (SIOCDEVPRIVATE + 2)
 
 /* RTL871X_IOCTL_HOSTAPD ioctl() cmd: */
 enum {
@@ -56,6 +55,7 @@ enum {
 	RTL871X_HOSTAPD_ACL_ADD_STA = 22,
 	RTL871X_HOSTAPD_ACL_REMOVE_STA = 23,
 };
+#endif /* CONFIG_AP_MODE */
 
 /* STA flags */
 #define WLAN_STA_AUTH BIT(0)
@@ -73,9 +73,9 @@ enum {
 #define WLAN_STA_WPS BIT(12)
 #define WLAN_STA_MAYBE_WPS BIT(13)
 #define WLAN_STA_VHT BIT(14)
+#define WLAN_STA_WDS BIT(15)
+#define WLAN_STA_MULTI_AP BIT(16)
 #define WLAN_STA_NONERP BIT(31)
-
-#endif
 
 #define IEEE_CMD_SET_WPA_PARAM			1
 #define IEEE_CMD_SET_WPA_IE				2
@@ -112,7 +112,13 @@ enum {
 #define WPA_CIPHER_WEP104 BIT(2)
 #define WPA_CIPHER_TKIP	BIT(3)
 #define WPA_CIPHER_CCMP	BIT(4)
-
+#define WPA_CIPHER_GCMP	BIT(5)
+#define WPA_CIPHER_GCMP_256	BIT(6)
+#define WPA_CIPHER_CCMP_256	BIT(7)
+#define WPA_CIPHER_BIP_CMAC_128	BIT(8)
+#define WPA_CIPHER_BIP_GMAC_128	BIT(9)
+#define WPA_CIPHER_BIP_GMAC_256	BIT(10)
+#define WPA_CIPHER_BIP_CMAC_256	BIT(11)
 
 
 #define WPA_SELECTOR_LEN 4
@@ -126,6 +132,9 @@ extern u8 WPA_CIPHER_SUITE_WEP40[];
 extern u8 WPA_CIPHER_SUITE_TKIP[];
 extern u8 WPA_CIPHER_SUITE_WRAP[];
 extern u8 WPA_CIPHER_SUITE_CCMP[];
+extern u8 RSN_CIPHER_SUITE_GCMP[];
+extern u8 RSN_CIPHER_SUITE_GCMP_256[];
+extern u8 RSN_CIPHER_SUITE_CCMP_256[];
 extern u8 WPA_CIPHER_SUITE_WEP104[];
 
 
@@ -242,6 +251,8 @@ typedef enum _RATEID_IDX_ {
 	RATEID_IDX_MIX2 = 12,
 	RATEID_IDX_VHT_3SS = 13,
 	RATEID_IDX_BGN_3SS = 14,
+	RATEID_IDX_BGN_4SS = 15,
+	RATEID_IDX_VHT_4SS = 16,
 } RATEID_IDX, *PRATEID_IDX;
 
 typedef enum _RATR_TABLE_MODE {
@@ -489,12 +500,21 @@ struct rtw_ieee80211s_hdr {
 } __attribute__((packed));
 #endif
 
+/* Some IEEE 802.11x packet types are corresponding to parsing_eapol_packet() */
 enum eap_type {
 	EAP_PACKET = 0,
+	NON_EAPOL,
 	EAPOL_START,
 	EAPOL_LOGOFF,
 	EAPOL_KEY,
-	EAPOL_ENCAP_ASF_ALERT
+	EAPOL_ENCAP_ASF_ALERT,
+	EAPOL_PACKET,
+	EAPOL_WPA_GROUP_KEY_1_2,
+	EAPOL_WPA_GROUP_KEY_2_2,
+	EAPOL_1_4,
+	EAPOL_2_4,
+	EAPOL_3_4,
+	EAPOL_4_4,
 };
 
 #define IEEE80211_3ADDR_LEN 24
@@ -664,6 +684,7 @@ struct ieee80211_snap_hdr {
 #define WLAN_REASON_CLASS3_FRAME_FROM_NONASSOC_STA 7
 #define WLAN_REASON_DISASSOC_STA_HAS_LEFT 8
 #define WLAN_REASON_STA_REQ_ASSOC_WITHOUT_AUTH 9
+#define WLAN_REASON_IEEE_802_1X_AUTH_FAILED 23
 #define WLAN_REASON_MESH_PEER_CANCELED 52
 #define WLAN_REASON_MESH_MAX_PEERS 53
 #define WLAN_REASON_MESH_CONFIG 54
@@ -739,6 +760,8 @@ struct ieee80211_snap_hdr {
 #define WLAN_EID_GENERIC (WLAN_EID_VENDOR_SPECIFIC)
 #define WLAN_EID_VHT_CAPABILITY 191
 #define WLAN_EID_VHT_OPERATION 192
+#define WLAN_EID_WIDE_BANDWIDTH_CHANNEL_SWITCH 194
+#define WLAN_EID_CHANNEL_SWITCH_WRAPPER 196
 #define WLAN_EID_VHT_OP_MODE_NOTIFY 199
 #define WLAN_EID_EXTENSION 255
 #define WLAN_EID_EXT_OWE_DH_PARAM 32
@@ -765,6 +788,7 @@ struct ieee80211_snap_hdr {
 #define IEEE80211_NUM_OFDM_RATESLEN	8
 
 
+
 #define IEEE80211_CCK_RATE_1MB		        0x02
 #define IEEE80211_CCK_RATE_2MB		        0x04
 #define IEEE80211_CCK_RATE_5MB		        0x0B
@@ -775,6 +799,8 @@ struct ieee80211_snap_hdr {
 #define IEEE80211_OFDM_RATE_12MB		0x18
 #define IEEE80211_OFDM_RATE_18MB		0x24
 #define IEEE80211_OFDM_RATE_24MB		0x30
+#define IEEE80211_PBCC_RATE_22MB		0x2C
+#define IEEE80211_FREAK_RATE_22_5MB		0x2D
 #define IEEE80211_OFDM_RATE_36MB		0x48
 #define IEEE80211_OFDM_RATE_48MB		0x60
 #define IEEE80211_OFDM_RATE_54MB		0x6C
@@ -1035,6 +1061,8 @@ typedef enum _RATE_SECTION {
 	VHT_4SS = VHT_4SSMCS0_4SSMCS9,
 	RATE_SECTION_NUM,
 } RATE_SECTION;
+
+RATE_SECTION mgn_rate_to_rs(enum MGN_RATE rate);
 
 const char *rate_section_str(u8 section);
 
@@ -1447,29 +1475,13 @@ enum ieee80211_state {
 #define PORT_FMT "%u"
 #define PORT_ARG(x) ntohs(*((u16 *)(x)))
 
-#ifdef PLATFORM_FREEBSD /* Baron change func to macro */
 #define is_multicast_mac_addr(Addr) ((((Addr[0]) & 0x01) == 0x01) && ((Addr[0]) != 0xff))
 #define is_broadcast_mac_addr(Addr) ((((Addr[0]) & 0xff) == 0xff) && (((Addr[1]) & 0xff) == 0xff) && \
 	(((Addr[2]) & 0xff) == 0xff) && (((Addr[3]) & 0xff) == 0xff) && (((Addr[4]) & 0xff) == 0xff) && \
 				     (((Addr[5]) & 0xff) == 0xff))
-#else
-extern __inline int is_multicast_mac_addr(const u8 *addr)
-{
-	return (addr[0] != 0xff) && (0x01 & addr[0]);
-}
+#define is_zero_mac_addr(Addr)	((Addr[0] == 0x00) && (Addr[1] == 0x00) && (Addr[2] == 0x00) &&   \
+                (Addr[3] == 0x00) && (Addr[4] == 0x00) && (Addr[5] == 0x00))
 
-extern __inline int is_broadcast_mac_addr(const u8 *addr)
-{
-	return ((addr[0] == 0xff) && (addr[1] == 0xff) && (addr[2] == 0xff) &&   \
-		(addr[3] == 0xff) && (addr[4] == 0xff) && (addr[5] == 0xff));
-}
-
-extern __inline int is_zero_mac_addr(const u8 *addr)
-{
-	return ((addr[0] == 0x00) && (addr[1] == 0x00) && (addr[2] == 0x00) &&   \
-		(addr[3] == 0x00) && (addr[4] == 0x00) && (addr[5] == 0x00));
-}
-#endif /* PLATFORM_FREEBSD */
 
 #define CFG_IEEE80211_RESERVE_FCS (1<<0)
 #define CFG_IEEE80211_COMPUTE_FCS (1<<1)
@@ -1524,6 +1536,9 @@ enum rtw_ieee80211_category {
 	RTW_WLAN_CATEGORY_SELF_PROTECTED = 15,
 	RTW_WLAN_CATEGORY_WMM = 17,
 	RTW_WLAN_CATEGORY_VHT = 21,
+#ifdef CONFIG_RTW_TOKEN_BASED_XMIT
+	RTW_WLAN_CATEGORY_TBTX = 25,
+#endif
 	RTW_WLAN_CATEGORY_P2P = 0x7f,/* P2P action frames */
 };
 
@@ -1656,26 +1671,6 @@ enum rtw_ieee80211_vht_actioncode {
 	RTW_WLAN_ACTION_VHT_OPMODE_NOTIFICATION = 2,
 };
 
-/*IEEE 802.11r action code*/
-#ifdef CONFIG_RTW_80211R
-enum rtw_ieee80211_ft_actioncode {
-	RTW_WLAN_ACTION_FT_RESV,
-	RTW_WLAN_ACTION_FT_REQ,
-	RTW_WLAN_ACTION_FT_RSP,
-	RTW_WLAN_ACTION_FT_CONF,
-	RTW_WLAN_ACTION_FT_ACK,
-	RTW_WLAN_ACTION_FT_MAX,
-};
-#endif
-
-#ifdef CONFIG_RTW_WNM
-enum rtw_ieee80211_wnm_actioncode {
-	RTW_WLAN_ACTION_WNM_BTM_QUERY = 6,
-	RTW_WLAN_ACTION_WNM_BTM_REQ = 7,
-	RTW_WLAN_ACTION_WNM_BTM_RSP = 8,
-};
-#endif
-
 #define OUI_MICROSOFT 0x0050f2 /* Microsoft (also used in Wi-Fi specs)
 				* 00:50:F2 */
 #ifndef PLATFORM_FREEBSD /* Baron BSD has defined */
@@ -1701,6 +1696,9 @@ enum rtw_ieee80211_wnm_actioncode {
 
 #define OUI_BROADCOM 0x00904c /* Broadcom (Epigram) */
 
+#ifdef CONFIG_RTW_TOKEN_BASED_XMIT
+#define OUI_REALTEK	0x00e04c /* Realtek */
+#endif
 #define VENDOR_HT_CAPAB_OUI_TYPE 0x33 /* 00-90-4c:0x33 */
 
 enum rtw_ieee80211_rann_flags {
@@ -1886,6 +1884,10 @@ struct rtw_ieee802_11_elems {
 	u8 *rann;
 	u8 rann_len;
 #endif
+#ifdef CONFIG_RTW_TOKEN_BASED_XMIT
+	u8 *tbtx_cap;
+	u8 tbtx_cap_len;
+#endif
 };
 
 typedef enum { ParseOK = 0, ParseUnknown = 1, ParseFailed = -1 } ParseRes;
@@ -1941,10 +1943,10 @@ int rtw_rsne_info_parse(const u8 *ie, uint ie_len, struct rsne_info *info);
 unsigned char *rtw_get_wpa_ie(unsigned char *pie, int *wpa_ie_len, int limit);
 unsigned char *rtw_get_wpa2_ie(unsigned char *pie, int *rsn_ie_len, int limit);
 int rtw_get_wpa_cipher_suite(u8 *s);
-int rtw_get_wpa2_cipher_suite(u8 *s);
+int rtw_get_rsn_cipher_suite(u8 *s);
 int rtw_get_wapi_ie(u8 *in_ie, uint in_len, u8 *wapi_ie, u16 *wapi_len);
 int rtw_parse_wpa_ie(u8 *wpa_ie, int wpa_ie_len, int *group_cipher, int *pairwise_cipher, u32 *akm);
-int rtw_parse_wpa2_ie(u8 *wpa_ie, int wpa_ie_len, int *group_cipher, int *pairwise_cipher, u32 *akm, u8 *mfp_opt);
+int rtw_parse_wpa2_ie(u8 *wpa_ie, int wpa_ie_len, int *group_cipher, int *pairwise_cipher, int *gmcs, u32 *akm, u8 *mfp_opt);
 
 int rtw_get_sec_ie(u8 *in_ie, uint in_len, u8 *rsn_ie, u16 *rsn_len, u8 *wpa_ie, u16 *wpa_len);
 
@@ -1966,6 +1968,7 @@ u8 *rtw_get_owe_ie(const u8 *in_ie, uint in_len, u8 *owe_ie, uint *owe_ielen);
 	for (ie = (void *)buf; (((u8 *)ie) - ((u8 *)buf) + 1) < buf_len; ie = (void *)(((u8 *)ie) + *(((u8 *)ie)+1) + 2))
 
 void dump_ies(void *sel, const u8 *buf, u32 buf_len);
+#ifdef CONFIG_RTW_DEBUG
 
 #ifdef CONFIG_80211N_HT
 #define HT_SC_OFFSET_MAX 4
@@ -1976,6 +1979,7 @@ void dump_ht_cap_ie_content(void *sel, const u8 *buf, u32 buf_len);
 #endif
 
 void dump_wps_ie(void *sel, const u8 *ie, u32 ie_len);
+#endif	/*	CONFIG_RTW_DEBUG	*/
 
 void rtw_ies_get_chbw(u8 *ies, int ies_len, u8 *ch, u8 *bw, u8 *offset, u8 ht, u8 vht);
 
@@ -1986,9 +1990,12 @@ bool rtw_is_chbw_grouped(u8 ch_a, u8 bw_a, u8 offset_a
 void rtw_sync_chbw(u8 *req_ch, u8 *req_bw, u8 *req_offset
 	, u8 *g_ch, u8 *g_bw, u8 *g_offset);
 
+#ifdef CONFIG_P2P
 u32 rtw_get_p2p_merged_ies_len(u8 *in_ie, u32 in_len);
 int rtw_p2p_merge_ies(u8 *in_ie, u32 in_len, u8 *merge_ie);
+#ifdef CONFIG_RTW_DEBUG
 void dump_p2p_ie(void *sel, const u8 *ie, u32 ie_len);
+#endif
 u8 *rtw_get_p2p_ie(const u8 *in_ie, int in_len, u8 *p2p_ie, uint *p2p_ielen);
 u8 *rtw_get_p2p_attr(u8 *p2p_ie, uint p2p_ielen, u8 target_attr_id, u8 *buf_attr, u32 *len_attr);
 u8 *rtw_get_p2p_attr_content(u8 *p2p_ie, uint p2p_ielen, u8 target_attr_id, u8 *buf_content, uint *len_content);
@@ -1998,16 +2005,32 @@ uint rtw_del_p2p_attr(u8 *ie, uint ielen_ori, u8 attr_id);
 u8 *rtw_bss_ex_get_p2p_ie(WLAN_BSSID_EX *bss_ex, u8 *p2p_ie, uint *p2p_ielen);
 void rtw_bss_ex_del_p2p_ie(WLAN_BSSID_EX *bss_ex);
 void rtw_bss_ex_del_p2p_attr(WLAN_BSSID_EX *bss_ex, u8 attr_id);
+#endif	/*	CONFIG_P2P	*/
 
+uint rtw_del_wfd_ie(u8 *ies, uint ies_len_ori, const char *msg);
+void rtw_bss_ex_del_wfd_ie(WLAN_BSSID_EX *bss_ex);
+#ifdef CONFIG_WFD
+#ifdef CONFIG_RTW_DEBUG
 void dump_wfd_ie(void *sel, const u8 *ie, u32 ie_len);
+#endif
 u8 *rtw_get_wfd_ie(const u8 *in_ie, int in_len, u8 *wfd_ie, uint *wfd_ielen);
 u8 *rtw_get_wfd_attr(u8 *wfd_ie, uint wfd_ielen, u8 target_attr_id, u8 *buf_attr, u32 *len_attr);
 u8 *rtw_get_wfd_attr_content(u8 *wfd_ie, uint wfd_ielen, u8 target_attr_id, u8 *buf_content, uint *len_content);
-uint rtw_del_wfd_ie(u8 *ies, uint ies_len_ori, const char *msg);
 uint rtw_del_wfd_attr(u8 *ie, uint ielen_ori, u8 attr_id);
 u8 *rtw_bss_ex_get_wfd_ie(WLAN_BSSID_EX *bss_ex, u8 *wfd_ie, uint *wfd_ielen);
-void rtw_bss_ex_del_wfd_ie(WLAN_BSSID_EX *bss_ex);
 void rtw_bss_ex_del_wfd_attr(WLAN_BSSID_EX *bss_ex, u8 attr_id);
+#endif
+
+#define MULTI_AP_SUB_ELEM_TYPE 0x06
+#define MULTI_AP_TEAR_DOWN BIT(4)
+#define MULTI_AP_FRONTHAUL_BSS BIT(5)
+#define MULTI_AP_BACKHAUL_BSS BIT(6)
+#define MULTI_AP_BACKHAUL_STA BIT(7)
+#ifdef CONFIG_RTW_MULTI_AP
+void dump_multi_ap_ie(void *sel, const u8 *ie, u32 ie_len);
+u8 rtw_get_multi_ap_ie_ext(const u8 *ies, int ies_len);
+u8 *rtw_set_multi_ap_ie_ext(u8 *pbuf, uint *frlen, u8 val);
+#endif
 
 uint	rtw_get_rateset_len(u8	*rateset);
 
@@ -2022,12 +2045,10 @@ uint	rtw_is_cckratesonly_included(u8 *rate);
 uint rtw_get_cckrate_size(u8 *rate,u32 rate_length);
 int rtw_check_network_type(unsigned char *rate, int ratelen, int channel);
 
-void rtw_get_bcn_info(struct wlan_network *pnetwork);
-
 u8 rtw_check_invalid_mac_address(u8 *mac_addr, u8 check_local_bit);
 void rtw_macaddr_cfg(u8 *out, const u8 *hw_mac_addr);
 
-u16 rtw_mcs_rate(u8 rf_type, u8 bw_40MHz, u8 short_GI, unsigned char *MCS_rate);
+u16 rtw_ht_mcs_rate(u8 bw_40MHz, u8 short_GI, unsigned char *MCS_rate);
 u8	rtw_ht_mcsset_to_nss(u8 *supp_mcs_set);
 u32	rtw_ht_mcs_set_to_bitmap(u8 *mcs_set, u8 nss);
 

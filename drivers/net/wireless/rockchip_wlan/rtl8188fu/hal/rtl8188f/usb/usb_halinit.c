@@ -1,4 +1,3 @@
-/* SPDX-License-Identifier: GPL-2.0 */
 /******************************************************************************
  *
  * Copyright(c) 2007 - 2017 Realtek Corporation.
@@ -99,8 +98,6 @@ void rtl8188fu_interface_configure(_adapter *padapter)
 		/* FULL SPEED */
 		pHalData->UsbBulkOutSize = USB_FULL_SPEED_BULK_SIZE;/*64 bytes */
 	}
-
-	pHalData->interfaceIndex = pdvobjpriv->InterfaceNumber;
 
 #ifdef CONFIG_USB_TX_AGGREGATION
 	pHalData->UsbTxAggMode		= 1;
@@ -465,11 +462,8 @@ _InitAdaptiveCtrl(
 	value32 &= ~RATE_BITMAP_ALL;
 	value32 |= RATE_RRSR_CCK_ONLY_1M;
 
-	#ifdef RTW_DYNAMIC_RRSR
-		rtw_phydm_set_rrsr(Adapter, value32, TRUE);
-	#else
-		rtw_write32(Adapter, REG_RRSR, value32);
-	#endif
+	rtw_phydm_set_rrsr(Adapter, value32, TRUE);
+
 
 	/* CF-END Threshold */
 	/*m_spIoBase->rtw_write8(REG_CFEND_TH, 0x1); */
@@ -649,7 +643,7 @@ static void usb_AggSettingRxUpdate(PADAPTER padapter)
 	PHAL_DATA_TYPE pHalData;
 	u8 aggctrl;
 	u32 aggrx;
-
+	u32 agg_size;
 
 	pHalData = GET_HAL_DATA(padapter);
 
@@ -663,9 +657,18 @@ static void usb_AggSettingRxUpdate(PADAPTER padapter)
 #ifdef CONFIG_USB_RX_AGGREGATION
 	switch (pHalData->rxagg_mode) {
 	case RX_AGG_DMA:
+		agg_size = pHalData->rxagg_dma_size << 10;
+		if (agg_size > RX_DMA_BOUNDARY_8188F)
+			agg_size = RX_DMA_BOUNDARY_8188F >> 1;
+		if ((agg_size + 2048) > MAX_RECVBUF_SZ)
+			agg_size = MAX_RECVBUF_SZ - 2048;
+		agg_size >>= 10; /* unit: 1K */
+		if (agg_size > 0xF)
+			agg_size = 0xF;
+
 		aggctrl |= RXDMA_AGG_EN;
 		aggrx |= BIT_USB_RXDMA_AGG_EN;
-		aggrx |= pHalData->rxagg_dma_size & 0xF;
+		aggrx |= agg_size;
 		aggrx |= pHalData->rxagg_dma_timeout << 8;
 		RTW_INFO("%s: RX Aggregation DMA mode, size=%dKB, timeout=%dus\n",
 			__func__, pHalData->rxagg_dma_size & 0xF, pHalData->rxagg_dma_timeout * 32);
@@ -673,9 +676,16 @@ static void usb_AggSettingRxUpdate(PADAPTER padapter)
 
 	case RX_AGG_USB:
 	case RX_AGG_MIX:
+		agg_size = pHalData->rxagg_usb_size << 12;
+		if ((agg_size + 2048) > MAX_RECVBUF_SZ)
+			agg_size = MAX_RECVBUF_SZ - 2048;
+		agg_size >>= 12; /* unit: 4K */
+		if (agg_size > 0xF)
+			agg_size = 0xF;
+
 		aggctrl |= RXDMA_AGG_EN;
 		aggrx &= ~BIT_USB_RXDMA_AGG_EN;
-		aggrx |= pHalData->rxagg_usb_size & 0xF;
+		aggrx |= agg_size;
 		aggrx |= pHalData->rxagg_usb_timeout << 8;
 		RTW_INFO("%s: RX Aggregation USB mode, size=%dKB, timeout=%dus\n",
 			__func__, (pHalData->rxagg_usb_size & 0xF) * 4, pHalData->rxagg_usb_timeout * 32);
@@ -1140,6 +1150,11 @@ u32 rtl8188fu_hal_init(PADAPTER padapter)
 	_InitHardwareDropIncorrectBulkOut(padapter);
 #endif
 
+	/* Enable MACTXEN/MACRXEN block */
+	u1bRegCR = rtw_read8(padapter, REG_CR);
+	u1bRegCR |= (MACTXEN | MACRXEN);
+	rtw_write8(padapter, REG_CR, u1bRegCR);
+
 #ifdef CONFIG_RTW_LED
 	_InitHWLed(padapter);
 #endif /*CONFIG_RTW_LED */
@@ -1185,45 +1200,12 @@ u32 rtl8188fu_hal_init(PADAPTER padapter)
 	{
 		pwrctrlpriv->rf_pwrstate = rf_on;
 
-		if (pwrctrlpriv->rf_pwrstate == rf_on) {
-			struct pwrctrl_priv *pwrpriv;
-			systime start_time;
-			u8 restore_iqk_rst;
-			u8 h2cCmdBuf;
+		/*phy_lc_calibrate_8188f(&pHalData->odmpriv);*/
+		halrf_lck_trigger(&pHalData->odmpriv);
 
-			pwrpriv = adapter_to_pwrctl(padapter);
+		pHalData->neediqk_24g = _TRUE;
 
-			/*phy_lc_calibrate_8188f(&pHalData->odmpriv);*/
-			halrf_lck_trigger(&pHalData->odmpriv);
-
-#ifdef CONFIG_BT_COEXIST
-			/* Inform WiFi FW that it is the beginning of IQK */
-			h2cCmdBuf = 1;
-			FillH2CCmd8188F(padapter, H2C_8188F_BT_WLAN_CALIBRATION, 1, &h2cCmdBuf);
-
-			start_time = rtw_get_current_time();
-			do {
-				if (rtw_read8(padapter, 0x1e7) & 0x01)
-					break;
-
-				rtw_msleep_os(50);
-			} while (rtw_get_passing_time_ms(start_time) <= 400);
-
-
-			rtw_btcoex_IQKNotify(padapter, _TRUE);
-#endif
-
-			pHalData->neediqk_24g = _TRUE;
-#ifdef CONFIG_BT_COEXIST
-			rtw_btcoex_IQKNotify(padapter, _FALSE);
-
-			/* Inform WiFi FW that it is the finish of IQK */
-			h2cCmdBuf = 0;
-			FillH2CCmd8188F(padapter, H2C_8188F_BT_WLAN_CALIBRATION, 1, &h2cCmdBuf);
-#endif
-
-			odm_txpowertracking_check(&pHalData->odmpriv);
-		}
+		odm_txpowertracking_check(&pHalData->odmpriv);
 	}
 
 
@@ -1246,11 +1228,6 @@ u32 rtl8188fu_hal_init(PADAPTER padapter)
 	/*ack for xmit mgmt frames. */
 	rtw_write32(padapter, REG_FWHW_TXQ_CTRL, rtw_read32(padapter, REG_FWHW_TXQ_CTRL) | BIT(12));
 #endif /*CONFIG_XMIT_ACK */
-
-	/* Enable MACTXEN/MACRXEN block */
-	u1bRegCR = rtw_read8(padapter, REG_CR);
-	u1bRegCR |= (MACTXEN | MACRXEN);
-	rtw_write8(padapter, REG_CR, u1bRegCR);
 
 	/* #if RTL8188F_USB_MAC_LOOPBACK */
 #if 0
@@ -1735,6 +1712,7 @@ u32 rtl8188fu_hal_deinit(PADAPTER Adapter)
 
 unsigned int rtl8188fu_inirp_init(PADAPTER Adapter)
 {
+	struct registry_priv *regsty = adapter_to_regsty(Adapter);
 	u8 i;
 	struct recv_buf *precvbuf;
 	uint	status;
@@ -1758,7 +1736,7 @@ unsigned int rtl8188fu_inirp_init(PADAPTER Adapter)
 
 	/*issue Rx irp to receive data */
 	precvbuf = (struct recv_buf *)precvpriv->precv_buf;
-	for (i = 0; i < NR_RECVBUFF; i++) {
+	for (i = 0; i < regsty->recvbuf_nr; i++) {
 		if (_read_port(pintfhdl, precvpriv->ff_hwaddr, 0, (unsigned char *)precvbuf) == _FALSE) {
 			status = _FAIL;
 			goto exit;
@@ -2230,15 +2208,6 @@ static u8 rtl8188fu_ps_func(PADAPTER Adapter, HAL_INTF_PS_FUNC efunc_id, u8 *val
 {
 	u8 bResult = _TRUE;
 	switch (efunc_id) {
-
-#if defined(CONFIG_AUTOSUSPEND) && defined(SUPPORT_HW_RFOFF_DETECTED)
-	case HAL_USB_SELECT_SUSPEND: {
-		u8 bfwpoll = *((u8 *)val);
-
-		rtl8188f_set_FwSelectSuspend_cmd(Adapter, bfwpoll , 500); /*note fw to support hw power down ping detect */
-	}
-	break;
-#endif /*CONFIG_AUTOSUSPEND && SUPPORT_HW_RFOFF_DETECTED */
 
 	default:
 		break;

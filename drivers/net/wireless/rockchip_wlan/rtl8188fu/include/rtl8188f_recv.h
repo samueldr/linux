@@ -1,4 +1,3 @@
-/* SPDX-License-Identifier: GPL-2.0 */
 /******************************************************************************
  *
  * Copyright(c) 2007 - 2017 Realtek Corporation.
@@ -36,7 +35,8 @@
 #elif defined(CONFIG_PCI_HCI)
 	#define MAX_RECVBUF_SZ (4000) /* about 4K */
 #elif defined(CONFIG_SDIO_HCI)
-	#define MAX_RECVBUF_SZ (RX_DMA_BOUNDARY_8188F + 1)
+	/* minmum 4K, multiple of 8-byte is required, multiple of sdio block size is prefered */
+	#define MAX_RECVBUF_SZ _RND(RX_DMA_BOUNDARY_8188F + 1, 8)
 #endif /* CONFIG_SDIO_HCI */
 
 /* Rx smooth factor */

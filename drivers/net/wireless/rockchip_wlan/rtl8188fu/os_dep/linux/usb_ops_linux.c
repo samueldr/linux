@@ -1,4 +1,3 @@
-/* SPDX-License-Identifier: GPL-2.0 */
 /******************************************************************************
  *
  * Copyright(c) 2007 - 2017 Realtek Corporation.
@@ -116,8 +115,25 @@ int usbctrl_vendorreq(struct intf_hdl *pintfhdl, u8 request, u16 value, u16 inde
 				_rtw_memcpy(pdata, pIo_buf,  len);
 			}
 		} else { /* error cases */
-			RTW_INFO("reg 0x%x, usb %s %u fail, status:%d value=0x%x, vendorreq_times:%d\n"
-				, value, (requesttype == 0x01) ? "read" : "write" , len, status, *(u32 *)pdata, vendorreq_times);
+			switch (len) {
+				case 1:
+					RTW_INFO("reg 0x%x, usb %s %u fail, status:%d value=0x%x, vendorreq_times:%d\n"
+						, value, (requesttype == 0x01) ? "read" : "write" , len, status, *(u8 *)pdata, vendorreq_times);
+				break;
+				case 2:
+					RTW_INFO("reg 0x%x, usb %s %u fail, status:%d value=0x%x, vendorreq_times:%d\n"
+						, value, (requesttype == 0x01) ? "read" : "write" , len, status, *(u16 *)pdata, vendorreq_times);
+				break;
+				case 4:
+					RTW_INFO("reg 0x%x, usb %s %u fail, status:%d value=0x%x, vendorreq_times:%d\n"
+						, value, (requesttype == 0x01) ? "read" : "write" , len, status, *(u32 *)pdata, vendorreq_times);
+				break;
+				default:
+					RTW_INFO("reg 0x%x, usb %s %u fail, status:%d, vendorreq_times:%d\n"
+						, value, (requesttype == 0x01) ? "read" : "write" , len, status, vendorreq_times);
+				break;
+				
+			}
 
 			if (status < 0) {
 				if (status == (-ESHUTDOWN)	|| status == -ENODEV)
@@ -154,7 +170,7 @@ int usbctrl_vendorreq(struct intf_hdl *pintfhdl, u8 request, u16 value, u16 inde
 
 #if (defined(CONFIG_RTL8822B) || defined(CONFIG_RTL8821C)) || defined(CONFIG_RTL8822C)
 	if (value < 0xFE00) {
-		if (0x00 <= value && value <= 0xff)
+		if (value <= 0xff)
 			current_reg_sec = REG_ON_SEC;
 		else if (0x1000 <= value && value <= 0x10ff)
 			current_reg_sec = REG_ON_SEC;
@@ -279,7 +295,8 @@ unsigned int ffaddr2pipehdl(struct dvobj_priv *pdvobj, u32 addr)
 
 #ifdef RTW_HALMAC
          /* halmac already translate queue id to bulk out id (addr 0~3) */
-        else if (addr < 4) {
+		 /* 8814BU bulk out id range is 0~6 */
+        else if (addr < MAX_BULKOUT_NUM) {
                 ep_num = pdvobj->RtOutPipe[addr];
                 pipe = usb_sndbulkpipe(pusbd, ep_num);
         }
@@ -393,11 +410,12 @@ void usb_read_port_cancel(struct intf_hdl *pintfhdl)
 	int i;
 	struct recv_buf *precvbuf;
 	_adapter	*padapter = pintfhdl->padapter;
+	struct registry_priv *regsty = adapter_to_regsty(padapter);
 	precvbuf = (struct recv_buf *)padapter->recvpriv.precv_buf;
 
 	RTW_INFO("%s\n", __func__);
 
-	for (i = 0; i < NR_RECVBUFF ; i++) {
+	for (i = 0; i < regsty->recvbuf_nr ; i++) {
 
 		if (precvbuf->purb)	 {
 			/* RTW_INFO("usb_read_port_cancel : usb_kill_urb\n"); */

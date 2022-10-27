@@ -1,4 +1,3 @@
-/* SPDX-License-Identifier: GPL-2.0 */
 /******************************************************************************
  *
  * Copyright(c) 2007 - 2017 Realtek Corporation.
@@ -53,7 +52,6 @@
 	#define CONFIG_SET_SCAN_DENY_TIMER
 #endif
 
-#define CONFIG_AP_MODE
 #ifdef CONFIG_AP_MODE
 	#define CONFIG_NATIVEAP_MLME
 	#ifndef CONFIG_NATIVEAP_MLME
@@ -63,7 +61,6 @@
 	/* #define CONFIG_AUTO_AP_MODE */
 #endif
 
-#define CONFIG_P2P
 #ifdef CONFIG_P2P
 	/*
 	 * Added by Albert 20110812
@@ -294,10 +291,6 @@
 	#define DBG	0	/* for ODM & BTCOEX debug */
 	#define DBG_PHYDM_MORE 0
 #endif /* CONFIG_RTW_DEBUG */
-
-
-
-#define CONFIG_PROC_DEBUG
 
 /*
 #define DBG_CONFIG_ERROR_DETECT

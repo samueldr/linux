@@ -1,4 +1,3 @@
-/* SPDX-License-Identifier: GPL-2.0 */
 /******************************************************************************
  *
  * Copyright(c) 2013 - 2017 Realtek Corporation.
@@ -14,8 +13,6 @@
  *
  *****************************************************************************/
 #ifndef CONFIG_PLATFORM_OPS
-#include <linux/rfkill-wlan.h>
-extern unsigned int oob_irq;
 /*
  * Return:
  *	0:	power on successfully
@@ -25,8 +22,6 @@ int platform_wifi_power_on(void)
 {
 	int ret = 0;
 
-	rockchip_wifi_power(1);
-	//oob_irq = rockchip_wifi_get_oob_irq();
 
 	return ret;
 }
