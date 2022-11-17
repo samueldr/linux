@@ -412,22 +412,20 @@ static int sof_probes_client_probe(struct auxiliary_device *auxdev,
 	if (sof_client_get_ipc_type(cdev) != SOF_IPC)
 		return -ENXIO;
 
-	if (!dev->platform_data) {
+	ops = dev_get_platdata(dev);
+	if (!ops) {
 		dev_err(dev, "missing platform data\n");
+		return -ENODEV;
+	}
+	if (!ops->startup || !ops->shutdown || !ops->set_params || !ops->trigger ||
+	    !ops->pointer) {
+		dev_err(dev, "missing platform callback(s)\n");
 		return -ENODEV;
 	}
 
 	priv = devm_kzalloc(dev, sizeof(*priv), GFP_KERNEL);
 	if (!priv)
 		return -ENOMEM;
-
-	ops = dev->platform_data;
-
-	if (!ops->startup || !ops->shutdown || !ops->set_params || !ops->trigger ||
-	    !ops->pointer) {
-		dev_err(dev, "missing platform callback(s)\n");
-		return -ENODEV;
-	}
 
 	priv->host_ops = ops;
 	priv->ipc_ops = &ipc3_probe_ops;
