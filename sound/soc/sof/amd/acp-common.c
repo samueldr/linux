@@ -23,6 +23,7 @@ int acp_dai_probe(struct snd_soc_dai *dai)
 	const struct sof_amd_acp_desc *desc = get_chip_info(sdev->pdata);
 	unsigned int val;
 
+	snd_sof_dsp_write(sdev, ACP_DSP_BAR, desc->i2s_pin_config_offset, desc->i2s_mode);
 	val = snd_sof_dsp_read(sdev, ACP_DSP_BAR, desc->i2s_pin_config_offset);
 	if (val != desc->i2s_mode) {
 		dev_err(sdev->dev, "I2S Mode is not supported (I2S_PIN_CONFIG: %#x)\n", val);
