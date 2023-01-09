@@ -36,6 +36,20 @@ static struct snd_soc_jack vg_headset;
 #define DUAL_CHANNEL	2
 #define FOUR_CHANNEL	4
 
+#define TDM_MODE_ENABLE 1
+
+const struct dmi_system_id acp_quirk_table[] = {
+	{
+		/* Google skyrim proto-0 */
+		.matches = {
+			DMI_EXACT_MATCH(DMI_PRODUCT_FAMILY, "Google_Skyrim"),
+		},
+		.driver_data = (void *)TDM_MODE_ENABLE,
+	},
+	{}
+};
+EXPORT_SYMBOL_GPL(acp_quirk_table);
+
 static struct snd_soc_jack pco_jack;
 
 static const unsigned int channels[] = {
