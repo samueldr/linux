@@ -238,6 +238,7 @@ int configure_and_run_sha_dma(struct acp_dev_data *adata, void *image_addr,
 		}
 	}
 
+	snd_sof_dsp_write(sdev, ACP_DSP_BAR, ACP_SHA_DMA_INCLUDE_HDR, ACP_SHA_HEADER);
 	snd_sof_dsp_write(sdev, ACP_DSP_BAR, ACP_SHA_DMA_STRT_ADDR, start_addr);
 	snd_sof_dsp_write(sdev, ACP_DSP_BAR, ACP_SHA_DMA_DESTINATION_ADDR, dest_addr);
 	snd_sof_dsp_write(sdev, ACP_DSP_BAR, ACP_SHA_MSG_LENGTH, image_length);
@@ -478,6 +479,7 @@ int amd_sof_acp_probe(struct snd_sof_dev *sdev)
 		return -ENOMEM;
 
 	adata->dev = sdev;
+	adata->signed_fw_image = false;
 	addr = pci_resource_start(pci, ACP_DSP_BAR);
 	sdev->bar[ACP_DSP_BAR] = devm_ioremap(sdev->dev, addr, pci_resource_len(pci, ACP_DSP_BAR));
 	if (!sdev->bar[ACP_DSP_BAR]) {
@@ -519,13 +521,18 @@ int amd_sof_acp_probe(struct snd_sof_dev *sdev)
 	}
 
 	sdev->dsp_box.offset = 0;
-	sdev->dsp_box.size = BOX_SIZE_512;
+	sdev->dsp_box.size = BOX_SIZE_1024;
 
 	sdev->host_box.offset = sdev->dsp_box.offset + sdev->dsp_box.size;
-	sdev->host_box.size = BOX_SIZE_512;
+	sdev->host_box.size = BOX_SIZE_1024;
 
 	sdev->debug_box.offset = sdev->host_box.offset + sdev->host_box.size;
 	sdev->debug_box.size = BOX_SIZE_1024;
+
+	sdev->dsp_oops_offset = sdev->debug_box.offset + sdev->debug_box.size;
+
+	sdev->stream_box.offset = sdev->dsp_oops_offset + BOX_SIZE_1024;
+	sdev->stream_box.size = BOX_SIZE_1024;
 
 	acp_memory_init(sdev);
 

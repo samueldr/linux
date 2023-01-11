@@ -159,7 +159,11 @@ int acp_dsp_pre_fw_run(struct snd_sof_dev *sdev)
 	int ret;
 
 	adata = sdev->pdata->hw_pdata;
-	size_fw = adata->fw_bin_size;
+
+	if (adata->signed_fw_image)
+		size_fw = adata->fw_bin_size - FW_SIGNATURE;
+	else
+		size_fw = adata->fw_bin_size;
 
 	page_count = PAGE_ALIGN(size_fw) >> PAGE_SHIFT;
 	adata->fw_bin_page_count = page_count;
@@ -214,3 +218,54 @@ int acp_sof_dsp_run(struct snd_sof_dev *sdev)
 	return 0;
 }
 EXPORT_SYMBOL_NS(acp_sof_dsp_run, SND_SOC_SOF_AMD_COMMON);
+
+int acp_sof_load_firmware(struct snd_sof_dev *sdev)
+{
+	struct snd_sof_pdata *plat_data = sdev->pdata;
+	struct acp_dev_data *adata = plat_data->hw_pdata;
+	const char *fw_filename;
+	const char *fw_datafilename;
+	int ret;
+
+	adata->signed_fw_image = true;
+	fw_filename = kasprintf(GFP_KERNEL, "%s/%s",
+				plat_data->fw_filename_prefix,
+				"fwimage_3_0.bin");
+
+	ret = request_firmware(&plat_data->fw, fw_filename, sdev->dev);
+	if (ret < 0) {
+		dev_err(sdev->dev,
+			"error: sof firmware file is missing, you might need to\n");
+		dev_err(sdev->dev,
+			"       download it from https://github.com/thesofproject/sof-bin/\n");
+
+	} else {
+		dev_dbg(sdev->dev, "request_firmware %s successful\n",
+			fw_filename);
+	}
+	ret = snd_sof_dsp_block_write(sdev, SOF_FW_BLK_TYPE_IRAM, 0,
+				      (void *)plat_data->fw->data, plat_data->fw->size);
+
+	fw_datafilename = kasprintf(GFP_KERNEL, "%s/%s",
+				    plat_data->fw_filename_prefix,
+				    "fwdata_3_0.bin");
+
+        ret = request_firmware(&adata->fw_dbin, fw_datafilename, sdev->dev);
+
+        if (ret < 0) {
+                dev_err(sdev->dev,
+                        "error: sof firmware file is missing, you might need to\n");
+                dev_err(sdev->dev,
+                        "       download it from https://github.com/thesofproject/sof-bin/\n");
+
+        } else {
+                dev_dbg(sdev->dev, "request_firmware %s successful\n",
+                        fw_filename);
+        }
+
+	ret = snd_sof_dsp_block_write(sdev, SOF_FW_BLK_TYPE_DRAM, 0,
+				      (void *)adata->fw_dbin->data, adata->fw_dbin->size);
+
+	return ret;
+}
+EXPORT_SYMBOL_NS(acp_sof_load_firmware, SND_SOC_SOF_AMD_COMMON);
