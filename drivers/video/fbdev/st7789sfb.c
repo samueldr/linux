@@ -256,6 +256,7 @@ struct myfb_app{
 struct myfb_par {
     struct device *dev;
     struct platform_device *pdev;
+    struct backlight_device *backlight;
 
     resource_size_t p_palette_base;
     unsigned short *v_palette_base;
@@ -946,6 +947,18 @@ static int wait_for_vsync(struct myfb_par *par)
     return t > 0 ? 0 : (t < 0 ? (int)t : -ETIMEDOUT);
 }
 
+static int myfb_of_get_backlight(struct device *dev, struct myfb_par *par)
+{
+    struct backlight_device *backlight;
+
+    backlight = devm_of_find_backlight(dev);
+    if (IS_ERR(backlight))
+        return PTR_ERR(backlight);
+
+    par->backlight = backlight;
+    return 0;
+}
+
 static int myfb_ioctl(struct fb_info *info, unsigned int cmd, unsigned long arg)
 {
     struct myfb_par *par = info->par;
@@ -1061,6 +1074,21 @@ static int myfb_probe(struct platform_device *device)
     dev_set_drvdata(&device->dev, info);
     if(register_framebuffer(info) < 0){
         return -EINVAL;
+    }
+
+    ret = myfb_of_get_backlight(&device->dev, par);
+    if (ret) {
+        par->backlight = NULL;
+        printk("%s, failed to attach backlight (%d)\n", __func__, ret);
+    }
+
+    /*
+     * Turn on backlight
+     */
+    // FIXME: attach to suspend/resume cycle of the display
+    if (par->backlight) {
+        par->backlight->props.power = FB_BLANK_UNBLANK;
+        backlight_update_status(par->backlight);
     }
 
     mypar = par;
