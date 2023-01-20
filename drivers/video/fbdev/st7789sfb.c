@@ -827,7 +827,7 @@ static void suniv_cpu_init(struct myfb_par *par)
     }
 }
 
-static void lcd_delay_init(unsigned long param)
+static void lcd_delay_init(struct timer_list *t)
 {
     suniv_cpu_init(mypar);
     suniv_lcdc_init(mypar);
@@ -1034,7 +1034,7 @@ static int myfb_probe(struct platform_device *device)
         clk_prepare_enable(of_clk_get(device->dev.of_node, ret));
     }
 
-    setup_timer(&mytimer, lcd_delay_init, 0);
+    timer_setup(&mytimer, lcd_delay_init, 0);
     mod_timer(&mytimer, jiffies + HZ);
     return 0;
 }
