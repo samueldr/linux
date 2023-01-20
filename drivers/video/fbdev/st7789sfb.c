@@ -589,6 +589,7 @@ static void init_lcd(void)
 
 static void suniv_lcdc_init(struct myfb_par *par)
 {
+	struct fb_info *info;
 	uint32_t ret=0, p1=0, p2=0;
 
 	// Initializes CTRL_REG and INT_REG0 to all unset.
@@ -771,7 +772,7 @@ static void suniv_lcdc_init(struct myfb_par *par)
 	// TCON0_CPU_IF_REG.AUTO = 1; "all valid data during frame is written to the panel"
     suniv_setbits(iomm.lcdc + TCON0_CPU_IF_REG, (1 << 28));
 
-    struct fb_info *info = platform_get_drvdata(par->pdev);
+    info = platform_get_drvdata(par->pdev);
     fb_prepare_logo(info, 0);
     fb_show_logo(info, 0);
 }
