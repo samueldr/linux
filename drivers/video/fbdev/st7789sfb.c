@@ -207,10 +207,23 @@ void suniv_clrsetbits(void __iomem *reg, u32 clr_val, u32 set_val)
 // }}}
 ////////////////////////////////////////////////////////////////////////////////
 
+// When defined, the display will be rotated to match the orientation on-device.
+// When left undefined, the panel-native orientation will be kept.
+// Controller-based device rotation will cause worse (diagonal) tearing.
+// #define MIYOO_FB_ROTATE
+
 #define MIYOO_FB_BPP 16
+
+#ifdef MIYOO_FB_ROTATE
 #define MIYOO_FB_RES "320x240"
 #define MIYOO_FB_XRES 320
 #define MIYOO_FB_YRES 240
+#else
+#define MIYOO_FB_RES "240x320"
+#define MIYOO_FB_XRES 240
+#define MIYOO_FB_YRES 320
+#endif
+
 //#define MIYOO_ST7789s_VERTICAL_FRONT_PORCH 0x03
 //#define MIYOO_ST7789s_VERTICAL_BACK_PORCH  0x01
 //#define MIYOO_ST7789s_VERTICAL_SYNC_LENGTH 0x03
@@ -486,10 +499,12 @@ static void init_lcd(void)
 	lcdc_wr_cmd(ST7789S_CMD_MADCTL);
 	lcdc_wr_dat(
 		// Equivalent to 0xb0
+#ifdef MIYOO_FB_ROTATE
 		ST7789S_MADCTL_ML |
 		ST7789S_MADCTL_MV | // Causes **IMPRESSIVE** diagonal tearing :/
 		// ST7789S_MADCTL_MX |
 		ST7789S_MADCTL_MY |
+#endif
 		0
 	);
 
