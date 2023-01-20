@@ -626,7 +626,6 @@ static void init_lcd(void)
 
 static void suniv_lcdc_init(struct myfb_par *par)
 {
-	struct fb_info *info;
 	uint32_t ret=0, p1=0, p2=0;
 
 	// Initializes CTRL_REG and INT_REG0 to all unset.
@@ -808,10 +807,6 @@ static void suniv_lcdc_init(struct myfb_par *par)
 
 	// TCON0_CPU_IF_REG.AUTO = 1; "all valid data during frame is written to the panel"
     suniv_setbits(iomm.lcdc + TCON0_CPU_IF_REG, (1 << 28));
-
-    info = platform_get_drvdata(par->pdev);
-    fb_prepare_logo(info, 0);
-    fb_show_logo(info, 0);
 }
 
 static void suniv_enable_irq(struct myfb_par *par)
@@ -864,13 +859,41 @@ static void suniv_cpu_init(struct myfb_par *par)
     }
 }
 
+static int myfb_set_par(struct fb_info *info)
+{
+    struct myfb_par *par = info->par;
+
+    fb_var_to_videomode(&par->mode, &info->var);
+    par->app_virt->yoffset = info->var.yoffset = 0;
+    par->bpp = info->var.bits_per_pixel;
+    info->fix.visual = FB_VISUAL_TRUECOLOR;
+    info->fix.line_length = (par->mode.xres * par->bpp) / 8;
+    writel((5 << 8), iomm.debe + DEBE_LAY0_ATT_CTRL_REG1);
+    writel((5 << 8), iomm.debe + DEBE_LAY1_ATT_CTRL_REG1);
+    writel((5 << 8), iomm.debe + DEBE_LAY2_ATT_CTRL_REG1);
+    writel((5 << 8), iomm.debe + DEBE_LAY3_ATT_CTRL_REG1);
+    return 0;
+}
+
 static void lcd_delay_init(struct timer_list *t)
 {
+	struct fb_info *info;
+
     suniv_cpu_init(mypar);
     suniv_lcdc_init(mypar);
     mypar->app_virt->yoffset = MIYOO_FB_YRES;
     mypar->lcdc_ready = 1;
     suniv_enable_irq(mypar);
+
+    info = platform_get_drvdata(mypar->pdev);
+    myfb_set_par(info);
+    fb_prepare_logo(info, 0);
+    fb_show_logo(info, 0);
+    if (fb_prepare_logo(info, 0)) {
+        /* Start display and show logo on boot */
+        fb_set_cmap(&info->cmap, info);
+        fb_show_logo(info, 0);
+    }
 }
 
 #define CNVT_TOHW(val, width) ((((val) << (width)) + 0x7FFF - (val)) >> 16)
@@ -921,22 +944,6 @@ static int myfb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
     if(var->yres + var->yoffset > var->yres_virtual){
         var->yoffset = var->yres_virtual - var->yres;
     }
-    return 0;
-}
-
-static int myfb_set_par(struct fb_info *info)
-{
-    struct myfb_par *par = info->par;
-
-    fb_var_to_videomode(&par->mode, &info->var);
-    par->app_virt->yoffset = info->var.yoffset = 0;
-    par->bpp = info->var.bits_per_pixel;
-    info->fix.visual = FB_VISUAL_TRUECOLOR;
-    info->fix.line_length = (par->mode.xres * par->bpp) / 8;
-    writel((5 << 8), iomm.debe + DEBE_LAY0_ATT_CTRL_REG1);
-    writel((5 << 8), iomm.debe + DEBE_LAY1_ATT_CTRL_REG1);
-    writel((5 << 8), iomm.debe + DEBE_LAY2_ATT_CTRL_REG1);
-    writel((5 << 8), iomm.debe + DEBE_LAY3_ATT_CTRL_REG1);
     return 0;
 }
 
@@ -1069,7 +1076,7 @@ static int myfb_probe(struct platform_device *device)
     }
     info->cmap.len = 32;
 
-    myfb_var.activate = FB_ACTIVATE_FORCE;
+    myfb_var.activate |= FB_ACTIVATE_FORCE | FB_ACTIVATE_NOW;
     fb_set_var(info, &myfb_var);
     dev_set_drvdata(&device->dev, info);
     if(register_framebuffer(info) < 0){
