@@ -79,6 +79,12 @@
 	};
 };
 
+// XXX not actually tcon0, but compatible data for clocks for miyoo st7789s vendor driver.
+&tcon0 {
+	compatible = "miyoo,st7789s";
+	status = "okay";
+};
+
 &pwm {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pwm1_pins_a>;
