@@ -81,6 +81,7 @@
 
 // XXX not actually tcon0, but compatible data for clocks for miyoo st7789s vendor driver.
 &tcon0 {
+	backlight = <&backlight>;
 	compatible = "miyoo,st7789s";
 	status = "okay";
 };
