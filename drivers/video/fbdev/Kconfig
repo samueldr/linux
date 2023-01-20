@@ -2240,3 +2240,13 @@ config FB_SM712
 source "drivers/video/fbdev/omap/Kconfig"
 source "drivers/video/fbdev/omap2/Kconfig"
 source "drivers/video/fbdev/mmp/Kconfig"
+
+# XXX vendor driver for Powkiddy v90
+config FB_ST7789S
+    tristate "ST7789S SLCD framebuffer support"
+    depends on FB
+    select FB_SYS_FILLRECT
+    select FB_SYS_COPYAREA
+    select FB_SYS_IMAGEBLIT
+    help
+      Framebuffer driver for ST7789S SLCD panel.
