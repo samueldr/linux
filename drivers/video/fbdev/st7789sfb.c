@@ -1026,7 +1026,7 @@ static int myfb_probe(struct platform_device *device)
     fb_videomode_to_var(&myfb_var, mode);
 
     par->vram_size = (MIYOO_FB_XRES * MIYOO_FB_YRES * (MIYOO_FB_BPP / 8) * DE_LAYERS_COUNT) + 4096;
-    par->vram_virt = dma_alloc_coherent(NULL, par->vram_size, (resource_size_t*)&par->vram_phys, GFP_KERNEL | GFP_DMA);
+    par->vram_virt = dma_alloc_coherent(par->dev, par->vram_size, (resource_size_t*)&par->vram_phys, GFP_KERNEL | GFP_DMA);
     if(!par->vram_virt){
         return -EINVAL;
     }
@@ -1036,7 +1036,7 @@ static int myfb_probe(struct platform_device *device)
     myfb_fix.line_length = MIYOO_FB_XRES * (MIYOO_FB_BPP / 8);
     par->app_virt = (struct myfb_app*)((uint8_t*)par->vram_virt + (MIYOO_FB_XRES * MIYOO_FB_YRES * (MIYOO_FB_BPP / 8) * DE_LAYERS_COUNT));
 
-    par->v_palette_base = dma_alloc_coherent(NULL, PALETTE_SIZE, (resource_size_t*)&par->p_palette_base, GFP_KERNEL | GFP_DMA);
+    par->v_palette_base = dma_alloc_coherent(par->dev, PALETTE_SIZE, (resource_size_t*)&par->p_palette_base, GFP_KERNEL | GFP_DMA);
     if(!par->v_palette_base){
         return -EINVAL;
     }
