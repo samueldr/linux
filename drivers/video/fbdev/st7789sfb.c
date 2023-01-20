@@ -66,6 +66,42 @@
 #include <asm/arch-suniv/common.h>
 
 ////////////////////////////////////////////////////////////////////////////////
+// suniv memory twiddling
+
+void suniv_clrbits(void __iomem *reg, u32 clr_val)
+{
+    uint32_t ret;
+
+    ret = readl(reg);
+    ret&= ~(clr_val);
+    writel(ret, reg);
+}
+//EXPORT_SYMBOL(suniv_clrbits);
+
+void suniv_setbits(void __iomem *reg, u32 set_val)
+{
+    uint32_t ret;
+
+    ret = readl(reg);
+    ret|= set_val;
+    writel(ret, reg);
+}
+//EXPORT_SYMBOL(suniv_setbits);
+
+void suniv_clrsetbits(void __iomem *reg, u32 clr_val, u32 set_val)
+{
+    uint32_t ret;
+
+    ret = readl(reg);
+    ret&= ~(clr_val);
+    ret|= set_val;
+    writel(ret, reg);
+}
+//EXPORT_SYMBOL(suniv_clrsetbits);
+
+////////////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////////////////////
 // ST7789S commands
 // {{{
 
