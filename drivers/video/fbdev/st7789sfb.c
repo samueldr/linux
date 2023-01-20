@@ -1118,7 +1118,7 @@ static int myfb_resume(struct platform_device *dev)
 
 static const struct of_device_id fb_of_match[] = {
         {
-                .compatible = "allwinner,suniv-f1c500s-tcon0",
+                .compatible = "miyoo,st7789s",
         },{}
 };
 MODULE_DEVICE_TABLE(of, fb_of_match);
