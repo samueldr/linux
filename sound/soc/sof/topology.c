@@ -289,6 +289,8 @@ static const struct sof_dai_types sof_dais[] = {
 	{"ACPDMIC", SOF_DAI_AMD_DMIC},
 	{"ACPHS", SOF_DAI_AMD_HS},
 	{"AFE", SOF_DAI_MEDIATEK_AFE},
+	{"ACPSP_VIRTUAL", SOF_DAI_AMD_SP_VIRTUAL},
+	{"ACPHS_VIRTUAL", SOF_DAI_AMD_HS_VIRTUAL},
 };
 
 static enum sof_ipc_dai_type find_dai(const char *name)
