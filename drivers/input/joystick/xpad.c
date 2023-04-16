@@ -2036,7 +2036,7 @@ static int xpad_probe(struct usb_interface *intf, const struct usb_device_id *id
 					       25,
 					       GFP_KERNEL);
 		if (ret)
-			dev_warn(&xpad->dev->dev,
+			dev_warn(&xpad->intf->dev,
 				 "unable to receive magic message: %d\n", ret);
 	}
 
