@@ -16,6 +16,7 @@
 #include <sound/pcm.h>
 #include <sound/pcm_params.h>
 #include <sound/soc.h>
+#include <sound/simple_card.h>
 
 #include <sound/dmaengine_pcm.h>
 
@@ -148,16 +149,41 @@ static int dmaengine_pcm_prepare_and_submit(struct snd_pcm_substream *substream)
 	enum dma_transfer_direction direction;
 	unsigned long flags = DMA_CTRL_ACK;
 
+	struct snd_card *card = substream->pcm->card;
+	struct snd_soc_pcm_runtime *rtd = NULL;
+	struct asoc_simple_priv *sndhdmi_priv = NULL;
+	unsigned int raw_flag;
+
 	direction = snd_pcm_substream_to_dma_direction(substream);
 
 	if (!substream->runtime->no_period_wakeup)
 		flags |= DMA_PREP_INTERRUPT;
 
 	prtd->pos = 0;
-	desc = dmaengine_prep_dma_cyclic(chan,
-		substream->runtime->dma_addr,
-		snd_pcm_lib_buffer_bytes(substream),
-		snd_pcm_lib_period_bytes(substream), direction, flags);
+	/* sunxi for hdmi dma transfer */
+	if (strcmp(card->shortname, "sndhdmi") == 0) {
+		rtd = substream->private_data;
+		sndhdmi_priv = snd_soc_card_get_drvdata(rtd->card);
+		raw_flag = sndhdmi_priv->hdmi_format;
+		if (raw_flag > 1)
+			desc = dmaengine_prep_dma_cyclic(chan,
+				substream->runtime->dma_addr,
+				snd_pcm_lib_buffer_bytes(substream) * 2,
+				snd_pcm_lib_period_bytes(substream) * 2,
+				direction, flags);
+		else
+			desc = dmaengine_prep_dma_cyclic(chan,
+				substream->runtime->dma_addr,
+				snd_pcm_lib_buffer_bytes(substream),
+				snd_pcm_lib_period_bytes(substream),
+				direction, flags);
+	} else {
+		desc = dmaengine_prep_dma_cyclic(chan,
+			substream->runtime->dma_addr,
+			snd_pcm_lib_buffer_bytes(substream),
+			snd_pcm_lib_period_bytes(substream),
+			direction, flags);
+	}
 
 	if (!desc)
 		return -ENOMEM;

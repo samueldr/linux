@@ -8,6 +8,7 @@
 #include <linux/of.h>
 #include <linux/of_device.h>
 #include <linux/platform_device.h>
+#include <linux/module.h>
 
 #include "cpufreq-dt.h"
 
@@ -26,6 +27,7 @@ static const struct of_device_id whitelist[] __initconst = {
 	{ .compatible = "allwinner,sun8i-a23", },
 	{ .compatible = "allwinner,sun8i-a83t", },
 	{ .compatible = "allwinner,sun8i-h3", },
+	{ .compatible = "allwinner,sun8iw20p1", },
 
 	{ .compatible = "apm,xgene-shadowcat", },
 
@@ -102,6 +104,11 @@ static const struct of_device_id whitelist[] __initconst = {
  */
 static const struct of_device_id blacklist[] __initconst = {
 	{ .compatible = "allwinner,sun50i-h6", },
+
+	{ .compatible = "arm,sun50iw9p1", },
+	{ .compatible = "arm,sun50iw10p1", },
+	{ .compatible = "arm,sun8iw20p1", },
+	{ .compatible = "arm,sun20iw1p1", },
 
 	{ .compatible = "calxeda,highbank", },
 	{ .compatible = "calxeda,ecx-2000", },
@@ -180,4 +187,6 @@ create_pdev:
 			       -1, data,
 			       sizeof(struct cpufreq_dt_platform_data)));
 }
-core_initcall(cpufreq_dt_platdev_init);
+
+module_init(cpufreq_dt_platdev_init);
+MODULE_LICENSE("GPL");

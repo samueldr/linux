@@ -41,5 +41,12 @@ obj-$(CONFIG_BLK_DEV_NULL_BLK)	+= null_blk.o
 null_blk-objs	:= null_blk_main.o
 null_blk-$(CONFIG_BLK_DEV_ZONED) += null_blk_zoned.o
 
+ifneq ($(CONFIG_SUNXI_NAND),)
+obj-$(CONFIG_SUNXI_NAND) += ../../modules/nand/
+endif
+
+
+
+
 skd-y		:= skd_main.o
 swim_mod-y	:= swim.o swim_asm.o

@@ -8,6 +8,7 @@
 
 obj-y				+= irqchip/
 obj-y				+= bus/
+obj-y				+= dsp/
 
 obj-$(CONFIG_GENERIC_PHY)	+= phy/
 
@@ -180,6 +181,7 @@ obj-$(CONFIG_NVMEM)		+= nvmem/
 obj-$(CONFIG_FPGA)		+= fpga/
 obj-$(CONFIG_FSI)		+= fsi/
 obj-$(CONFIG_TEE)		+= tee/
+obj-$(CONFIG_SUNXI_DRM_HEAP)	+= sunxi_drm_heap/
 obj-$(CONFIG_MULTIPLEXER)	+= mux/
 obj-$(CONFIG_UNISYS_VISORBUS)	+= visorbus/
 obj-$(CONFIG_SIOX)		+= siox/

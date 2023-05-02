@@ -188,8 +188,14 @@ int ccu_mux_helper_set_parent(struct ccu_common *common,
 	spin_lock_irqsave(common->lock, flags);
 
 	reg = readl(common->base + common->reg);
+	if (common->features & CCU_FEATURE_KEY_FIELD_MOD) {
+		reg = reg | common->key_value;
+	}
 	reg &= ~GENMASK(cm->width + cm->shift - 1, cm->shift);
 	writel(reg | (index << cm->shift), common->base + common->reg);
+	/* some clks need set mux reg repeatedly to fix ic bug */
+	if (common->features & CCU_FEATURE_REPEAT_SET_MUX)
+		writel(reg | (index << cm->shift), common->base + common->reg);
 
 	spin_unlock_irqrestore(common->lock, flags);
 
@@ -251,6 +257,7 @@ const struct clk_ops ccu_mux_ops = {
 	.determine_rate	= __clk_mux_determine_rate,
 	.recalc_rate	= ccu_mux_recalc_rate,
 };
+EXPORT_SYMBOL_GPL(ccu_mux_ops);
 
 /*
  * This clock notifier is called when the frequency of the of the parent
@@ -285,3 +292,4 @@ int ccu_mux_notifier_register(struct clk *clk, struct ccu_mux_nb *mux_nb)
 
 	return clk_notifier_register(clk, &mux_nb->clk_nb);
 }
+EXPORT_SYMBOL_GPL(ccu_mux_notifier_register);

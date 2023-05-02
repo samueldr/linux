@@ -26,6 +26,13 @@
 #define SNOR_MFR_SPANSION	CFI_MFR_AMD
 #define SNOR_MFR_SST		CFI_MFR_SST
 #define SNOR_MFR_WINBOND	0xef /* Also used by some Spansion */
+#define SNOR_MFR_ADESTO		0x1f /* Also used by some Spansion0 */
+#define SNOR_MFR_XMC		0x20
+#define SNOR_MFR_XTX		0x0b
+#define SNOR_MFR_PUYA		0x85
+#define SNOR_MFR_ZETTA		0xba
+#define SNOR_MFR_BOYA		0x68
+#define SNOR_MFR_FM             0xa1
 
 /*
  * Note on opcode nomenclature: some opcodes have a format like
@@ -62,6 +69,7 @@
 #define SPINOR_OP_RDID		0x9f	/* Read JEDEC ID */
 #define SPINOR_OP_RDSFDP	0x5a	/* Read SFDP */
 #define SPINOR_OP_RDCR		0x35	/* Read configuration register */
+#define SPINOR_OP_WRCR		0x31	/* Write configuration register */
 #define SPINOR_OP_RDFSR		0x70	/* Read flag status register */
 #define SPINOR_OP_CLFSR		0x50	/* Clear flag status register */
 #define SPINOR_OP_RDEAR		0xc8	/* Read Extended Address Register */
@@ -146,6 +154,7 @@
 
 /* Configuration Register bits. */
 #define CR_QUAD_EN_SPAN		BIT(1)	/* Spansion Quad I/O */
+#define CR_QUAD_EN_GD		BIT(1)  /* Gd Quad I/O */
 
 /* Status Register 2 bits. */
 #define SR2_QUAD_EN_BIT7	BIT(7)
@@ -395,6 +404,7 @@ struct spi_nor_hwcaps {
 #define SNOR_HWCAPS_PP_8_8_8	BIT(22)
 
 #define SNOR_HWCAPS_X_X_X	(SNOR_HWCAPS_READ_2_2_2 |	\
+				 SNOR_HWCAPS_READ_1_4_4 |	\
 				 SNOR_HWCAPS_READ_4_4_4 |	\
 				 SNOR_HWCAPS_READ_8_8_8 |	\
 				 SNOR_HWCAPS_PP_4_4_4 |		\

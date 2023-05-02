@@ -100,6 +100,10 @@
 #define LINEAR_MODE     0
 #define IO_MODE         1
 
+#define SET_DST_HIGH_ADDR(x) ((((u64)x >> 32) & 0x3UL) << 18)
+#define SET_SRC_HIGH_ADDR(x) ((((u64)x >> 32) & 0x3UL) << 16)
+#define SET_DESC_HIGH_ADDR(x) ((((u64)x >> 32) & 0x3UL) | (x & 0xFFFFFFFC))
+
 /* forward declaration */
 struct sun6i_dma_dev;
 
@@ -155,6 +159,12 @@ struct sun6i_dma_lli {
 	 * or freeing it).
 	 */
 	struct sun6i_dma_lli	*v_lli_next;
+
+	/*
+	 * This param is used to store the physical address of the
+	 * coherent cache requested by dma_pool_alloc.
+	 */
+	dma_addr_t	        this_phy;
 };
 
 
@@ -241,9 +251,8 @@ static inline void sun6i_dma_dump_com_regs(struct sun6i_dma_dev *sdev)
 static inline void sun6i_dma_dump_chan_regs(struct sun6i_dma_dev *sdev,
 					    struct sun6i_pchan *pchan)
 {
-	phys_addr_t reg = virt_to_phys(pchan->base);
 
-	dev_dbg(sdev->slave.dev, "Chan %d reg: %pa\n"
+	dev_dbg(sdev->slave.dev, "Chan %d\n"
 		"\t___en(%04x): \t0x%08x\n"
 		"\tpause(%04x): \t0x%08x\n"
 		"\tstart(%04x): \t0x%08x\n"
@@ -252,7 +261,7 @@ static inline void sun6i_dma_dump_chan_regs(struct sun6i_dma_dev *sdev,
 		"\t__dst(%04x): \t0x%08x\n"
 		"\tcount(%04x): \t0x%08x\n"
 		"\t_para(%04x): \t0x%08x\n\n",
-		pchan->idx, &reg,
+		pchan->idx,
 		DMA_CHAN_ENABLE,
 		readl(pchan->base + DMA_CHAN_ENABLE),
 		DMA_CHAN_PAUSE,
@@ -387,15 +396,14 @@ static void *sun6i_dma_lli_add(struct sun6i_dma_lli *prev,
 static inline void sun6i_dma_dump_lli(struct sun6i_vchan *vchan,
 				      struct sun6i_dma_lli *lli)
 {
-	phys_addr_t p_lli = virt_to_phys(lli);
-
 	dev_dbg(chan2dev(&vchan->vc.chan),
-		"\n\tdesc:   p - %pa v - 0x%p\n"
+		"\n\tdesc:   p - %pad v - 0x%p\n"
 		"\t\tc - 0x%08x s - 0x%08x d - 0x%08x\n"
 		"\t\tl - 0x%08x p - 0x%08x n - 0x%08x\n",
-		&p_lli, lli,
+		&lli->this_phy, lli,
 		lli->cfg, lli->src, lli->dst,
 		lli->len, lli->para, lli->p_lli_next);
+
 }
 
 static void sun6i_dma_free_desc(struct virt_dma_desc *vd)
@@ -421,7 +429,11 @@ static void sun6i_dma_free_desc(struct virt_dma_desc *vd)
 		p_lli = p_next;
 	}
 
+	txd->vd.tx.callback = NULL;
+	txd->vd.tx.callback_result = NULL;
+	txd->vd.tx.callback_param = NULL;
 	kfree(txd);
+	txd = NULL;
 }
 
 static int sun6i_dma_start_desc(struct sun6i_vchan *vchan)
@@ -553,17 +565,32 @@ static irqreturn_t sun6i_dma_interrupt(int irq, void *dev_id)
 		for (j = 0; (j < DMA_IRQ_CHAN_NR) && status; j++) {
 			pchan = sdev->pchans + j;
 			vchan = pchan->vchan;
+			if (!pchan->desc)
+				goto next;
+
 			if (vchan && (status & vchan->irq_type)) {
 				if (vchan->cyclic) {
-					vchan_cyclic_callback(&pchan->desc->vd);
+					struct virt_dma_desc *vd;
+					dma_async_tx_callback cb = NULL;
+					void *cb_data = NULL;
+
+					vd = &(pchan->desc->vd);
+					if (vd) {
+						cb = vd->tx.callback;
+						cb_data = vd->tx.callback_param;
+					}
+					if (cb)
+						cb(cb_data);
 				} else {
 					spin_lock(&vchan->vc.lock);
-					vchan_cookie_complete(&pchan->desc->vd);
-					pchan->done = pchan->desc;
+					if (pchan->desc) {
+						vchan_cookie_complete(&pchan->desc->vd);
+						pchan->done = pchan->desc;
+					}
 					spin_unlock(&vchan->vc.lock);
 				}
 			}
-
+next:
 			status = status >> DMA_IRQ_CHAN_WIDTH;
 		}
 
@@ -644,20 +671,24 @@ static struct dma_async_tx_descriptor *sun6i_dma_prep_dma_memcpy(
 	if (!len)
 		return NULL;
 
-	txd = kzalloc(sizeof(*txd), GFP_NOWAIT);
+	txd = kzalloc(sizeof(*txd), GFP_KERNEL);
 	if (!txd)
 		return NULL;
+
 
 	v_lli = dma_pool_alloc(sdev->pool, GFP_NOWAIT, &p_lli);
 	if (!v_lli) {
 		dev_err(sdev->slave.dev, "Failed to alloc lli memory\n");
 		goto err_txd_free;
 	}
+	v_lli->this_phy = p_lli;
 
 	v_lli->src = src;
 	v_lli->dst = dest;
 	v_lli->len = len;
-	v_lli->para = NORMAL_WAIT;
+	v_lli->para = SET_DST_HIGH_ADDR(dest)
+		| SET_SRC_HIGH_ADDR(src)
+		| NORMAL_WAIT;
 
 	burst = convert_burst(8);
 	width = convert_buswidth(DMA_SLAVE_BUSWIDTH_4_BYTES);
@@ -677,6 +708,18 @@ static struct dma_async_tx_descriptor *sun6i_dma_prep_dma_memcpy(
 err_txd_free:
 	kfree(txd);
 	return NULL;
+}
+
+static inline struct sun6i_vchan *to_sun6i_dma_chan(struct dma_chan *c)
+{
+	return container_of(c, struct sun6i_vchan, vc.chan);
+}
+
+static void sun6i_dma_synchronize(struct dma_chan *chan)
+{
+	struct sun6i_vchan *c = to_sun6i_dma_chan(chan);
+
+	vchan_synchronize(&c->vc);
 }
 
 static struct dma_async_tx_descriptor *sun6i_dma_prep_slave_sg(
@@ -703,7 +746,7 @@ static struct dma_async_tx_descriptor *sun6i_dma_prep_slave_sg(
 		return NULL;
 	}
 
-	txd = kzalloc(sizeof(*txd), GFP_NOWAIT);
+	txd = kzalloc(sizeof(*txd), GFP_KERNEL);
 	if (!txd)
 		return NULL;
 
@@ -712,8 +755,9 @@ static struct dma_async_tx_descriptor *sun6i_dma_prep_slave_sg(
 		if (!v_lli)
 			goto err_lli_free;
 
+		v_lli->this_phy = p_lli;
+		p_lli = (u32)SET_DESC_HIGH_ADDR(p_lli);
 		v_lli->len = sg_dma_len(sg);
-		v_lli->para = NORMAL_WAIT;
 
 		if (dir == DMA_MEM_TO_DEV) {
 			v_lli->src = sg_dma_address(sg);
@@ -742,6 +786,10 @@ static struct dma_async_tx_descriptor *sun6i_dma_prep_slave_sg(
 				sg_dma_len(sg), flags);
 		}
 
+		v_lli->para = SET_DST_HIGH_ADDR(v_lli->dst)
+			| SET_SRC_HIGH_ADDR(v_lli->src)
+			| NORMAL_WAIT;
+
 		prev = sun6i_dma_lli_add(prev, v_lli, p_lli, txd);
 	}
 
@@ -753,7 +801,7 @@ static struct dma_async_tx_descriptor *sun6i_dma_prep_slave_sg(
 
 err_lli_free:
 	for (prev = txd->v_lli; prev; prev = prev->v_lli_next)
-		dma_pool_free(sdev->pool, prev, virt_to_phys(prev));
+		dma_pool_free(sdev->pool, prev, prev->this_phy);
 	kfree(txd);
 	return NULL;
 }
@@ -782,7 +830,7 @@ static struct dma_async_tx_descriptor *sun6i_dma_prep_dma_cyclic(
 		return NULL;
 	}
 
-	txd = kzalloc(sizeof(*txd), GFP_NOWAIT);
+	txd = kzalloc(sizeof(*txd), GFP_KERNEL);
 	if (!txd)
 		return NULL;
 
@@ -792,9 +840,8 @@ static struct dma_async_tx_descriptor *sun6i_dma_prep_dma_cyclic(
 			dev_err(sdev->slave.dev, "Failed to alloc lli memory\n");
 			goto err_lli_free;
 		}
-
+		v_lli->this_phy = p_lli;
 		v_lli->len = period_len;
-		v_lli->para = NORMAL_WAIT;
 
 		if (dir == DMA_MEM_TO_DEV) {
 			v_lli->src = buf_addr + period_len * i;
@@ -810,6 +857,10 @@ static struct dma_async_tx_descriptor *sun6i_dma_prep_dma_cyclic(
 			sdev->cfg->set_mode(&v_lli->cfg, IO_MODE, LINEAR_MODE);
 		}
 
+		v_lli->para = SET_DST_HIGH_ADDR(v_lli->dst)
+			| SET_SRC_HIGH_ADDR(v_lli->src)
+			| NORMAL_WAIT;
+
 		prev = sun6i_dma_lli_add(prev, v_lli, p_lli, txd);
 	}
 
@@ -821,7 +872,7 @@ static struct dma_async_tx_descriptor *sun6i_dma_prep_dma_cyclic(
 
 err_lli_free:
 	for (prev = txd->v_lli; prev; prev = prev->v_lli_next)
-		dma_pool_free(sdev->pool, prev, virt_to_phys(prev));
+		dma_pool_free(sdev->pool, prev, prev->this_phy);
 	kfree(txd);
 	return NULL;
 }
@@ -908,6 +959,7 @@ static int sun6i_dma_terminate_all(struct dma_chan *chan)
 	vchan_get_all_descriptors(&vchan->vc, &head);
 
 	if (pchan) {
+		writel(DMA_CHAN_PAUSE_PAUSE, pchan->base + DMA_CHAN_PAUSE);
 		writel(DMA_CHAN_ENABLE_STOP, pchan->base + DMA_CHAN_ENABLE);
 		writel(DMA_CHAN_PAUSE_RESUME, pchan->base + DMA_CHAN_PAUSE);
 
@@ -1196,10 +1248,31 @@ static struct sun6i_dma_config sun50i_h6_dma_cfg = {
 };
 
 /*
+ * The sun50iw9 binding uses the number of dma channels from the
+ * device tree node.
+ */
+static struct sun6i_dma_config sun50iw9_dma_cfg = {
+	.clock_autogate_enable = sun6i_enable_clock_autogate_h3,
+	.set_burst_length = sun6i_set_burst_length_h3,
+	.set_drq          = sun6i_set_drq_h6,
+	.set_mode         = sun6i_set_mode_h6,
+	.src_burst_lengths = BIT(1) | BIT(4) | BIT(8) | BIT(16),
+	.dst_burst_lengths = BIT(1) | BIT(4) | BIT(8) | BIT(16),
+	.src_addr_widths   = BIT(DMA_SLAVE_BUSWIDTH_1_BYTE) |
+			     BIT(DMA_SLAVE_BUSWIDTH_2_BYTES) |
+			     BIT(DMA_SLAVE_BUSWIDTH_4_BYTES) |
+			     BIT(DMA_SLAVE_BUSWIDTH_8_BYTES),
+	.dst_addr_widths   = BIT(DMA_SLAVE_BUSWIDTH_1_BYTE) |
+			     BIT(DMA_SLAVE_BUSWIDTH_2_BYTES) |
+			     BIT(DMA_SLAVE_BUSWIDTH_4_BYTES) |
+			     BIT(DMA_SLAVE_BUSWIDTH_8_BYTES),
+	.has_mbus_clk = true,
+};
+
+/*
  * The V3s have only 8 physical channels, a maximum DRQ port id of 23,
  * and a total of 24 usable source and destination endpoints.
  */
-
 static struct sun6i_dma_config sun8i_v3s_dma_cfg = {
 	.nr_max_channels = 8,
 	.nr_max_requests = 23,
@@ -1224,8 +1297,13 @@ static const struct of_device_id sun6i_dma_match[] = {
 	{ .compatible = "allwinner,sun8i-a83t-dma", .data = &sun8i_a83t_dma_cfg },
 	{ .compatible = "allwinner,sun8i-h3-dma", .data = &sun8i_h3_dma_cfg },
 	{ .compatible = "allwinner,sun8i-v3s-dma", .data = &sun8i_v3s_dma_cfg },
+	{ .compatible = "allwinner,sun8iw20-dma", .data = &sun50iw9_dma_cfg },
+	{ .compatible = "allwinner,sun8i-riscv-dma", .data = &sun50iw9_dma_cfg },
 	{ .compatible = "allwinner,sun50i-a64-dma", .data = &sun50i_a64_dma_cfg },
 	{ .compatible = "allwinner,sun50i-h6-dma", .data = &sun50i_h6_dma_cfg },
+	{ .compatible = "allwinner,sun50iw9-dma", .data = &sun50iw9_dma_cfg },
+	{ .compatible = "allwinner,sun50iw10-dma", .data = &sun50iw9_dma_cfg },
+	{ .compatible = "allwinner,sun50iw12-dma", .data = &sun50iw9_dma_cfg },
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, sun6i_dma_match);
@@ -1302,6 +1380,7 @@ static int sun6i_dma_probe(struct platform_device *pdev)
 	sdc->slave.device_pause			= sun6i_dma_pause;
 	sdc->slave.device_resume		= sun6i_dma_resume;
 	sdc->slave.device_terminate_all		= sun6i_dma_terminate_all;
+	sdc->slave.device_synchronize		= sun6i_dma_synchronize;
 	sdc->slave.src_addr_widths		= sdc->cfg->src_addr_widths;
 	sdc->slave.dst_addr_widths		= sdc->cfg->dst_addr_widths;
 	sdc->slave.directions			= BIT(DMA_DEV_TO_MEM) |
@@ -1359,6 +1438,13 @@ static int sun6i_dma_probe(struct platform_device *pdev)
 		vchan->vc.desc_free = sun6i_dma_free_desc;
 		vchan_init(&vchan->vc, &sdc->slave);
 	}
+
+	ret = reset_control_assert(sdc->rstc);
+	if (ret) {
+		dev_err(&pdev->dev, "Couldn't assert the device from reset\n");
+		goto err_chan_free;
+	}
+	usleep_range(20, 25); /* ensure dma controller is reset */
 
 	ret = reset_control_deassert(sdc->rstc);
 	if (ret) {
@@ -1446,7 +1532,18 @@ static struct platform_driver sun6i_dma_driver = {
 		.of_match_table	= sun6i_dma_match,
 	},
 };
-module_platform_driver(sun6i_dma_driver);
+
+static int __init sun6i_dma_init(void)
+{
+	return platform_driver_register(&sun6i_dma_driver);
+}
+subsys_initcall(sun6i_dma_init);
+
+static void __exit sun6i_dma_exit(void)
+{
+	platform_driver_unregister(&sun6i_dma_driver);
+}
+module_exit(sun6i_dma_exit);
 
 MODULE_DESCRIPTION("Allwinner A31 DMA Controller Driver");
 MODULE_AUTHOR("Sugar <shuge@allwinnertech.com>");

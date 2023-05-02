@@ -464,6 +464,11 @@ config ROCKCHIP_PHY
 	---help---
 	  Currently supports the integrated Ethernet PHY.
 
+config RTL8363_NB
+	tristate "RealTek RTL-8363NB Ethernet Adapter support"
+	---help---
+	  This is a driver for the Fast Ethernet PCI network cards
+
 config SMSC_PHY
 	tristate "SMSC PHYs"
 	---help---
