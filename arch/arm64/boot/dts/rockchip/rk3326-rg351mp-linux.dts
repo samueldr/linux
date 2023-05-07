@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 /*
- * Copyright (c) 2021 Anbernic
- *
- * Anbernic RG351MP
- *
+ * Copyright (c) 2020 Hardkernel Co., Ltd
  */
 
 /dts-v1/;
@@ -16,38 +13,37 @@
 #include "rk3326-linux.dtsi"
 
 / {
-	model = "Anbernic RG351MP";
-	compatible = "rockchip,rk3326-rg351mp-linux", "rockchip,rk3326";
+	model = "Hardkernel ODROID-GO3";
+	compatible = "rockchip,rk3326-odroidgo3-linux", "rockchip,rk3326";
 
 	chosen {
                 bootargs = "";
 	};
 
-	gpio_keys: rg351-keys {
-		compatible = "gpio-keys";
-		#address-cells = <1>;
-		#size-cells = <0>;
-		autorepeat;
-		button@0 {
-			label = "GPIO BTN-VOLUP";
-			linux,code = <KEY_VOLUMEUP>;
-			gpios = <&gpio2 RK_PA0 GPIO_ACTIVE_LOW>;
-		};
-		button@1 {
-			label = "GPIO BTN-VOLDN";
-			linux,code = <KEY_VOLUMEDOWN>;
-			gpios = <&gpio2 RK_PA1 GPIO_ACTIVE_LOW>;
-		};
+	gpio_keys: odroidgo3-keys {
+			compatible = "gpio-keys";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			autorepeat;
+			button@0 {
+				label = "GPIO BTN-VOLUP";
+				linux,code = <KEY_VOLUMEUP>;
+				gpios = <&gpio2 RK_PA0 GPIO_ACTIVE_LOW>;
+			};
+			button@1 {
+				label = "GPIO BTN-VOLDN";
+				linux,code = <KEY_VOLUMEDOWN>;
+				gpios = <&gpio2 RK_PA1 GPIO_ACTIVE_LOW>;
+			};
 	};
 
 	joypad: odroidgo3-joypad {
                 compatible = "odroidgo3-joypad";
-
-                pwms = <&pwm0 0 200000000 0>;
+                pwms = <&pwm0 0 200000000 0>;		 
                 pwm-names = "enable";
                 rumble-boost-weak = <0x0000>;
                 rumble-boost-strong = <0x0000>;
-
+		 
                 joypad-name = "GO-Super Gamepad";
                 joypad-product = <0x1100>;
                 joypad-revision = <0x0100>;
@@ -77,6 +73,7 @@
 		   * for rumble boost(0~65535)
 		   /sys/devices/platform/odroidgo3_joypad/rumble_boost_weak
 		   /sys/devices/platform/odroidgo3_joypad/rumble_boost_strong
+
 
 		   * for amux data debug
 		   * Joypad driver is disabled when using this sysfs.
@@ -138,7 +135,7 @@
 		/* required for RG351MP */
 		invert-absx;
 		invert-absy;
-
+		
 		/* gpio button auto repeat set value : default disable */
 		/*
 			autorepeat;
@@ -269,26 +266,6 @@
 		status = "okay";
 	};
 
-	backlight: backlight {
-		compatible = "pwm-backlight";
-		pwms = <&pwm1 0 62745 0>;
-		brightness-levels = <
-			  2   3   4   5   6   7
-			  8   9  10  11  12  13  14  15
-			 16  17  18  19  20  21  22  23
-			 24  25  26  27  28  29  30  31
-			 32  33  34  35  36  37  38  39
-			 40  41  42  43  44  45  46  47
-			 48  49  50  51  52  53  54  55
-			 56  57  58  59  60  61  62  63
-			 64  65  66  67  68  69  70  71
-			 72  73  74  75  76  77  78  79
-			 80  81  82  83  84  85  86  87
-			 88  89  90  91  92  93  94  95
-			 96  97  98  99 100 101 102 >;
-		default-brightness-level = <51>; /* default 50% */
-	};
-
 	leds: gpio_leds {
 		compatible = "gpio-leds";
 
@@ -301,6 +278,34 @@
 			gpios = <&gpio0 RK_PC1 GPIO_ACTIVE_HIGH>;
 			linux,default-trigger = "heartbeat";
 		};
+	};
+
+	backlight: backlight {
+		compatible = "pwm-backlight";
+		pwms = <&pwm1 0 40000 0>;
+		brightness-levels = <
+			  0   1   2   3   4   5   6   7
+			  8   9  10  11  12  13  14  15
+			 16  17  18  19  20  21  22  23
+			 24  25  26  27  28  29  30  31
+			 32  33  34  35  36  37  38  39
+			 40  41  42  43  44  45  46  47
+			 48  49  50  51  52  53  54  55
+			 56  57  58  59  60  61  62  63
+			 64  65  66  67  68  69  70  71
+			 72  73  74  75  76  77  78  79
+			 80  81  82  83  84  85  86  87
+			 88  89  90  91  92  93  94  95
+			 96  97  98  99 100 101 102 103
+			104 105 106 107 108 109 110 111
+			112 113 114 115 116 117 118 119
+			120 121 122 123 124 125 126 127
+			128 129 130 131 132 133 134 135
+			136 137 138 139 140 141 142 143
+			144 145 146 147 148 149 150 151
+			152 153 154 155 156 157 158 159
+			160 >;
+		default-brightness-level = <80>; /* default 50% */
 	};
 
 	rk817-sound {
@@ -334,17 +339,6 @@
 		regulator-max-microvolt = <3800000>;
 	};
 
-/*	vcc_host: vcc_host {
-		compatible = "regulator-fixed";
-		regulator-name = "vcc_host";
-		regulator-min-microvolt = <5000000>;
-		regulator-max-microvolt = <5000000>;
-
-		gpio = <&gpio0 RK_PB7 GPIO_ACTIVE_HIGH>;
-		enable-active-high;
-		regulator-always-on;
-		vin-supply = <&vccsys>;
-	};*/
 };
 
 &bus_apll {
@@ -411,7 +405,6 @@
 
 		dsi,format = <MIPI_DSI_FMT_RGB888>;
 		dsi,lanes = <4>;
-
 		/*
 			- panel-init-sequence data description -
 			  mipi_cmd, delay(ms), len, lcd_cmd, lcd_data...
@@ -419,27 +412,8 @@
 			- mipi_cmd description -
 			  05 : MIPI_DSI_SHORT_WRITE
 			  15 : MIPI_DSI_SHORT_WRITE_PARAM
-			  39 : MIPI_DSI_LONG_WRITE
-
-			- ILI9486 (Initialize sequence) -
-			  11: Sleep out & 250ms wait
-			  E0: PositiveGamma
-			  E1: NegativeGamma
-			  C0: PowerControl_1
-			  C1: PowerControl_2
-			  C5: VcomControl
-			  36: MemoryAccess
-			  3A: InterfacePixelFormat
-			  B0: InterfaceModeControl
-			  B1: FrameRateControl
-			  B4: DisplayInversionControl
-			  B6: DisplayFunctionControl
-			  E9: SetImageFunction
-			  F7: AdjustControl_3
-			  21: DisplayInversionOn
-			  29: DisplayOn & 50ms wait
+			  39 : MIPI_DSI_LONG_WRITE		
 		*/
-
 		panel-init-sequence = [
 			15 00 02 FF 30
 			15 00 02 FF 52
@@ -639,7 +613,7 @@
 		display-timings {
 			native-mode = <&timing0>;
 
-			timing0: timing0 {
+			timing0: 60Hz {
 				clock-frequency = <26400000>;
 				hactive = <640>;
 				vactive = <480>;
@@ -654,11 +628,46 @@
 				de-active = <0>;
 				pixelclk-active = <0>;
 			};
+			timing1: 50Hz {
+				clock-frequency = <26400000>;
+				hactive = <640>;
+				vactive = <480>;
+				hfront-porch = <207>;
+				hsync-len = <2>;
+				hback-porch = <207>;
+				vfront-porch = <13>;
+				vsync-len = <2>;
+				vback-porch = <5>;
+				hsync-active = <0>;
+				vsync-active = <0>;
+				de-active = <0>;
+				pixelclk-active = <0>;
+			};
+			timing2: 75Hz {
+				clock-frequency = <26400000>;
+				hactive = <640>;
+				vactive = <480>;
+				hfront-porch = <31>;
+				hsync-len = <2>;
+				hback-porch = <31>;
+				vfront-porch = <13>;
+				vsync-len = <2>;
+				vback-porch = <5>;
+				hsync-active = <0>;
+				vsync-active = <0>;
+				de-active = <0>;
+				pixelclk-active = <0>;
+			};
 		};
 	};
 };
 
 &dsi_in_vopb {
+	status = "okay";
+};
+
+&route_dsi {
+	connect = <&vopb_out_dsi>;
 	status = "okay";
 };
 
@@ -681,18 +690,22 @@
 	};
 };
 
+&gpu_opp_table {
+	/delete-node/ opp-200000000;
+	/delete-node/ opp-300000000;
+};
+
 &emmc {
+	status = "disabled";
+};
+
+&sfc {
 	status = "disabled";
 };
 
 &gpu {
 	mali-supply = <&vdd_logic>;
 	status = "okay";
-};
-
-&gpu_opp_table {
-	/delete-node/ opp-200000000;
-	/delete-node/ opp-300000000;
 };
 
 &i2c0 {
@@ -933,19 +946,7 @@
 				};
 			};
 
-			/* Rev 1.1 WIFI Power */
-			vcc_wifi: LDO_REG9 {
-				regulator-always-on;
-				regulator-boot-on;
-				regulator-min-microvolt = <3300000>;
-				regulator-max-microvolt = <3300000>;
 
-				regulator-name = "vcc_wifi";
-				regulator-state-mem {
-					regulator-off-in-suspend;
-					regulator-suspend-microvolt = <3300000>;
-				};
-			};
 
 			dcdc_boost: BOOST {
 				regulator-always-on;
@@ -990,7 +991,6 @@
 			monitor_sec = <5>;
 			virtual_power = <0>;
 			sample_res = <10>;
-			power_dc2otg = <0>;
 		};
 
 		charger {
@@ -1003,7 +1003,6 @@
 			chrg_finish_cur = <52>;
 			virtual_power = <0>;
 			sample_res = <10>;
-
 
 			/* P.C.B rev0.2 DC Detect & Charger Status LED GPIO */
 			dc_det_gpio  = <&gpio0 RK_PB3 GPIO_ACTIVE_HIGH>;
@@ -1069,6 +1068,14 @@
 	status = "okay";
 };
 
+&rkisp1 {
+	status = "okay";
+};
+
+&spi0 {
+	status = "disabled";
+};
+
 &pmu_io_domains {
 	/* PMU GRF Register Voltage select control */
 	status = "okay";
@@ -1079,22 +1086,13 @@
 	pmuio2-supply = <&vcc3v3_pmu>;
 };
 
-/* RG351MP Motor PWM */
+/* Rumble PWM */
 &pwm0 {
 	status = "okay";
 };
 
 /* LCD Backlight PWM */
 &pwm1 {
-	status = "okay";
-};
-
-&route_dsi {
-	connect = <&vopb_out_dsi>;
-	status = "okay";
-};
-
-&rkisp1 {
 	status = "okay";
 };
 
@@ -1105,14 +1103,6 @@
 &rockchip_suspend {
 	status = "okay";
 	rockchip,sleep-debug-en = <1>;
-};
-
-&sfc {
-	status = "disabled";
-};
-
-&spi0 {
-	status = "disabled";
 };
 
 &saradc {
@@ -1204,7 +1194,6 @@
 };
 
 &pinctrl {
-
 	pmic {
 		/* ODROID-GO2 : PMIC_INT(GPIO0.PB2) */
 		pmic_int: pmic_int {
@@ -1262,5 +1251,7 @@
 	};
 };
 
+/* DON'T PUT ANYTHING BELOW HERE.  PUT IT ABOVE PINCTRL */
+/* DON'T PUT ANYTHING BELOW HERE.  PUT IT ABOVE PINCTRL */
 /* DON'T PUT ANYTHING BELOW HERE.  PUT IT ABOVE PINCTRL */
 

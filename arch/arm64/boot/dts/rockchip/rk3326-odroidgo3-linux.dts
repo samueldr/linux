@@ -344,14 +344,17 @@
 &cpu0_opp_table {
 	rockchip,avs = <1>;
 
-	/* default 1.296GHz */
+	/* bin scaling clock 1.296MHz */
 	rockchip,bin-scaling-sel = <
-		0	13
-		1	13
+		0               13
+		1               13
 	>;
 
+	/delete-node/ opp-408000000;
+	/delete-node/ opp-600000000;
 	/delete-node/ opp-816000000;
-	/delete-node/ opp-1248000000;
+	/delete-node/ opp-1416000000;
+	/delete-node/ opp-1512000000;
 };
 
 &display_subsystem {
@@ -435,7 +438,7 @@
 			05 FA 01 11
 			39 00 06 FF 77 01 00 00 10
 			15 00 03 C0 E9 03
-			15 00 03 C1 11 02
+			15 00 03 C1 0C 0C
 			15 00 03 C2 31 08
 			15 00 02 CC 10
 			39 00 11 B0 00 0D 14 0D 10 05 02 08
@@ -488,16 +491,16 @@
 			native-mode = <&timing0>;
 
 			timing0: timing0 {
-				clock-frequency = <27500000>;
+				clock-frequency = <26400000>;
 				hactive = <480>;
 				vactive = <854>;
 
-				hfront-porch = <2>;
+				hfront-porch = <5>;
 				hsync-len = <10>;
-				hback-porch = <2>;
+				hback-porch = <5>;
 				vfront-porch = <12>;
 				vsync-len = <2>;
-				vback-porch = <60>;
+				vback-porch = <12>;
 				hsync-active = <0>;
 				vsync-active = <0>;
 				de-active = <0>;
