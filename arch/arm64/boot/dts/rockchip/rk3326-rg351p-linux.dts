@@ -2,7 +2,7 @@
 /*
  * Copyright (c) 2020 Anbernic
  *
- * Anbernic RG351P isn't ODROID-GO2 CLONE:)
+ * Anbernic RG351P
  *
  */
 
@@ -38,7 +38,7 @@
 
 	backlight: backlight {
 		compatible = "pwm-backlight";
-		pwms = <&pwm1 0 25000 0>;
+		pwms = <&pwm1 0 64000 0>;
 		brightness-levels = <
 			  0   1   2   3   4   5   6   7
 			  8   9  10  11  12  13  14  15
@@ -52,29 +52,10 @@
 			 72  73  74  75  76  77  78  79
 			 80  81  82  83  84  85  86  87
 			 88  89  90  91  92  93  94  95
-			 96  97  98  99 100 101 102 103
-			104 105 106 107 108 109 110 111
-			112 113 114 115 116 117 118 119
-			120 121 122 123 124 125 126 127
-			128 129 130 131 132 133 134 135
-			136 137 138 139 140 141 142 143
-			144 145 146 147 148 149 150 151
-			152 153 154 155 156 157 158 159
-			160 161 162 163 164 165 166 167
-			168 169 170 171 172 173 174 175
-			176 177 178 179 180 181 182 183
-			184 185 186 187 188 189 190 191
-			192 193 194 195 196 197 198 199
-			200 201 202 203 204 205 206 207
-			208 209 210 211 212 213 214 215
-			216 217 218 219 220 221 222 223
-			224 225 226 227 228 229 230 231
-			232 233 234 235 236 237 238 239
-			240 241 242 243 244 245 246 247
-			248 249 250 251 252 253 254 255>;
-		default-brightness-level = <255>;
+			 96  97  98  99 100 >;
+		default-brightness-level = <50>; /* default 50% */
 	};
-	
+
 	leds: gpio_leds {
 		compatible = "gpio-leds";
 
@@ -118,8 +99,8 @@
 		regulator-min-microvolt = <3800000>;
 		regulator-max-microvolt = <3800000>;
 	};
-/*
-	vcc_host: vcc_host {
+
+/*	vcc_host: vcc_host {
 		compatible = "regulator-fixed";
 		regulator-name = "vcc_host";
 		regulator-min-microvolt = <5000000>;
@@ -129,10 +110,8 @@
 		enable-active-high;
 		regulator-always-on;
 		vin-supply = <&vccsys>;
-	};
-*/
+	};*/
 };
-
 
 &bus_apll {
 	bus-supply = <&vdd_logic>;
@@ -241,7 +220,6 @@
 			15 00 02 B0 00
 			15 00 02 B1 A0
 			15 00 02 B4 02
-			39 00 05 B5 09 0A 1F 2D
 			15 00 03 B6 20 02
 			15 00 02 E9 00
 			39 00 05 F7 A9 51 2C 82
@@ -260,15 +238,15 @@
 			native-mode = <&timing0>;
 
 			timing0: timing0 {
-				clock-frequency = <12000000>;
+				clock-frequency = <17000000>;
 				hactive = <320>;
 				vactive = <480>;
-				hfront-porch = <31>;
+				hfront-porch = <130>;
 				hsync-len = <4>;
-				hback-porch = <45>;
-				vfront-porch = <9>;
+				hback-porch = <130>;
+				vfront-porch = <2>;
 				vsync-len = <1>;
-				vback-porch = <10>;
+				vback-porch = <2>;
 				hsync-active = <0>;
 				vsync-active = <0>;
 				de-active = <0>;
@@ -281,8 +259,6 @@
 &dsi_in_vopb {
 	status = "okay";
 };
-
-
 
 &dfi {
 	status = "okay";
@@ -316,7 +292,6 @@
 	/delete-node/ opp-200000000;
 	/delete-node/ opp-300000000;
 };
-
 
 &i2c0 {
 	status = "okay";
@@ -627,6 +602,7 @@
 			virtual_power = <0>;
 			sample_res = <10>;
 
+
 			dc_det_gpio  = <&gpio0 RK_PB3 GPIO_ACTIVE_HIGH>;
 			bat_low_gpio = <&gpio2 RK_PB5 GPIO_ACTIVE_HIGH>;
 
@@ -727,11 +703,9 @@
 	rockchip,sleep-debug-en = <1>;
 };
 
-
 &sfc {
 	status = "disabled";
 };
-
 
 &spi0 {
 	status = "disabled";
@@ -871,6 +845,4 @@
 	};
 };
 
-/* DON'T PUT ANYTHING BELOW HERE.  PUT IT ABOVE PINCTRL */
-/* DON'T PUT ANYTHING BELOW HERE.  PUT IT ABOVE PINCTRL */
 /* DON'T PUT ANYTHING BELOW HERE.  PUT IT ABOVE PINCTRL */

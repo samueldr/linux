@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 /*
- * Copyright (c) 2020 Hardkernel Co., Ltd
+ * Copyright (c) 2021 Anbernic
+ *
+ * Anbernic RG351V
+ *
  */
 
 /dts-v1/;
@@ -20,7 +23,7 @@
                 bootargs = "";
 	};
 
-	gpio_keys: rg351v-keys {
+	gpio_keys: rg351-keys {
 		compatible = "gpio-keys";
 		#address-cells = <1>;
 		#size-cells = <0>;
@@ -52,9 +55,9 @@
 
 	backlight: backlight {
 		compatible = "pwm-backlight";
-		pwms = <&pwm1 0 25000 0>;
+		pwms = <&pwm1 0 62745 0>;
 		brightness-levels = <
-			  0   1   2   3   4   5   6   7
+			  2   3   4   5   6   7
 			  8   9  10  11  12  13  14  15
 			 16  17  18  19  20  21  22  23
 			 24  25  26  27  28  29  30  31
@@ -66,27 +69,8 @@
 			 72  73  74  75  76  77  78  79
 			 80  81  82  83  84  85  86  87
 			 88  89  90  91  92  93  94  95
-			 96  97  98  99 100 101 102 103
-			104 105 106 107 108 109 110 111
-			112 113 114 115 116 117 118 119
-			120 121 122 123 124 125 126 127
-			128 129 130 131 132 133 134 135
-			136 137 138 139 140 141 142 143
-			144 145 146 147 148 149 150 151
-			152 153 154 155 156 157 158 159
-			160 161 162 163 164 165 166 167
-			168 169 170 171 172 173 174 175
-			176 177 178 179 180 181 182 183
-			184 185 186 187 188 189 190 191
-			192 193 194 195 196 197 198 199
-			200 201 202 203 204 205 206 207
-			208 209 210 211 212 213 214 215
-			216 217 218 219 220 221 222 223
-			224 225 226 227 228 229 230 231
-			232 233 234 235 236 237 238 239
-			240 241 242 243 244 245 246 247
-			248 249 250 251 252 253 254 255>;
-		default-brightness-level = <200>;
+			 96  97  98  99 100 101 102 >;
+		default-brightness-level = <51>; /* default 50% */
 	};
 
 	leds: gpio_leds {
@@ -133,8 +117,8 @@
 		regulator-min-microvolt = <3800000>;
 		regulator-max-microvolt = <3800000>;
 	};
-/*
-	vcc_host: vcc_host {
+
+/*	vcc_host: vcc_host {
 		compatible = "regulator-fixed";
 		regulator-name = "vcc_host";
 		regulator-min-microvolt = <5000000>;
@@ -144,10 +128,8 @@
 		enable-active-high;
 		regulator-always-on;
 		vin-supply = <&vccsys>;
-	};
-*/
+	};*/
 };
-
 
 &bus_apll {
 	bus-supply = <&vdd_logic>;
@@ -161,14 +143,17 @@
 &cpu0_opp_table {
 	rockchip,avs = <1>;
 
-	/* default 1.296GHz */
+	/* bin scaling clock 1.296MHz */
 	rockchip,bin-scaling-sel = <
-		0	13
-		1	13
+		0               13
+		1               13
 	>;
 
+	/delete-node/ opp-408000000;
+	/delete-node/ opp-600000000;
 	/delete-node/ opp-816000000;
-	/delete-node/ opp-1248000000;
+	/delete-node/ opp-1416000000;
+	/delete-node/ opp-1512000000;
 };
 
 &display_subsystem {
@@ -210,6 +195,7 @@
 
 		dsi,format = <MIPI_DSI_FMT_RGB888>;
 		dsi,lanes = <4>;
+
 		/*
 			- panel-init-sequence data description -
 			  mipi_cmd, delay(ms), len, lcd_cmd, lcd_data...
@@ -217,13 +203,31 @@
 			- mipi_cmd description -
 			  05 : MIPI_DSI_SHORT_WRITE
 			  15 : MIPI_DSI_SHORT_WRITE_PARAM
-			  39 : MIPI_DSI_LONG_WRITE		
+			  39 : MIPI_DSI_LONG_WRITE
+
+			- ILI9486 (Initialize sequence) -
+			  11: Sleep out & 250ms wait
+			  E0: PositiveGamma
+			  E1: NegativeGamma
+			  C0: PowerControl_1
+			  C1: PowerControl_2
+			  C5: VcomControl
+			  36: MemoryAccess
+			  3A: InterfacePixelFormat
+			  B0: InterfaceModeControl
+			  B1: FrameRateControl
+			  B4: DisplayInversionControl
+			  B6: DisplayFunctionControl
+			  E9: SetImageFunction
+			  F7: AdjustControl_3
+			  21: DisplayInversionOn
+			  29: DisplayOn & 50ms wait
 		*/
+
 		panel-init-sequence = [
 			15 00 02 FF 30
 			15 00 02 FF 52
 			15 00 02 FF 01
-
 			15 00 02 E3 00
 			15 00 02 40 0A
 			15 00 02 03 40
@@ -419,43 +423,13 @@
 		display-timings {
 			native-mode = <&timing0>;
 
-			timing0: 60Hz {
-				clock-frequency = <25500000>;
+			timing0: timing0 {
+				clock-frequency = <26400000>;
 				hactive = <640>;
 				vactive = <480>;
-				hfront-porch = <104>;
+				hfront-porch = <119>;
 				hsync-len = <2>;
-				hback-porch = <104>;
-				vfront-porch = <13>;
-				vsync-len = <2>;
-				vback-porch = <5>;
-				hsync-active = <0>;
-				vsync-active = <0>;
-				de-active = <0>;
-				pixelclk-active = <0>;
-			};
-			timing1: 50Hz {
-				clock-frequency = <25500000>;
-				hactive = <640>;
-				vactive = <480>;
-				hfront-porch = <188>;
-				hsync-len = <2>;
-				hback-porch = <190>;
-				vfront-porch = <13>;
-				vsync-len = <2>;
-				vback-porch = <5>;
-				hsync-active = <0>;
-				vsync-active = <0>;
-				de-active = <0>;
-				pixelclk-active = <0>;
-			};
-			timing2: 75Hz {
-				clock-frequency = <30600000>;
-				hactive = <640>;
-				vactive = <480>;
-				hfront-porch = <87>;
-				hsync-len = <2>;
-				hback-porch = <87>;
+				hback-porch = <119>;
 				vfront-porch = <13>;
 				vsync-len = <2>;
 				vback-porch = <5>;
@@ -814,6 +788,7 @@
 			virtual_power = <0>;
 			sample_res = <10>;
 
+
 			/* P.C.B rev0.2 DC Detect & Charger Status LED GPIO */
 			dc_det_gpio  = <&gpio0 RK_PB3 GPIO_ACTIVE_HIGH>;
 			bat_low_gpio = <&gpio2 RK_PB5 GPIO_ACTIVE_HIGH>;
@@ -891,7 +866,6 @@
 /* RG351V Motor PWM */
 &pwm0 {
 	status = "okay";
-	label = "rumble-pwm";
 };
 
 /* LCD Backlight PWM */
@@ -903,6 +877,7 @@
 	connect = <&vopb_out_dsi>;
 	status = "okay";
 };
+
 &rkisp1 {
 	status = "okay";
 };
@@ -920,11 +895,9 @@
 	status = "disabled";
 };
 
-
 &spi0 {
 	status = "disabled";
 };
-
 
 &saradc {
 	status = "okay";
@@ -1070,3 +1043,5 @@
 		};
 	};
 };
+
+/* DON'T PUT ANYTHING BELOW HERE.  PUT IT ABOVE PINCTRL */
