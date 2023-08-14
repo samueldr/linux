@@ -2009,9 +2009,11 @@ int iommu_attach_device(struct iommu_domain *domain, struct device *dev)
 	 */
 	mutex_lock(&group->mutex);
 	ret = -EINVAL;
-	if (iommu_group_device_count(group) != 1)
+	if (iommu_group_device_count(group) != 1) {
+		/* sunxi's all iommu device share one group */
+		ret = __iommu_attach_group(domain, group);
 		goto out_unlock;
-
+	}
 	ret = __iommu_attach_group(domain, group);
 
 out_unlock:

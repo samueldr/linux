@@ -7,6 +7,25 @@
 #include <sys/syscall.h>
 #include <sys/mman.h>
 
+#ifndef __NR_bpf
+# if defined(__i386__)
+#  define __NR_bpf 357
+# elif defined(__x86_64__)
+#  define __NR_bpf 321
+# elif defined(__aarch64__)
+#  define __NR_bpf 280
+# elif defined(__sparc__)
+#  define __NR_bpf 349
+# elif defined(__s390__)
+#  define __NR_bpf 351
+# elif defined(__arc__)
+#  define __NR_bpf 280
+# else
+#  error __NR_bpf not defined. libbpf does not support your arch.
+# endif
+#endif
+
+
 /* This file is a base header for auto-generated *.lskel.h files.
  * Its contents will change and may become part of auto-generation in the future.
  *

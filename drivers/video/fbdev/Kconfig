@@ -12,7 +12,6 @@ config FB_NOTIFY
 menuconfig FB
 	tristate "Support for frame buffer devices"
 	select FB_CMDLINE
-	select FB_NOTIFY
 	help
 	  The frame buffer device provides an abstraction for the graphics
 	  hardware. It represents the frame buffer of some video hardware and
