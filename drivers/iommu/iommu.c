@@ -2009,9 +2009,11 @@ int iommu_attach_device(struct iommu_domain *domain, struct device *dev)
 	 */
 	mutex_lock(&group->mutex);
 	ret = -EINVAL;
-	if (iommu_group_device_count(group) != 1)
+	if (iommu_group_device_count(group) != 1) {
+		/* sunxi's all iommu device share one group */
+		ret = __iommu_attach_group(domain, group);
 		goto out_unlock;
-
+	}
 	ret = __iommu_attach_group(domain, group);
 
 out_unlock:
@@ -2665,6 +2667,18 @@ static ssize_t __iommu_map_sg(struct iommu_domain *domain, unsigned long iova,
 	phys_addr_t start;
 	unsigned int i = 0;
 	int ret;
+
+	if (ops->map_sg) {
+		ret = ops->map_sg(domain, iova, sg, nents, prot, gfp, &mapped);
+
+		if (ops->iotlb_sync_map)
+			ops->iotlb_sync_map(domain, iova, mapped);
+
+		if (ret)
+			goto out_err;
+
+		return mapped;
+	}
 
 	while (i <= nents) {
 		phys_addr_t s_phys = sg_phys(sg);

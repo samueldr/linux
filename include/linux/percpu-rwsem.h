@@ -9,11 +9,21 @@
 #include <linux/rcu_sync.h>
 #include <linux/lockdep.h>
 
+void _trace_android_vh_record_pcpu_rwsem_starttime(
+		struct task_struct *tsk, unsigned long settime);
+
 struct percpu_rw_semaphore {
 	struct rcu_sync		rss;
 	unsigned int __percpu	*read_count;
 	struct rcuwait		writer;
-	wait_queue_head_t	waiters;
+	/*
+	 * destroy_list_entry is used during object destruction when waiters
+	 * can't be used, therefore reusing the same space.
+	 */
+	union {
+		wait_queue_head_t	waiters;
+		struct list_head	destroy_list_entry;
+	};
 	atomic_t		block;
 #ifdef CONFIG_DEBUG_LOCK_ALLOC
 	struct lockdep_map	dep_map;
@@ -68,6 +78,7 @@ static inline void percpu_down_read(struct percpu_rw_semaphore *sem)
 	 * bleeding the critical section out.
 	 */
 	preempt_enable();
+	_trace_android_vh_record_pcpu_rwsem_starttime(current, jiffies);
 }
 
 static inline bool percpu_down_read_trylock(struct percpu_rw_semaphore *sem)
@@ -88,14 +99,17 @@ static inline bool percpu_down_read_trylock(struct percpu_rw_semaphore *sem)
 	 * bleeding the critical section out.
 	 */
 
-	if (ret)
+	if (ret) {
+		_trace_android_vh_record_pcpu_rwsem_starttime(current, jiffies);
 		rwsem_acquire_read(&sem->dep_map, 0, 1, _RET_IP_);
+	}
 
 	return ret;
 }
 
 static inline void percpu_up_read(struct percpu_rw_semaphore *sem)
 {
+	_trace_android_vh_record_pcpu_rwsem_starttime(current, 0);
 	rwsem_release(&sem->dep_map, _RET_IP_);
 
 	preempt_disable();
@@ -127,7 +141,11 @@ extern void percpu_up_write(struct percpu_rw_semaphore *);
 extern int __percpu_init_rwsem(struct percpu_rw_semaphore *,
 				const char *, struct lock_class_key *);
 
+/* Can't be called in atomic context. */
 extern void percpu_free_rwsem(struct percpu_rw_semaphore *);
+
+/* Invokes percpu_free_rwsem and frees the semaphore from a worker thread. */
+extern void percpu_rwsem_async_destroy(struct percpu_rw_semaphore *sem);
 
 #define percpu_init_rwsem(sem)					\
 ({								\

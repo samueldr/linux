@@ -175,9 +175,9 @@ alternative_else_nop_endif
 
 	.macro mte_set_kernel_gcr, tmp, tmp2
 #ifdef CONFIG_KASAN_HW_TAGS
-alternative_if_not ARM64_MTE
+alternative_cb	kasan_hw_tags_enable
 	b	1f
-alternative_else_nop_endif
+alternative_cb_end
 	mov	\tmp, KERNEL_GCR_EL1
 	msr_s	SYS_GCR_EL1, \tmp
 1:
@@ -185,10 +185,10 @@ alternative_else_nop_endif
 	.endm
 
 	.macro mte_set_user_gcr, tsk, tmp, tmp2
-#ifdef CONFIG_ARM64_MTE
-alternative_if_not ARM64_MTE
+#ifdef CONFIG_KASAN_HW_TAGS
+alternative_cb	kasan_hw_tags_enable
 	b	1f
-alternative_else_nop_endif
+alternative_cb_end
 	ldr	\tmp, [\tsk, #THREAD_MTE_CTRL]
 
 	mte_set_gcr \tmp, \tmp2
@@ -691,9 +691,7 @@ alternative_else_nop_endif
 	tramp_map_kernel	x30
 alternative_insn isb, nop, ARM64_WORKAROUND_QCOM_FALKOR_E1003
 	tramp_data_read_var	x30, vectors
-alternative_if_not ARM64_WORKAROUND_CAVIUM_TX2_219_PRFM
 	prfm	plil1strm, [x30, #(1b - \vector_start)]
-alternative_else_nop_endif
 
 	msr	vbar_el1, x30
 	isb
