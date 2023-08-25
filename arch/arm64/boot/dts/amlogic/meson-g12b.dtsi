@@ -105,6 +105,8 @@
 
 		l2: l2-cache0 {
 			compatible = "cache";
+			cache-level = <2>;
+			cache-unified;
 		};
 	};
 };
@@ -137,5 +139,6 @@
 };
 
 &mali {
-	dma-coherent;
+	system-coherency = <0>;
+	power_policy = "always_on";
 };
