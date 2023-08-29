@@ -32,8 +32,8 @@ glapi_open_mr() {
 	TITLE="$2"
 	DESCRIPTION="$3"
 	ASSIGNEE_ID="3744812" # calebccff
-	#TARGET_PROJECT_ID="8065375" # postmarketOS/pmaports
-	TARGET_PROJECT_ID="18694862" # sdm845-mainline/pmaports
+	TARGET_PROJECT_ID="8065375" # postmarketOS/pmaports
+	#TARGET_PROJECT_ID="18694862" # sdm845-mainline/pmaports
 	TARGET_BRANCH="$(glapi_default_branch)"
 	BODY="{
 		\"id\": ${PROJECT_ID},
