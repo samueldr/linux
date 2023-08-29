@@ -44,8 +44,8 @@ merge-stable:
     # Add pmbootstrap repo for cross compiler toolchain
     - echo "http://mirror.postmarketos.org/postmarketos/master" >> /etc/apk/repositories
     - /bin/sh .ci/apk_retry.sh add --allow-untrusted bash bison findutils flex installkernel openssl-dev perl zstd gcc gcc-aarch64 wget make git musl-dev sudo
-    - wget "https://gitlab.com/postmarketOS/ci-common/-/raw/master/install_pmbootstrap.sh"
-    - sh ./install_pmbootstrap.sh
+    - wget "https://gitlab.com/postmarketOS/ci-common/-/raw/master/install_pmbootstrap.sh" -O /tmp/install_pmbootstrap.sh
+    - sh /tmp/install_pmbootstrap.sh
   script:
     # Ref to build might be an artifact from a previous job
     - CHECKOUT_REF=$(cat latest_stable_tag || git rev-parse --verify HEAD)
