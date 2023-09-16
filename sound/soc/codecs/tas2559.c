@@ -30,6 +30,7 @@
 #include <linux/regmap.h>
 #include <linux/of.h>
 #include <linux/slab.h>
+#include <linux/gpio/consumer.h>
 #include <linux/syscalls.h>
 #include <linux/fcntl.h>
 #include <linux/uaccess.h>
