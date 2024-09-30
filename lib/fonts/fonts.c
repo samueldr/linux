@@ -112,42 +112,42 @@ const struct font_desc *get_default_font(int xres, int yres,
 					 unsigned long *font_w,
 					 unsigned long *font_h)
 {
-	int i, c, cc, res;
-	const struct font_desc *f, *g;
+	int i, candidate_score, selected_score, resolution;
+	const struct font_desc *candidate_font, *selected_font;
 
-	g = NULL;
-	cc = -10000;
+	selected_font = NULL;
+	selected_score = -10000;
 	for (i = 0; i < num_fonts; i++) {
-		f = fonts[i];
-		c = f->pref;
+		candidate_font = fonts[i];
+		candidate_score = candidate_font->pref;
 #if defined(__mc68000__)
 #ifdef CONFIG_FONT_PEARL_8x8
-		if (MACH_IS_AMIGA && f->idx == PEARL8x8_IDX)
-			c = 100;
+		if (MACH_IS_AMIGA && candidate_font->idx == PEARL8x8_IDX)
+			candidate_score = 100;
 #endif
 #ifdef CONFIG_FONT_6x11
-		if (MACH_IS_MAC && xres < 640 && f->idx == VGA6x11_IDX)
-			c = 100;
+		if (MACH_IS_MAC && xres < 640 && candidate_font->idx == VGA6x11_IDX)
+			candidate_score = 100;
 #endif
 #endif
-		if ((yres < 400) == (f->height <= 8))
-			c += 1000;
+		if ((yres < 400) == (candidate_font->height <= 8))
+			candidate_score += 1000;
 
 		/* prefer a bigger font for high resolution */
-		res = (xres / f->width) * (yres / f->height) / 1000;
-		if (res > 20)
-			c += 20 - res;
+		resolution = (xres / candidate_font->width) * (yres / candidate_font->height) / 1000;
+		if (resolution > 20)
+			candidate_score += 20 - resolution;
 
-		if ((!font_w || test_bit(f->width - 1, font_w)) &&
-		    (!font_h || test_bit(f->height - 1, font_h)))
-			c += 1000;
+		if ((!font_w || test_bit(candidate_font->width - 1, font_w)) &&
+		    (!font_h || test_bit(candidate_font->height - 1, font_h)))
+			candidate_score += 1000;
 
-		if (c > cc) {
-			cc = c;
-			g = f;
+		if (candidate_score > selected_score) {
+			selected_score = candidate_score;
+			selected_font = candidate_font;
 		}
 	}
-	return g;
+	return selected_font;
 }
 EXPORT_SYMBOL(get_default_font);
 
