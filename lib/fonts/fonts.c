@@ -133,7 +133,13 @@ const struct font_desc *get_default_font(int xres, int yres,
 		if ((yres < 400) == (candidate_font->height <= 8))
 			candidate_score += 1000;
 
-		/* prefer a bigger font for high resolution */
+		/* Prefer a bigger font for high resolution.
+		 * "resolution" is the number of cells the candidate font would produce (rows × cols) divided by 1000.
+		 * Effectively, the resolution is in units of "kilocells"??
+		 * A VT100 with 80 cols × 32 rows would produce 2.56 kilocells.
+		 * FONT_8x16 on 1080p would produce 240 cols × 67 rows, or 16.2 kilocells.
+		 * Fonts producing 20 kilocells (20_000 chars) or more are deprioritized.
+		 */
 		resolution = (xres / candidate_font->width) * (yres / candidate_font->height) / 1000;
 		if (resolution > 20)
 			candidate_score += 20 - resolution;
