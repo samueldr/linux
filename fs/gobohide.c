@@ -77,7 +77,6 @@
 #include <linux/magic.h>
 #include <net/genetlink.h>
 #include <asm/uaccess.h>
-#include "overlayfs/ovl_entry.h"
 #include "mount.h"
 
 static int gobohide_inode_list_count;
@@ -384,14 +383,6 @@ static struct hide **gobohide_list(u32 *num)
 	return hiddenlist;
 }
 
-/* From overlayfs/util.c (ovl_dentry_lower) */
-struct dentry *overlay_dentry_lower(struct dentry *dentry)
-{
-	struct ovl_entry *oe = OVL_E(dentry);
-
-	return ovl_numlower(oe) ? ovl_lowerstack(oe)->dentry : NULL;
-}
-
 /**
  * gobohide_add - Add the inode to the "must hide" list
  * @ino: inode to be added
@@ -432,11 +423,7 @@ static int gobohide_add(ino_t ino, const char *pathname)
 		ret = -ENOENT;
 		goto out_free_page;
 	}
-	if (dentry->d_sb->s_magic == OVERLAYFS_SUPER_MAGIC) {
-		lower = overlay_dentry_lower(dentry);
-		entry->i_ino = d_inode(lower)->i_ino;
-	} else
-		entry->i_ino = d_inode(dentry)->i_ino;
+	entry->i_ino = d_inode(dentry)->i_ino;
 
 	pr_debug("gobohide_add(%ld): real_ino=%ld lower=%ld\n",
 			ino, entry->i_ino, lower ? d_inode(lower)->i_ino : 0);
