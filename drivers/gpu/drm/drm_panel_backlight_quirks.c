@@ -42,6 +42,14 @@ static const struct drm_panel_min_backlight_quirk drm_panel_min_backlight_quirks
 		.ident.name = "NE135A1M-NY1",
 		.min_brightness = 0,
 	},
+	/* Minisforum V3 SE */
+	{
+		.dmi_match.field = DMI_SYS_VENDOR,
+		.dmi_match.value = "Micro Computer (HK) Tech Limited",
+		/* .dmi_match_other.field = DMI_PRODUCT_NAME, */
+		/* .dmi_match_other.value = "V3 SE", */
+		.min_brightness = 0,
+	},
 };
 
 static bool drm_panel_min_backlight_quirk_matches(const struct drm_panel_min_backlight_quirk *quirk,
