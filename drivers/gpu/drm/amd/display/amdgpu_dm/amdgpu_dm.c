@@ -3669,6 +3669,8 @@ static void update_connector_ext_caps(struct amdgpu_dm_connector *aconnector)
 	struct drm_luminance_range_info *luminance_range;
 	int min_input_signal_override;
 
+	pr_warn("HACK update_connector_ext_caps...\n");
+
 	if (aconnector->bl_idx == -1 ||
 	    aconnector->dc_link->connector_signal != SIGNAL_TYPE_EDP)
 		return;
@@ -3708,6 +3710,8 @@ static void update_connector_ext_caps(struct amdgpu_dm_connector *aconnector)
 		caps->aux_min_input_signal = 1;
 
 	min_input_signal_override = drm_get_panel_min_brightness_quirk(aconnector->drm_edid);
+	pr_warn("    HACK   Original caps->min_input_signal: %d\n", caps->min_input_signal);
+	pr_warn("    HACK   min_input_signal_override: %d\n", min_input_signal_override);
 	if (min_input_signal_override >= 0)
 		caps->min_input_signal = min_input_signal_override;
 }
@@ -4757,8 +4761,11 @@ static void amdgpu_dm_update_backlight_caps(struct amdgpu_display_manager *dm,
 	if (caps->caps_valid)
 		return;
 
+	pr_warn("HACK amdgpu_dm_update_backlight_caps...\n");
+
 #if defined(CONFIG_ACPI)
 	amdgpu_acpi_get_backlight_caps(caps);
+	pr_warn("    HACK   ACPI caps->min_input_signal: %d\n", caps->min_input_signal);
 
 	/* validate the firmware value is sane */
 	if (caps->caps_valid) {
@@ -4775,6 +4782,7 @@ static void amdgpu_dm_update_backlight_caps(struct amdgpu_display_manager *dm,
 	}
 
 	if (!caps->caps_valid) {
+		pr_warn("    HACK   invalid caps!... setting to defaults!\n");
 		caps->min_input_signal = AMDGPU_DM_DEFAULT_MIN_BACKLIGHT;
 		caps->max_input_signal = AMDGPU_DM_DEFAULT_MAX_BACKLIGHT;
 		caps->caps_valid = true;
