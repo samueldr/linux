@@ -48,7 +48,7 @@ static const struct drm_panel_min_backlight_quirk drm_panel_min_backlight_quirks
 		.dmi_match.value = "Micro Computer (HK) Tech Limited",
 		/* .dmi_match_other.field = DMI_PRODUCT_NAME, */
 		/* .dmi_match_other.value = "V3 SE", */
-		.min_brightness = 6,
+		.min_brightness = 3,
 	},
 };
 
