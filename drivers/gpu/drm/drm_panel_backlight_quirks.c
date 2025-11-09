@@ -8,6 +8,10 @@
 #include <drm/drm_edid.h>
 #include <drm/drm_utils.h>
 
+unsigned int param_min_brightness = UINT_MAX;
+MODULE_PARM_DESC(min_brightness, "minimum brightness override for all panel backlights.");
+module_param_named(min_brightness, param_min_brightness, uint, 0444);
+
 struct drm_panel_min_backlight_quirk {
 	struct {
 		enum dmi_field field;
@@ -73,6 +77,9 @@ int drm_get_panel_min_brightness_quirk(const struct drm_edid *edid)
 {
 	const struct drm_panel_min_backlight_quirk *quirk;
 	size_t i;
+
+	if (param_min_brightness < UINT_MAX)
+		return param_min_brightness;
 
 	if (!IS_ENABLED(CONFIG_DMI))
 		return -ENODATA;
