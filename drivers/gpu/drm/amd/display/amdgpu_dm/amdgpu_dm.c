@@ -3714,6 +3714,10 @@ static void update_connector_ext_caps(struct amdgpu_dm_connector *aconnector)
 	pr_warn("    HACK   min_input_signal_override: %d\n", min_input_signal_override);
 	if (min_input_signal_override >= 0)
 		caps->min_input_signal = min_input_signal_override;
+
+	// FIXME: with v6.18, 
+	if (/* drm_get_panel_backlight_quirk(...)->disable_custom_brightness_curve 0*/ true)
+		caps->data_points = 0;
 }
 
 DEFINE_FREE(sink_release, struct dc_sink *, if (_T) dc_sink_release(_T))
