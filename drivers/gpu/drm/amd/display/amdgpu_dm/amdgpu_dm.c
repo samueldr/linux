@@ -3791,6 +3791,12 @@ static void update_connector_ext_caps(struct amdgpu_dm_connector *aconnector)
 			caps->brightness_mask =
 				panel_backlight_quirk->brightness_mask;
 		}
+		if (panel_backlight_quirk->disable_custom_brightness_curve) {
+			drm_info(drm,
+				 "Applying panel backlight quirk, disable_custom_brightness_curve: %s\n",
+				 panel_backlight_quirk->disable_custom_brightness_curve ? "true" : "false");
+			caps->data_points = 0;
+		}
 	}
 }
 
