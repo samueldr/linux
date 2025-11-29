@@ -19,6 +19,7 @@ int drm_get_panel_orientation_quirk(int width, int height);
 struct drm_panel_backlight_quirk {
 	u16 min_brightness;
 	u32 brightness_mask;
+	bool disable_custom_brightness_curve;
 };
 
 const struct drm_panel_backlight_quirk *
