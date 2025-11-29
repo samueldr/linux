@@ -20,6 +20,7 @@ struct drm_panel_backlight_quirk {
 	u16 min_brightness;
 	u32 brightness_mask;
 	bool force_pwm;
+	bool disable_custom_brightness_curve;
 };
 
 const struct drm_panel_backlight_quirk *
