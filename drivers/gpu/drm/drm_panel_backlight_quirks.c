@@ -66,7 +66,7 @@ static const struct drm_get_panel_backlight_quirk drm_panel_min_backlight_quirks
 		.dmi_match.value = "Shenzhen Meigao Electronic Equipment Co.,Ltd",
 		.dmi_match_other.field = DMI_PRODUCT_NAME,
 		.dmi_match_other.value = "V3 SE",
-		.quirk = { .min_brightness = 1, },
+		.quirk = { .min_brightness = 1, .disable_custom_brightness_curve = true, },
 	},
 	/* Have OLED Panels with brightness issue when last byte is 0/1 */
 	{
