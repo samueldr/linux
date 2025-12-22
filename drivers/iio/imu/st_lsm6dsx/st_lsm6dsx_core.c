@@ -2625,6 +2625,13 @@ static int st_lsm6dsx_init_regulators(struct device *dev)
 	return 0;
 }
 
+static bool st_lsm6dsx_read_acpi_mount_matrix(struct device *dev,
+				      struct iio_mount_matrix *orientation)
+{
+	return iio_read_acpi_mount_matrix(dev, orientation, "ROTM") ||
+		iio_read_acpi_mount_matrix(dev, orientation, "SLA0");
+}
+
 int st_lsm6dsx_probe(struct device *dev, int irq, int hw_id,
 		     struct regmap *regmap)
 {
@@ -2698,7 +2705,7 @@ int st_lsm6dsx_probe(struct device *dev, int irq, int hw_id,
 			return err;
 	}
 
-	if (!iio_read_acpi_mount_matrix(hw->dev, &hw->orientation, "ROTM")) {
+	if (!st_lsm6dsx_read_acpi_mount_matrix(hw->dev, &hw->orientation)) {
 		err = iio_read_mount_matrix(hw->dev, &hw->orientation);
 		if (err)
 			return err;
