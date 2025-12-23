@@ -508,13 +508,25 @@ static const struct soc_device_data soc_device_PNP0C40 = {
 	.button_info = soc_button_PNP0C40,
 };
 
-static const struct soc_button_info soc_button_INT33D3[] = {
+/*
+ * Definition of the Laptop/slate mode indicator. The device implementation
+ * is defined in section "Other ACPI namespace objects" of "Windows ACPI
+ * Design Guide for SoC Platforms", under "Convertible PC sensing
+ * device".
+ *  - https://learn.microsoft.com/en-us/windows-hardware/drivers/bringup/other-acpi-namespace-objects#convertible-pc-sensing-device
+ *  - https://web.archive.org/web/20251223191154/https://learn.microsoft.com/en-us/windows-hardware/drivers/bringup/other-acpi-namespace-objects#convertible-pc-sensing-device
+ *  - https://learn.microsoft.com/en-us/windows-hardware/drivers/gpiobtn/button-implementation
+ *  - https://web.archive.org/web/20251224171710/https://learn.microsoft.com/en-us/windows-hardware/drivers/gpiobtn/button-implementation
+ *
+ * Historical note: previously used `INT33D3` and `ID9001` HIDs.
+ */
+static const struct soc_button_info soc_button_PNP0C60[] = {
 	{ "tablet_mode", 0, EV_SW, SW_TABLET_MODE, false, false, false },
 	{ }
 };
 
-static const struct soc_device_data soc_device_INT33D3 = {
-	.button_info = soc_button_INT33D3,
+static const struct soc_device_data soc_device_PNP0C60 = {
+	.button_info = soc_button_PNP0C60,
 };
 
 /*
@@ -600,13 +612,14 @@ static const struct soc_device_data soc_device_MSHW0040 = {
 
 static const struct acpi_device_id soc_button_acpi_match[] = {
 	{ "PNP0C40", (unsigned long)&soc_device_PNP0C40 },
-	{ "INT33D3", (unsigned long)&soc_device_INT33D3 },
-	{ "ID9001", (unsigned long)&soc_device_INT33D3 },
 	{ "ACPI0011", 0 },
 
 	/* Microsoft Surface Devices (3th, 5th and 6th generation) */
 	{ "MSHW0028", (unsigned long)&soc_device_MSHW0028 },
 	{ "MSHW0040", (unsigned long)&soc_device_MSHW0040 },
+
+	/* Generic Laptop/slate mode indicator */
+	{ "PNP0C60", (unsigned long)&soc_device_PNP0C60 },
 
 	{ }
 };
