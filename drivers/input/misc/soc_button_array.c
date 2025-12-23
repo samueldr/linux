@@ -489,8 +489,11 @@ static int soc_button_probe(struct platform_device *pdev)
 
 /*
  * Definition of buttons on the tablet. The ACPI index of each button
- * is defined in section 2.8.7.2 of "Windows ACPI Design Guide for SoC
- * Platforms"
+ * is defined in section "Other ACPI namespace objects" of "Windows ACPI
+ * Design Guide for SoC Platforms", under "Windows-compatible button
+ * array".
+ *  - https://learn.microsoft.com/en-us/windows-hardware/drivers/bringup/other-acpi-namespace-objects#windows-compatible-button-array
+ *  - https://web.archive.org/web/20251223191154/https://learn.microsoft.com/en-us/windows-hardware/drivers/bringup/other-acpi-namespace-objects#windows-compatible-button-array
  */
 static const struct soc_button_info soc_button_PNP0C40[] = {
 	{ "power", 0, EV_KEY, KEY_POWER, false, true, true },
