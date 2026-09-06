@@ -292,7 +292,7 @@ static int send_list_reply(struct genl_info *info, char *data, size_t size)
 		nlmsg_free(skb);
 		return -EMSGSIZE;
 	}
-	strncpy(nla_data(na), data, size);
+	memcpy(nla_data(na), data, size);
 
 	/* send reply to listener */
 	genlhdr = nlmsg_data(nlmsg_hdr(skb));
